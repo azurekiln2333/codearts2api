@@ -1,0 +1,13 @@
+Active task: (none; planning artifacts under .trellis/tasks/10-21-production-concurrency-audit)
+
+The user explicitly requested live testing then Pi optimization tasks through Herdr. You are the existing Pi at w1C:p4 in D:/My2KProjects/codearts2api, acting as an independent read-only researcher/planning reviewer. This is a new planning task, not the earlier archived check. Do not implement before the parent reports approval of the final plan.
+
+Ownership: write only .trellis/tasks/10-21-production-multimodel-timeouts/research/ and .trellis/tasks/10-21-request-audit-account-health/research/. You are not alone in the workspace: do not revert or modify others' changes. Preserve current Compose/.env.example/README and unrelated scaffolding. Do not activate tasks, commit, push, deploy, mutate accounts, read auths/data/.env secrets, or run more production traffic. No production key is provided.
+
+Read parent and both children PRD/design/implement, parent research/findings.md and live-reproduction.json, backend index and request-lifecycle spec. Existing repair is 3d87a5c; HEAD 1b98ff0 on fix/deepseek-concurrency-20261021. Initial live state: 4 accounts, 3 cooling, max_concurrent=5. The 18-request wave yielded 4 successes, 4 capability errors, 10 client aborts at 125s without headers; health stayed 200. Old error templates match pre-3d87a5c and current chat.go does not emit them. Treat stale/mixed deployment as strong inference, not verified identity.
+
+Deliver two focused proposals:
+1. P0: independently validate old/new fingerprints; inspect any genuinely untested mixed-model/alias/cooling/admission path in current code. Separate deployment/config issues from proven bugs. Propose precise localhost tests and a credential-preserving build/config verification runbook. Do not invent a scheduler rewrite before intended deployment is verified.
+2. P1: investigate exact stale-error behavior and propose bounded metadata-only request audit, authenticated API/panel and safe runtime diagnostics. Give concrete fields, configurable retention/byte/count/queue defaults, non-blocking overflow/storage-failure behavior, ownership, compatibility and tests. No prompts/responses/credentials, I/O under pool locks or unbounded queues. Shared keys do not identify end users.
+
+Write concise English reports in your two research directories. Report in Chinese with exact source/test anchors, confirmed findings vs assumptions, proposed contracts, risks and actual blocking product choices. The parent handles final review. Targeted localhost reproduction is allowed if needed using temporary Go D:/AppData/Local/Temp/codearts2api-toolchain-go1.27.3/go/bin/go.exe; preserve Go 1.22 compatibility. Avoid broad suite reruns during planning.

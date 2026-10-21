@@ -1,0 +1,38 @@
+{
+  "id": "production-concurrency-audit",
+  "name": "production-concurrency-audit",
+  "title": "Production multi-model concurrency and request audit",
+  "description": "Use the user-authorized live 18-request reproduction to verify deployed fixes, improve overload diagnosis and account health semantics, and plan an authenticated metadata-only audit panel.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "lichengyu",
+  "assignee": "lichengyu",
+  "createdAt": "2026-10-21",
+  "completedAt": "2026-10-21",
+  "branch": "fix/deepseek-concurrency-20261021",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": "3fefda8",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-21-production-multimodel-timeouts",
+    "10-21-request-audit-account-health"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Local repair and verification complete. No push/deployment performed; verify running build/config after deployment before claiming production success.",
+  "meta": {
+    "planning_reviewer": "pi@w1C:p4",
+    "planning_review": "pi_complete_implementation_authorized",
+    "authorization": "User requested fixes and Pi implementation; latest steering asks why implementation has not started. Proceed under the reviewed scope.",
+    "quality_gate": "passed",
+    "independent_review": "pi_complete_no_confirmed_defects",
+    "local_implementation": "complete",
+    "production_verification": "pending_separate_deployment",
+    "completion_evidence": ".trellis/tasks/archive/2026-10/10-21-production-concurrency-audit/research/completion-review.md"
+  }
+}

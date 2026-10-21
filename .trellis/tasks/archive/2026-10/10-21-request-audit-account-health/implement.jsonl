@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/request-lifecycle.md", "reason": "Preserve bounded admission, cancellation, ownership, streaming and configuration contracts."}
+{"file": ".trellis/tasks/10-21-production-concurrency-audit/research/findings.md", "reason": "Actual authorized live evidence and diagnostic limits."}
+{"file": ".trellis/tasks/10-21-request-audit-account-health/design.md", "reason": "Scoped technical decisions and compatibility constraints."}
+{"file": ".trellis/tasks/10-21-production-concurrency-audit/research/plan-review.md", "reason": "Final scope presented for user approval; overrides exploratory alternatives."}
+{"file": ".trellis/tasks/10-21-production-concurrency-audit/research/pi-review.md", "reason": "Independent review, corrected evidence and final coordinator decisions."}
+{"file": ".trellis/tasks/10-21-production-multimodel-timeouts/research/pi-findings.md", "reason": "Independent Pi source/harness evidence and cross-layer integration proposal."}
+{"file": ".trellis/tasks/10-21-request-audit-account-health/research/pi-findings.md", "reason": "Independent Pi source/harness evidence and cross-layer integration proposal."}

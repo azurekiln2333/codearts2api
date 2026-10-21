@@ -1,0 +1,1187 @@
+{
+  "timestamp_utc": "2026-10-21T08:38:36.695Z",
+  "target": "https://codearts2api.azurekiln.cn",
+  "request_shape": {
+    "stream": false,
+    "max_tokens": 8,
+    "prompt": "Unique harmless diagnostic request; reply only OK",
+    "timeout_ms": 125000
+  },
+  "initial": [
+    {
+      "path": "/healthz",
+      "status": 200,
+      "ms": 1034,
+      "body": "ok"
+    },
+    {
+      "path": "/admin/api/overview",
+      "status": 200,
+      "ms": 992,
+      "body": {
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "schedule": {
+          "watch": {
+            "credits_auto_claim": true,
+            "enabled": true,
+            "keepalive_interval": 15,
+            "keepalive_window": "10m",
+            "max_concurrent": 5,
+            "poll_minutes": 30,
+            "refresh_skew_minutes": 30
+          }
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "disabled": false,
+            "cooling": true,
+            "until": "2026-10-21T16:37:55+08:00",
+            "err_count": 0,
+            "last_error": "context canceled",
+            "active_concurrent": 0,
+            "max_concurrent": 5
+          },
+          {
+            "name": "azure_kiln",
+            "disabled": false,
+            "cooling": true,
+            "until": "2026-10-21T16:37:55+08:00",
+            "err_count": 4,
+            "last_error": "consecutive errors",
+            "active_concurrent": 0,
+            "max_concurrent": 5
+          },
+          {
+            "name": "GT-2504_93107801",
+            "disabled": false,
+            "cooling": true,
+            "until": "2026-10-21T16:37:55+08:00",
+            "err_count": 4,
+            "last_error": "consecutive errors",
+            "active_concurrent": 0,
+            "max_concurrent": 5
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "disabled": false,
+            "cooling": false,
+            "until": "",
+            "err_count": 7,
+            "last_error": "consecutive errors",
+            "active_concurrent": 0,
+            "max_concurrent": 5
+          }
+        ]
+      }
+    },
+    {
+      "path": "/v1/models",
+      "status": 200,
+      "ms": 990,
+      "body": {
+        "data": [
+          {
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "GLM-5.2",
+            "max_output_tokens": 65536,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "glm-5.2",
+            "max_output_tokens": 65536,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 131072,
+            "created": 1753600000,
+            "id": "glm-5.2-sft-harmony",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "GLM-5.3",
+            "max_output_tokens": 65536,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "glm-5.3",
+            "max_output_tokens": 65536,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 131072,
+            "created": 1753600000,
+            "id": "kimi-k2.6-vl",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 524288,
+            "created": 1753600000,
+            "id": "OpenPangu-2.0-Flash",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 524288,
+            "created": 1753600000,
+            "id": "openpangu-2.0-flash",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 524288,
+            "created": 1753600000,
+            "id": "OpenPangu-2.0-Pro",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 524288,
+            "created": 1753600000,
+            "id": "openpangu-2.0-pro",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 131072,
+            "created": 1753600000,
+            "id": "Qwen3-VL-235B",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 131072,
+            "created": 1753600000,
+            "id": "qwen3-vl-235b",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "benefit": true,
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "deepseek-v4-flash-0731",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "benefit": true,
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "deepseek-v4-pro-0813",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "benefit": true,
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "glm-5.3-flash",
+            "object": "model",
+            "owned_by": "codearts"
+          }
+        ],
+        "object": "list"
+      }
+    }
+  ],
+  "baseline": [
+    {
+      "label": "baseline-1792571503815",
+      "model": "deepseek-v4-flash-0731",
+      "stream": false,
+      "status": 404,
+      "header_ms": 1156,
+      "total_ms": 1157,
+      "retry_after": null,
+      "error": "{\"code\":\"model_not_available\",\"message\":\"model deepseek-v4-flash-0731 is not available: codearts api code=400 http=400 path=/api/v2/chat/completions msg=InferHub.4004.200 benefit not found\",\"type\":\"api_error\"}"
+    }
+  ],
+  "wave": {
+    "started_utc": "2026-10-21T08:33:44.012Z",
+    "duration_ms": 125016,
+    "distinct_advertised_ids": 15,
+    "requests": [
+      {
+        "label": "wave-13-1792571624012",
+        "model": "deepseek-v4-flash-0731",
+        "stream": false,
+        "status": 404,
+        "header_ms": 891,
+        "total_ms": 897,
+        "retry_after": null,
+        "error": "{\"code\":\"model_not_available\",\"message\":\"model deepseek-v4-flash-0731 is not available on any configured account\",\"type\":\"api_error\"}"
+      },
+      {
+        "label": "wave-17-1792571624012",
+        "model": "deepseek-v4-flash-0731",
+        "stream": false,
+        "status": 404,
+        "header_ms": 956,
+        "total_ms": 957,
+        "retry_after": null,
+        "error": "{\"code\":\"model_not_available\",\"message\":\"model deepseek-v4-flash-0731 is not available on any configured account\",\"type\":\"api_error\"}"
+      },
+      {
+        "label": "wave-15-1792571624012",
+        "model": "glm-5.3-flash",
+        "stream": false,
+        "status": 404,
+        "header_ms": 1607,
+        "total_ms": 1607,
+        "retry_after": null,
+        "error": "{\"code\":\"model_not_available\",\"message\":\"model glm-5.3-flash is not available: codearts api code=400 http=400 path=/api/v2/chat/completions msg=InferHub.4004.200 benefit not found\",\"type\":\"api_error\"}"
+      },
+      {
+        "label": "wave-18-1792571624012",
+        "model": "openpangu-2.0-flash",
+        "stream": false,
+        "status": 404,
+        "header_ms": 1631,
+        "total_ms": 1632,
+        "retry_after": null,
+        "error": "{\"code\":\"model_not_available\",\"message\":\"model openpangu-2.0-flash is not available: codearts api code=400 http=400 path=/api/v2/chat/completions msg=InferHub.002002009.404 The model is not registered, please request other model\",\"type\":\"api_error\"}"
+      },
+      {
+        "label": "wave-12-1792571624012",
+        "model": "qwen3-vl-235b",
+        "stream": false,
+        "status": 200,
+        "header_ms": 2338,
+        "total_ms": 2339,
+        "retry_after": null,
+        "error": null,
+        "object": "chat.completion",
+        "choices": 1,
+        "finish_reason": "stop",
+        "usage": {
+          "completion_tokens": 2,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 25,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 27
+        }
+      },
+      {
+        "label": "wave-6-1792571624012",
+        "model": "kimi-k2.6-vl",
+        "stream": false,
+        "status": 200,
+        "header_ms": 64153,
+        "total_ms": 64154,
+        "retry_after": null,
+        "error": null,
+        "object": "chat.completion",
+        "choices": 1,
+        "finish_reason": "stop",
+        "usage": {
+          "completion_tokens": 2,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 25,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 27
+        }
+      },
+      {
+        "label": "wave-1-1792571624012",
+        "model": "GLM-5.2",
+        "stream": false,
+        "status": 200,
+        "header_ms": 70043,
+        "total_ms": 70044,
+        "retry_after": null,
+        "error": null,
+        "object": "chat.completion",
+        "choices": 1,
+        "finish_reason": "stop",
+        "usage": {
+          "completion_tokens": 141,
+          "completion_tokens_details": {
+            "reasoning_tokens": 139
+          },
+          "prompt_tokens": 30,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 171
+        }
+      },
+      {
+        "label": "wave-2-1792571624012",
+        "model": "glm-5.2",
+        "stream": false,
+        "status": 200,
+        "header_ms": 79348,
+        "total_ms": 79349,
+        "retry_after": null,
+        "error": null,
+        "object": "chat.completion",
+        "choices": 1,
+        "finish_reason": "stop",
+        "usage": {
+          "completion_tokens": 120,
+          "completion_tokens_details": {
+            "reasoning_tokens": 118
+          },
+          "prompt_tokens": 30,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 150
+        }
+      },
+      {
+        "label": "wave-3-1792571624012",
+        "model": "glm-5.2-sft-harmony",
+        "stream": false,
+        "status": null,
+        "total_ms": 125013,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-4-1792571624012",
+        "model": "GLM-5.3",
+        "stream": false,
+        "status": null,
+        "total_ms": 125013,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-5-1792571624012",
+        "model": "glm-5.3",
+        "stream": false,
+        "status": null,
+        "total_ms": 125013,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-7-1792571624012",
+        "model": "OpenPangu-2.0-Flash",
+        "stream": false,
+        "status": null,
+        "total_ms": 125012,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-8-1792571624012",
+        "model": "openpangu-2.0-flash",
+        "stream": false,
+        "status": null,
+        "total_ms": 125012,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-9-1792571624012",
+        "model": "OpenPangu-2.0-Pro",
+        "stream": false,
+        "status": null,
+        "total_ms": 125013,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-10-1792571624012",
+        "model": "openpangu-2.0-pro",
+        "stream": false,
+        "status": null,
+        "total_ms": 125013,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-11-1792571624012",
+        "model": "Qwen3-VL-235B",
+        "stream": false,
+        "status": null,
+        "total_ms": 125013,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-14-1792571624012",
+        "model": "deepseek-v4-pro-0813",
+        "stream": false,
+        "status": null,
+        "total_ms": 125013,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      },
+      {
+        "label": "wave-16-1792571624012",
+        "model": "glm-5.2",
+        "stream": false,
+        "status": null,
+        "total_ms": 125013,
+        "error": "The operation was aborted due to timeout",
+        "cause": ""
+      }
+    ],
+    "health_samples": [
+      {
+        "at": "2026-10-21T08:33:44.906Z",
+        "status": 200,
+        "ms": 868
+      },
+      {
+        "at": "2026-10-21T08:33:57.297Z",
+        "status": 200,
+        "ms": 353
+      },
+      {
+        "at": "2026-10-21T08:34:09.793Z",
+        "status": 200,
+        "ms": 467
+      },
+      {
+        "at": "2026-10-21T08:34:23.661Z",
+        "status": 200,
+        "ms": 1864
+      },
+      {
+        "at": "2026-10-21T08:34:36.201Z",
+        "status": 200,
+        "ms": 526
+      },
+      {
+        "at": "2026-10-21T08:34:48.889Z",
+        "status": 200,
+        "ms": 233
+      },
+      {
+        "at": "2026-10-21T08:35:01.741Z",
+        "status": 200,
+        "ms": 846
+      },
+      {
+        "at": "2026-10-21T08:35:14.254Z",
+        "status": 200,
+        "ms": 506
+      },
+      {
+        "at": "2026-10-21T08:35:27.257Z",
+        "status": 200,
+        "ms": 969
+      },
+      {
+        "at": "2026-10-21T08:35:40.198Z",
+        "status": 200,
+        "ms": 934
+      }
+    ],
+    "account_samples": [
+      {
+        "at": "2026-10-21T08:33:44.907Z",
+        "status": 200,
+        "ms": 890,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 5,
+            "max": 5,
+            "errors": 7,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:33:57.297Z",
+        "status": 200,
+        "ms": 376,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 4,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:34:09.793Z",
+        "status": 200,
+        "ms": 486,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:34:23.661Z",
+        "status": 200,
+        "ms": 655,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:34:36.201Z",
+        "status": 200,
+        "ms": 505,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:34:48.889Z",
+        "status": 200,
+        "ms": 674,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 4,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:35:01.741Z",
+        "status": 200,
+        "ms": 843,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 1,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:35:14.254Z",
+        "status": 200,
+        "ms": 498,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:35:27.257Z",
+        "status": 200,
+        "ms": 992,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      },
+      {
+        "at": "2026-10-21T08:35:40.198Z",
+        "status": 200,
+        "ms": 715,
+        "stats": {
+          "cooling": 3,
+          "credits": 1,
+          "disabled": 0,
+          "healthy": 1,
+          "total": 4
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "active": 0,
+            "max": 5,
+            "errors": 0,
+            "cooling": true,
+            "last_error": "context canceled"
+          },
+          {
+            "name": "azure_kiln",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "GT-2504_93107801",
+            "active": 0,
+            "max": 5,
+            "errors": 4,
+            "cooling": true,
+            "last_error": "consecutive errors"
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "active": 3,
+            "max": 5,
+            "errors": 0,
+            "cooling": false,
+            "last_error": "consecutive errors"
+          }
+        ]
+      }
+    ]
+  },
+  "after": [
+    {
+      "path": "/healthz",
+      "status": 200,
+      "ms": 1189,
+      "body": "ok"
+    },
+    {
+      "path": "/admin/api/overview",
+      "status": 200,
+      "ms": 1155,
+      "body": {
+        "stats": {
+          "cooling": 0,
+          "credits": 4,
+          "disabled": 0,
+          "healthy": 4,
+          "total": 4
+        },
+        "schedule": {
+          "watch": {
+            "credits_auto_claim": true,
+            "enabled": true,
+            "keepalive_interval": 15,
+            "keepalive_window": "10m",
+            "max_concurrent": 5,
+            "poll_minutes": 30,
+            "refresh_skew_minutes": 30
+          }
+        },
+        "accounts": [
+          {
+            "name": "apporia",
+            "disabled": false,
+            "cooling": false,
+            "until": "",
+            "err_count": 0,
+            "last_error": "context canceled",
+            "active_concurrent": 0,
+            "max_concurrent": 5
+          },
+          {
+            "name": "azure_kiln",
+            "disabled": false,
+            "cooling": false,
+            "until": "",
+            "err_count": 4,
+            "last_error": "consecutive errors",
+            "active_concurrent": 0,
+            "max_concurrent": 5
+          },
+          {
+            "name": "GT-2504_93107801",
+            "disabled": false,
+            "cooling": false,
+            "until": "",
+            "err_count": 4,
+            "last_error": "consecutive errors",
+            "active_concurrent": 0,
+            "max_concurrent": 5
+          },
+          {
+            "name": "hid_7z2k00f8g96788r",
+            "disabled": false,
+            "cooling": false,
+            "until": "",
+            "err_count": 1,
+            "last_error": "consecutive errors",
+            "active_concurrent": 0,
+            "max_concurrent": 5
+          }
+        ]
+      }
+    },
+    {
+      "path": "/v1/models",
+      "status": 200,
+      "ms": 1167,
+      "body": {
+        "data": [
+          {
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "GLM-5.2",
+            "max_output_tokens": 65536,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "glm-5.2",
+            "max_output_tokens": 65536,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 202752,
+            "created": 1753600000,
+            "id": "GLM-5.2-ArkTS-SPARK",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 202752,
+            "created": 1753600000,
+            "id": "glm-5.2-arkts-spark",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 131072,
+            "created": 1753600000,
+            "id": "glm-5.2-sft-harmony",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "GLM-5.3",
+            "max_output_tokens": 65536,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "glm-5.3",
+            "max_output_tokens": 65536,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 131072,
+            "created": 1753600000,
+            "id": "kimi-k2.6-vl",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 524288,
+            "created": 1753600000,
+            "id": "OpenPangu-2.0-Flash",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 524288,
+            "created": 1753600000,
+            "id": "openpangu-2.0-flash",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 524288,
+            "created": 1753600000,
+            "id": "OpenPangu-2.0-Pro",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 524288,
+            "created": 1753600000,
+            "id": "openpangu-2.0-pro",
+            "max_output_tokens": 131072,
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 131072,
+            "created": 1753600000,
+            "id": "Qwen3-VL-235B",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "context_length": 131072,
+            "created": 1753600000,
+            "id": "qwen3-vl-235b",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "benefit": true,
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "deepseek-v4-flash-0731",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "benefit": true,
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "deepseek-v4-pro-0813",
+            "object": "model",
+            "owned_by": "codearts"
+          },
+          {
+            "benefit": true,
+            "context_length": 1048576,
+            "created": 1753600000,
+            "id": "glm-5.3-flash",
+            "object": "model",
+            "owned_by": "codearts"
+          }
+        ],
+        "object": "list"
+      }
+    }
+  ]
+}
