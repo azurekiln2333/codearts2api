@@ -63,3 +63,25 @@ Implemented capability-aware bounded failover, metadata audit and truthful accou
 ### Next Steps
 
 - Deploy intended build with existing auth/data mounts, verify reported build/effective limits, then evaluate production traffic; no push or deployment performed.
+
+
+## Session 3: New API inspired admin panel redesign
+<!-- trellis-session: v=2 fp=3f0b6997ddd546d6 -->
+
+**Date**: 2026-10-21
+**Task**: New API inspired admin panel redesign
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Rebuilt the embedded admin panel as five workspace views with mobile navigation and light/dark themes. Preserved account, OAuth and audit contracts; independent review fixed failed-filter cursors, logout refresh races, exact model copying and schedule unknown states. Final synthetic localhost Chrome suite, targeted Go tests, vet/build, script checks and diff checks passed. UI task archived; no push or deployment.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `42fc19f` | feat: redesign admin panel with New API inspired workspace |
+
+### Status
+
+[OK] **Completed**
