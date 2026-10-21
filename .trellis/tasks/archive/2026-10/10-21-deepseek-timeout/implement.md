@@ -57,7 +57,7 @@ Integration tests also exposed two fairness traps. Independent first-turn reques
 - [x] Parent reran the original diagnostic harness successfully and passed full race/tests, vet, build, Linux server compilation, diff check, and task context validation. See `research/verification.md`.
 - [x] Capture executable contracts in `.trellis/spec/backend/request-lifecycle.md` and connect the backend index.
 - [x] Present the concrete one-shot commit plan and receive Phase 3.4 approval. The user explicitly replied "提交" on 2026-10-21; commit the approved paths without another approval request.
-- [ ] Commit only the approved paths, then archive/record the task through finish-work.
+- [x] Commit only the approved paths. Work commit: `3d87a5c` (`fix: bound chat lifecycle and concurrent account admission`); finish-work archive/session bookkeeping follows the work commit.
 
 ## Rollback Points
 
