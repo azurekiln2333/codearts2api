@@ -11,6 +11,7 @@ import (
 
 	"codearts2api/internal/audit"
 	"codearts2api/internal/pool"
+	"codearts2api/internal/telemetry"
 	"codearts2api/internal/upstream"
 )
 
@@ -52,13 +53,16 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	// whether audit is enabled, so logs and records can always be joined.
 	requestID := randHex(16)
 	original.Header().Set("X-Request-Id", requestID)
-	lifetime := newChatLifetime(r.Context(), h.cfg.StartupTimeout)
+	auditSink := h.cfg.Audit
+	tracker := auditSink.Begin(requestID, started)
+	observer := &chatObserver{tracker: tracker, started: started}
+	lifetime := newChatLifetime(telemetry.WithObserver(r.Context(), observer), h.cfg.StartupTimeout)
 	defer lifetime.close()
 	w := newChatResponseWriter(original, h.cfg.StreamWriteTimeout)
 	defer w.clearDeadline()
 	model := h.cfg.DefaultModel
 	outcome, accountName, attempts := "invalid_request", "", 0
-	var waited, firstData time.Duration
+	var waited time.Duration
 	var (
 		streamFlag     bool
 		requestedModel string
@@ -70,12 +74,11 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	// below. The sink call is a non-blocking enqueue and never holds a lock or
 	// a slot when it runs.
 	defer func() {
+		telemetry.SetPhase(lifetime.ctx, telemetry.Cleanup)
 		total := time.Since(started)
+		firstData := observer.firstData()
 		log.Printf("chat id=%s model=%s account=%s attempts=%d wait=%s first_data=%s total=%s outcome=%s", requestID, model, accountName, attempts,
 			waited.Round(time.Millisecond), firstData.Round(time.Millisecond), total.Round(time.Millisecond), outcome)
-		if h.cfg.Audit == nil {
-			return
-		}
 		status, committed := w.Status()
 		canceled := r.Context().Err() != nil
 		// The final context cause takes precedence over an earlier provider
@@ -126,7 +129,11 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			ms := firstData.Milliseconds()
 			ev.FirstDataMS = &ms
 		}
-		h.cfg.Audit.Record(ev)
+		if tracker != nil {
+			tracker.Finish(ev)
+		} else {
+			auditSink.Record(ev)
+		}
 	}()
 
 	// Include request reads and retry sleeps in the process-wide limit, across
@@ -138,7 +145,11 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		writeChatLifecycleError(w, r, lifetime, err)
 		return
 	}
-	defer releaseAdmission()
+	defer func() {
+		telemetry.SetPhase(lifetime.ctx, telemetry.Cleanup)
+		releaseAdmission()
+	}()
+	telemetry.SetPhase(lifetime.ctx, telemetry.ReadBody)
 	controller := http.NewResponseController(original)
 	readDeadlineSupported := controller.SetReadDeadline(started.Add(h.cfg.StartupTimeout)) == nil
 	stopRead := context.AfterFunc(lifetime.ctx, func() {
@@ -178,6 +189,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		writeOpenAIError(w, http.StatusRequestEntityTooLarge, "request_too_large", "request body exceeds 8MB limit")
 		return
 	}
+	telemetry.SetPhase(lifetime.ctx, telemetry.Prepare)
 	req, err := parseChatRequest(body)
 	if err != nil {
 		auditErr = err
@@ -192,6 +204,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		model = req.Model
 	}
 	canonical = upstream.CanonicalModel(model)
+	tracker.SetRequest(requestedModel, canonical, streamFlag)
 	tools, err := nativeTools(req.Tools, req.ToolChoice)
 	if err != nil {
 		auditErr = err
@@ -244,6 +257,8 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	defer func() { current.close() }()
 	remainingWait := h.cfg.AccountWaitTimeout
 	acquire := func(candidates []pool.AccountCandidate) (*pool.Lease, error) {
+		tracker.SetAttempt(attempts, "")
+		telemetry.SetPhase(lifetime.ctx, telemetry.WaitAccount)
 		before := time.Now()
 		lease, err := h.cfg.Pool.AcquireAccount(lifetime.ctx, candidates, remainingWait)
 		elapsed := time.Since(before)
@@ -297,14 +312,16 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			break
 		}
 		acct := lease.Account
-		current = &chatAttempt{lease: lease}
+		current = &chatAttempt{lease: lease, ctx: lifetime.ctx}
 		tried[acct.Name] = true
 		if len(triedOrder) < audit.MaxTried {
 			triedOrder = append(triedOrder, acct.Name)
 		}
 		accountName = acct.Name
+		tracker.SetAttempt(attempts, acct.Name)
 		stickyAcct = "" // Only the first still-valid affinity choice is pinned.
 
+		telemetry.SetPhase(lifetime.ctx, telemetry.ValidateAccount)
 		valid, verr := h.cfg.Pool.ValidateContext(lifetime.ctx, acct)
 		if verr != nil || !valid {
 			current.close()
@@ -329,6 +346,8 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				outcome = "canceled_or_timeout"
 				return
 			}
+			tracker.SetAttempt(attempts+1, acct.Name)
+			telemetry.SetPhase(lifetime.ctx, telemetry.PrepareUpstream)
 			authz := acct.AuthSnapshot()
 			if authz == nil {
 				sendErr = errors.New("account credentials are missing")
@@ -341,7 +360,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			h.cfg.Pool.PingKeepalive(acct.Name)
 			attempts++
 			current.body, sendErr = acct.Client.ChatStreamWithOptions(lifetime.ctx, chatID, msgs, "", cred,
-				authz.UserName, model, chatOpts, upstream.IsBenefitModel(acct.UID, model))
+				authz.UserName, model, chatOpts, upstream.IsBenefitModelForAuth(acct.UID, model, authz))
 			if sendErr == nil {
 				break
 			}
@@ -373,6 +392,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			current.close()
 			current = nil
+			telemetry.SetPhase(lifetime.ctx, telemetry.RetryDelay)
 			if err := waitChatRetry(lifetime.ctx, h.cfg.QueueRetryDelay); err != nil {
 				outcome = "canceled_or_timeout"
 				auditErr = err
@@ -395,7 +415,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				lastErr = err
 				break
 			}
-			current = &chatAttempt{lease: lease}
+			current = &chatAttempt{lease: lease, ctx: lifetime.ctx}
 		}
 		if current == nil {
 			// Failed reacquisition owns no slot and is not a provider failure.
@@ -423,7 +443,6 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			writeChatLifecycleError(w, r, lifetime, err)
 			return
 		}
-		firstData = time.Since(started)
 		w.Header().Set("X-Codearts-Chat-Id", chatID)
 		storeChat := func() {
 			if !explicitChat {
@@ -440,6 +459,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			if req.IncludeUsage {
 				usage = func(comp *upstream.RawCompletion) map[string]any { return usageEstimate(msgs, comp) }
 			}
+			telemetry.SetPhase(lifetime.ctx, telemetry.Stream)
 			streamErr := upstream.StreamCaptureWithUsage(w, current.body, model, nil, usage)
 			current.close()
 			if w.err != nil || r.Context().Err() != nil {
@@ -460,6 +480,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			return
 		}
 
+		telemetry.SetPhase(lifetime.ctx, telemetry.Aggregate)
 		comp, aggregateErr := upstream.AggregateRaw(current.body)
 		current.close()
 		if aggregateErr != nil {
@@ -500,6 +521,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		if len(calls) > 0 {
 			finish = "tool_calls"
 		}
+		telemetry.SetPhase(lifetime.ctx, telemetry.WriteResponse)
 		writeJSON(w, http.StatusOK, buildCompletion(model, comp.Reasoning, content, calls, finish, chatID, usageEstimate(msgs, comp)))
 		if w.err != nil {
 			outcome = "downstream_canceled"

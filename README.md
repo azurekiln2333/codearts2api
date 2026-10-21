@@ -50,7 +50,7 @@ curl -X POST http://127.0.0.1:7866/v1/chat/completions \
   -d '{"model":"snap-chat","messages":[{"role":"user","content":"你好"}]}'
 ```
 
-浏览器打开 **http://127.0.0.1:7866/** 即 WebUI：账号/token 状态、对话测试（流式/非流式）。多轮上下文按账号自动续接（chat_id 分组）；也可用请求头
+浏览器打开 **http://127.0.0.1:7866/panel/** 即管理控制台：账号授权与状态、模型目录、请求审计和连接日志。多轮上下文按账号自动续接（chat_id 分组）；也可用请求头
 `X-Codearts-Chat-Id: <chatId>` 或 body 里 `conversation_id` 显式指定会话。
 
 流式请求设置 `"stream_options":{"include_usage":true}` 后，会在 `[DONE]` 前返回一次
@@ -121,13 +121,16 @@ go run ./cmd/models -claim          # 先领取限时福利再查询（幂等，
 "benefit_auto_claim": false   // 或 CA2A_BENEFIT_AUTO_CLAIM=0
 ```
 
-关闭后福利模型仍会出现在 `/v1/models`，但调用必然失败。
+关闭后不会主动领取福利；已领取的权益仍以上游账号状态为准，未领取时上游可能拒绝调用。
+
+后台“模型目录 → 重新拉取”会真正重新请求各账号的 Agent、内置和福利来源，显示来源状态、尝试/成功时间、保留的旧目录及账号模型排除。多次点击共享同一个有界任务，任务启动至少间隔 15 秒，单次最多 60 秒、并行处理 2 个账号；失败来源保留上次成功数据并标为旧数据。`GET /admin/api/models` 只读缓存，`POST /admin/api/models/refresh` 返回 202 与任务状态。
+
+`model_not_available` 表示当前符合调度条件的账号均未提供该模型或存在有效的能力拒绝缓存。先在目录查看精确模型 ID、来源失败与排除原因。成功拉取对应的有效来源后，会重置这次拉取前的相关旧排除，允许下次真实调用重新判断；不会把目录收录当成权限验证，也不会清除并发请求刚写入的新拒绝。官网能看到模型不等于每个已配置账号都有同样权益。
 
 ### 模型可用性探测
 
-`/v1/models` 只列**真实可用**的模型：上游的模型发现（agent-center / builtin / 福利
-网关）会列出当前账号根本没注册的模型（实测 `GLM-5.2-ArkTS-SPARK`、`OpenPangu-2.0-Pro`
-等返回 `InferHub.002002009.404`）。服务会周期性用一条最小请求探测并缓存结论，
+`/v1/models` 返回发现的目录并过滤已知不可用项；未被拒绝不代表已验证可调用。上游模型发现（agent-center / builtin / 福利
+网关）可能列出当前账号尚未注册的模型（如返回 `InferHub.002002009.404`）。服务会周期性用一条最小请求探测并缓存结论，
 真实请求失败也会被学习（`not registered` / `benefit not found` 记为账号能力问题，
 不会给健康账号记错误冷却）。探测结果缓存 30 分钟。
 
@@ -197,18 +200,54 @@ Compose 支持通过同目录 `.env` 或 shell 环境变量配置端口、时区
 ```bash
 docker compose config --quiet
 docker inspect --format '{{.Image}}' codearts2api
-CA2A_BUILD_COMMIT="$(git rev-parse HEAD)" \
+export CA2A_BUILD_COMMIT="$(git rev-parse HEAD)"
 CA2A_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" docker compose build
 docker compose up -d --no-build
 ```
 
-容器名改过时替换上述 `codearts2api`。发布前确认工作目录对应预期提交且产品源码没有未提交改动。进入后台核对构建提交、实际账号并发和等待/超时配置，再做有边界的模型测试；未注入身份时后台显示“未知构建”，不能据此认定已运行新版本。需要回退时使用之前记录的镜像并保留同一组挂载目录。持续有上游数据的非流式生成可能超过启动预算，客户端长时间收不到最终响应并不单独证明网关卡死。
+容器名改过时替换上述 `codearts2api`。发布前确认工作目录对应预期提交且产品源码没有未提交改动。构建信息只保留在“运行配置”，未注入提交时无法确认版本。升级后检查实际账号并发和等待/超时配置；需要回退时使用之前记录的镜像并保留同一组挂载目录。持续有上游数据的非流式生成可能超过启动预算，客户端长时间收不到最终响应并不单独证明网关卡死。
+
+### 完整源码包与部署核对
+
+完成代码提交后，可用 Python 3.9+ 生成完整源码包；仅从指定 Git 提交导出产品清单，包含 Compose、Dockerfile、示例配置、Go 源码和校验脚本，排除真实 `.env`、`config.json`、凭证、数据和工作区工具。相同提交生成相同 ZIP，不覆盖已有文件：
+
+```bash
+python3 scripts/release-source.py --commit HEAD
+```
+
+产物为 `codearts2api-source-<提交前12位>.zip`，附带 `release.json` 文件校验和及仅含源码提交的 `release.env`。源码包不包含 `.git`；解压后在原部署目录保留现有挂载路径，按包内身份重新构建：
+
+```bash
+set -a
+. ./release.env
+set +a
+docker compose config --quiet
+CA2A_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" docker compose build
+docker compose up -d --no-build
+```
+
+重启现有容器不会替换旧镜像；源码更新后必须重新 build 并由 Compose 重建服务。不要在升级时覆盖原 `.env`、`config.json`、`auths/`、`data/`。
+
+部署核对使用环境变量提供密钥，仅发送 GET：检查健康、实际提交、清理后的控制台及审计/模型/连接接口；旧页面、404、401、身份未知或提交不符都会返回非零状态。反向代理有路径前缀时将其写入 `--url`。以下域名替换为自己的服务地址：
+
+```bash
+read -r -s -p "服务 API Key: " CA2A_API_KEY
+export CA2A_API_KEY
+python3 scripts/verify-deployment.py --url https://gateway.example.com --expected-commit "$CA2A_BUILD_COMMIT"
+unset CA2A_API_KEY
+```
+
+此校验不会发起聊天、模型探测或重新拉取；审计被配置关闭时会明确提示。它验证交付的版本和接口，模型实际权益需结合来源结果及真实调用判断。
 
 ## 请求审计与账号状态
 
 后台的“请求审计”展示最近请求的模型、所选账号、HTTP 状态与执行结果、安全供应商错误码、尝试次数，以及排队/首数据/总耗时。响应头 `X-Request-Id` 可关联服务日志和审计记录。`GET /admin/api/requests` 与 `GET /admin/api/audit` 使用现有 Bearer Key 鉴权；请求列表支持 `limit`（最多 200）、`before`（序号游标）、`model`、`account`、`outcome`、`status`、`since` 过滤。
 
 默认审计保留 7 天，最多 8 个 8 MiB 文件（含当前文件，合计不超过 64 MiB），入队上限 256，近期窗口 512 条。重启会恢复近期记录和序号；新请求可能让窗口中最旧的记录退出分页。更早的保留文件位于 `<state_file 所在目录>/audit/`，供本地归档查看。队列满或磁盘写入失败不会等待写盘，后台会显示丢弃与写入失败计数。审计仅保存元数据，不保存提示词、回复、工具参数、请求头、密钥或登录凭证；共享服务 Key 无法区分 New API 的具体终端用户。
+
+“连接日志”在请求尚未结束时显示当前阶段、阶段/总耗时、账号、尝试次数及实际最后上游读取进展，可区分等待账号、等待凭证刷新、等待上游响应头、等待首个 SSE 数据、转发/聚合和写回。首个 SSE 数据不是首个生成 token，长流耗时大也不代表无进展。页面仅在登录且位于前台时约每 2 秒读取 `GET /admin/api/connections`，离开页面、切后台或退出登录即停止。
+
+活动跟踪最多 512 个请求，每个请求最多 32 个阶段；超限和截断会显示累计计数。结束后的记录复用审计近期窗口，旧版记录没有阶段历史时明确显示不可用。关闭请求审计也会关闭连接跟踪。
 
 账号的“可调度 / 冷却 / 禁用”与历史失败分别展示。`err N` 是连续失败计数，默认达到 3 次冷却 10 分钟；冷却自然到期不会自动清除历史计数。实际请求成功后会清理已过时的当前错误并持久化一次，保留历史失败，不会撤销当前冷却或人工禁用。升级前的失败时间无法恢复，显示为“时间未知”。签到领取积分与具体模型的福利资格不同，`benefit not found` 仍需要核对该模型的权益。
 
@@ -237,7 +276,7 @@ docker compose up -d --no-build
 | `CA2A_QUEUE_RETRY_SECONDS` | 上游排队/TPM 重试间隔（秒） | `2` |
 | `CA2A_QUEUE_MAX_ATTEMPTS` | 每账号总尝试次数（含首次） | `3` |
 | `CA2A_KEEPALIVE_WINDOW` | 保活窗口 | `10m` |
-| `CA2A_BENEFIT_AUTO_CLAIM` | 发现模型时自动领取限时福利（幂等；关闭则福利模型不可用） | `true` |
+| `CA2A_BENEFIT_AUTO_CLAIM` | 发现模型时自动领取限时福利（幂等；关闭后不主动领取） | `true` |
 | `CA2A_CREDITS_AUTO_CLAIM` | watchdog 自动领取每日签到及新用户积分 | `true` |
 | `CA2A_LOGIN_CLIENT_ID` | WebUI 登录使用的 OAuth client_id | 已有账号的取值，否则 `codearts-agent` |
 | `CA2A_AUDIT_ENABLED` | 开启请求元数据审计 | `true` |
@@ -263,7 +302,9 @@ internal/upstream/ 云端客户端（登录/聊天/SSE/模型发现）+ 逆向�
 internal/pool/     账号池（token 校验/自动刷新/冷却/并发控制）
 internal/scheduler/ token 续期看门狗（新增保活机制）
 internal/server/   OpenAI 兼容路由
-internal/webui/    内嵌 WebUI 控制台
+internal/audit/    有界请求审计与活动连接跟踪
+internal/telemetry/ 请求阶段与读取进展观察器
+scripts/           完整源码打包与只读部署核对
 deploy/            systemd unit 样例
 docs/              逆向过程与接口清单
 ```

@@ -12,6 +12,7 @@ import (
 
 	"codearts2api/internal/auth"
 	"codearts2api/internal/pool"
+	"codearts2api/internal/telemetry"
 	"codearts2api/internal/upstream"
 )
 
@@ -69,11 +70,25 @@ func TestChatStartupTimeoutDuringRefreshWaitReleasesEverything(t *testing.T) {
 		acct.Client = upstream.NewWithChatEndpoint(300*time.Millisecond, backend.URL)
 	}
 	h := NewHandler(Config{Pool: p, MaxRotate: 1, QueueMaxAttempts: 1, ErrThreshold: 1})
-	h.cfg.StartupTimeout = 70 * time.Millisecond
+	h.cfg.StartupTimeout = 120 * time.Millisecond
+	h.cfg.Audit = newAuditSink(t)
 
 	started := time.Now()
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, lifecycleRequest(context.Background(), false))
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		h.ServeHTTP(rec, lifecycleRequest(context.Background(), false))
+	}()
+	active := waitConnectionPhase(t, h, telemetry.WaitRefresh)
+	if active.Account == nil || active.FirstSSEDataMS != nil || active.LastUpstreamProgressAgeMS != nil {
+		t.Fatalf("refresh wait invented upstream chat activity: %+v", active)
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("refresh wait retained its request after startup timeout")
+	}
 	elapsed := time.Since(started)
 	if rec.Code != http.StatusGatewayTimeout {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -101,5 +116,9 @@ func TestChatStartupTimeoutDuringRefreshWaitReleasesEverything(t *testing.T) {
 	waitLifecycle(t, func() bool { return !p.Busy(p.Accounts()[0].Name) }, "background refresh retained the account slot")
 	if !p.Healthy(p.Accounts()[0].Name) {
 		t.Fatal("canceled refresh wait changed account health")
+	}
+	event := assertFinishedConnection(t, h, p, active.ID)
+	if event.Outcome != "timeout" || !traceHasPhase(event, telemetry.WaitRefresh) || event.Trace.FirstSSEDataMS != nil {
+		t.Fatalf("refresh timeout lost the actual waiting phase: %+v", event)
 	}
 }

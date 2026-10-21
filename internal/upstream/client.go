@@ -26,6 +26,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"codearts2api/internal/telemetry"
 )
 
 // ApiError 带业务 code 的上游错误。
@@ -576,6 +578,7 @@ func (c *Client) sendChatV2(ctx context.Context, body map[string]any, traceID st
 	if sessionID != "" {
 		httpReq.Header.Set("Session-Id", sessionID)
 	}
+	telemetry.SetPhase(ctx, telemetry.WaitHeaders)
 	resp, err := c.streamHTTP.Do(httpReq)
 	wait.end()
 	if err != nil {
@@ -585,6 +588,7 @@ func (c *Client) sendChatV2(ctx context.Context, body map[string]any, traceID st
 	}
 	streamBody := &timeoutReadCloser{body: resp.Body, wait: wait}
 	if resp.StatusCode >= 400 {
+		telemetry.SetPhase(ctx, telemetry.ReadError)
 		rawBody, readErr := io.ReadAll(io.LimitReader(streamBody, 1<<20))
 		_ = streamBody.Close()
 		if readErr != nil {
@@ -592,7 +596,8 @@ func (c *Client) sendChatV2(ctx context.Context, body map[string]any, traceID st
 		}
 		return nil, &ApiError{Code: resp.StatusCode, Status: resp.StatusCode, Message: truncateStr(string(rawBody), 200), Path: EpChatV2}
 	}
-	return preflightSSE(streamBody)
+	telemetry.SetPhase(ctx, telemetry.WaitFirstSSE)
+	return preflightSSE(ctx, streamBody)
 }
 
 type replayReadCloser struct {
@@ -603,7 +608,7 @@ type replayReadCloser struct {
 // preflightSSE 只读到首个 data 事件：正常事件原样回放，不破坏流式；
 // HTTP 200 里内嵌的 CodeArts 排队/TPM 错误则在响应头发给客户端前
 // 转为 ApiError，让上层可以重试整个请求。
-func preflightSSE(body io.ReadCloser) (io.ReadCloser, error) {
+func preflightSSE(ctx context.Context, body io.ReadCloser) (io.ReadCloser, error) {
 	br := bufio.NewReaderSize(body, 1<<20)
 	var prefix bytes.Buffer
 	var pendingEvent string
@@ -615,6 +620,7 @@ func preflightSSE(body io.ReadCloser) (io.ReadCloser, error) {
 				_ = body.Close()
 				return nil, apiErr
 			}
+			telemetry.FirstSSEData(ctx)
 			return &replayReadCloser{Reader: io.MultiReader(bytes.NewReader(prefix.Bytes()), br), Closer: body}, nil
 		}
 		if err != nil {

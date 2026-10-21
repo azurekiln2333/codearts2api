@@ -95,7 +95,8 @@ type Event struct {
 	RetryAfterS int  `json:"retry_after_s,omitempty"`
 	Canceled    bool `json:"canceled"`
 
-	Cause Cause `json:"cause"`
+	Cause Cause  `json:"cause"`
+	Trace *Trace `json:"trace,omitempty"`
 }
 
 // Options configure the sink. Zero values mean "use the default".
@@ -246,14 +247,19 @@ type Sink struct {
 	// filesystem operation holds this lock; concurrent paging sees that order.
 	recordMu sync.Mutex
 	closed   bool
+	// Live metadata shares the record lock only for membership/publication.
+	// Per-request progress has its own lock and never takes a pool lock.
+	active map[*Tracker]struct{}
 
 	seq atomic.Uint64
 
-	queued        atomic.Int64
-	written       atomic.Uint64
-	dropped       atomic.Uint64
-	writeFailures atomic.Uint64
-	rotations     atomic.Uint64
+	queued             atomic.Int64
+	written            atomic.Uint64
+	dropped            atomic.Uint64
+	writeFailures      atomic.Uint64
+	rotations          atomic.Uint64
+	connectionOverflow atomic.Uint64
+	traceTruncated     atomic.Uint64
 
 	// Writer-owned state; never touched by Record.
 	file        *os.File
@@ -290,6 +296,7 @@ func Open(opts Options) (*Sink, error) {
 		s.writeFailures.Add(1)
 	}
 	s.ch = make(chan Event, o.MaxQueue)
+	s.active = make(map[*Tracker]struct{})
 	go s.loop()
 	return s, nil
 }
@@ -314,6 +321,11 @@ func (s *Sink) Record(ev Event) {
 	ev = s.prepare(ev)
 	s.recordMu.Lock()
 	defer s.recordMu.Unlock()
+	s.recordLocked(ev)
+}
+
+// recordLocked publishes already prepared metadata in sequence/enqueue order.
+func (s *Sink) recordLocked(ev Event) {
 	if s.closed {
 		s.dropped.Add(1)
 		return
@@ -383,7 +395,8 @@ func (s *Sink) prepare(ev Event) Event {
 	if ev.Attempts < 0 {
 		ev.Attempts = 0
 	}
-	return ev
+	ev.Trace = sanitizeTrace(ev.Trace, ev.TotalMS)
+	return fitTrace(ev)
 }
 
 func (s *Sink) appendRing(ev Event) {
@@ -454,6 +467,7 @@ func (s *Sink) Snapshot(q Query) Page {
 			first := *ev.FirstDataMS
 			ev.FirstDataMS = &first
 		}
+		ev.Trace = cloneTrace(ev.Trace)
 		matched = append(matched, ev)
 	}
 	if len(matched) > q.Limit {
@@ -498,6 +512,7 @@ func (s *Sink) Close(ctx context.Context) {
 	s.closeOnce.Do(func() {
 		s.recordMu.Lock()
 		s.closed = true
+		s.closeTrackersLocked()
 		close(s.closing)
 		s.recordMu.Unlock()
 		select {

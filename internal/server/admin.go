@@ -14,7 +14,8 @@ import (
 	"codearts2api/internal/auth"
 )
 
-// adminOverview 面板总览。
+// adminOverview reads cached runtime diagnostics only; it never starts model
+// discovery, benefit claims or real inference probes.
 func (h *Handler) adminOverview(w http.ResponseWriter, r *http.Request) {
 	total, healthy, disabled, cooling, credits := h.cfg.Pool.Stats()
 	models := h.modelList()

@@ -62,13 +62,6 @@ type Config struct {
 	Audit *audit.Sink
 }
 
-var dynamicModelsCache struct {
-	sync.RWMutex
-	ids      []upstream.ModelInfo
-	fetched  time.Time
-	lastFail time.Time
-}
-
 // staticModel 静态兜底模型：动态发现失败时 /v1/models 仍能列出实测可用模型。
 type staticModel struct {
 	ID            string
@@ -94,11 +87,6 @@ var staticModels = []staticModel{
 	{ID: "glm-5.3-flash", ContextWindow: 1048576, Benefit: true},
 }
 
-const (
-	dynamicModelsTTL        = time.Hour
-	modelsFetchFailCooldown = 5 * time.Minute
-)
-
 const maxBodyBytes = 8 << 20
 
 // Handler 主路由。
@@ -114,6 +102,8 @@ type Handler struct {
 
 	loginMu sync.Mutex
 	logins  map[string]*pendingLogin
+
+	modelCatalog modelCatalogState
 }
 
 // pendingLogin WebUI 登录中间状态。
@@ -185,6 +175,9 @@ func NewHandler(cfg Config) *Handler {
 	h.mux.HandleFunc("GET /admin/api/overview", h.withAuth(h.adminOverview))
 	h.mux.HandleFunc("GET /admin/api/requests", h.withAuth(h.adminRequests))
 	h.mux.HandleFunc("GET /admin/api/audit", h.withAuth(h.adminAudit))
+	h.mux.HandleFunc("GET /admin/api/models", h.withAuth(h.adminModels))
+	h.mux.HandleFunc("POST /admin/api/models/refresh", h.withAuth(h.adminModelsRefresh))
+	h.mux.HandleFunc("GET /admin/api/connections", h.withAuth(h.handleConnections))
 	h.mux.HandleFunc("POST /admin/api/credits", h.withAuth(h.adminCredits))
 	h.mux.HandleFunc("POST /admin/api/checkin", h.withAuth(h.adminCheckin))
 	h.mux.HandleFunc("POST /admin/api/keepalive", h.withAuth(h.adminKeepalive))
@@ -417,17 +410,22 @@ func firstNonEmpty(vals ...string) string {
 // models
 // ---------------------------------------------------------------------------
 
-// models 返回模型列表：优先动态（缓存 1h），失败回退静态表（仅精确模型名）。
+// models serves the cached list and schedules the existing bounded background
+// discovery/probe work only for the OpenAI model-list route.
 func (h *Handler) models(w http.ResponseWriter, r *http.Request) {
+	entries := h.modelList()
+	h.requestModelRefresh(false)
+	h.probeUnknownAsync()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"object": "list",
-		"data":   h.modelList(),
+		"data":   entries,
 	})
 }
 
-// modelList 动态获取模型列表并包装成 OpenAI 格式。
+// modelList reads and filters cached metadata only. Admin overview and release
+// verification must not trigger metadata requests, benefit claims or chat probes.
 func (h *Handler) modelList() []map[string]any {
-	entries := modelEntries(h.fetchDynamicModels())
+	entries := modelEntries(h.cachedDynamicModels())
 	// 过滤掉「已知不可用」的模型：这些条目在客户端点开就是 404 / benefit not
 	// found，列出来只会误导。必须作用在最终条目上——静态兜底表也会补位，
 	// 只在动态结果上过滤会让被下架的模型又从静态表冒出来。
@@ -440,13 +438,8 @@ func (h *Handler) modelList() []map[string]any {
 				kept = append(kept, e)
 			}
 		}
-		if len(kept) > 0 {
-			entries = kept
-		}
+		entries = kept
 	}
-	// 刚发现到的模型还没有可用性结论：后台补一轮探测，供后续请求过滤。
-	// （首次请求返回的是「发现结果」，之后才收敛到「真实可用」。）
-	h.probeUnknownAsync()
 	return entries
 }
 
@@ -538,62 +531,6 @@ func modelEntries(infos []upstream.ModelInfo) []map[string]any {
 	return out
 }
 
-// fetchDynamicModels 刷新各账号模型目录并返回合并后的展示列表，缓存 1h。
-//
-// 目录按账号存放（限时福利按账号授予，账号之间不能互相污染），因此这里逐个健康
-// 账号发现并写入其目录；发现失败的账号沿用旧目录或冷启动种子。
-func (h *Handler) fetchDynamicModels() []upstream.ModelInfo {
-	dynamicModelsCache.RLock()
-	if len(dynamicModelsCache.ids) > 0 && time.Since(dynamicModelsCache.fetched) < dynamicModelsTTL {
-		out := dynamicModelsCache.ids
-		dynamicModelsCache.RUnlock()
-		return out
-	}
-	// 失败负缓存：冷却期内不再请求上游。
-	if !dynamicModelsCache.lastFail.IsZero() && time.Since(dynamicModelsCache.lastFail) < modelsFetchFailCooldown {
-		dynamicModelsCache.RUnlock()
-		return nil
-	}
-	dynamicModelsCache.RUnlock()
-
-	var sets [][]upstream.ModelInfo
-	for _, acct := range h.cfg.Pool.Accounts() {
-		authz := acct.AuthSnapshot()
-		if authz == nil || !h.cfg.Pool.Healthy(acct.Name) {
-			continue
-		}
-		if !upstream.AccountCatalogStale(acct.UID) {
-			if infos, ok := upstream.AccountModels(acct.UID); ok {
-				sets = append(sets, infos)
-				continue
-			}
-		}
-		infos, err := h.cfg.Upstream.FetchModels(authz) // 成功即写入该账号目录
-		if err != nil {
-			log.Printf("model discovery failed for account %s: %v", acct.Name, err)
-			continue
-		}
-		if len(infos) == 0 {
-			log.Printf("model discovery returned no models for account %s", acct.Name)
-			continue
-		}
-		sets = append(sets, infos)
-	}
-	infos := upstream.MergeModels(sets...)
-	if len(infos) == 0 {
-		dynamicModelsCache.Lock()
-		dynamicModelsCache.lastFail = time.Now()
-		dynamicModelsCache.Unlock()
-		return nil
-	}
-	dynamicModelsCache.Lock()
-	dynamicModelsCache.ids = infos
-	dynamicModelsCache.fetched = time.Now()
-	dynamicModelsCache.lastFail = time.Time{} // 成功则清空负缓存
-	dynamicModelsCache.Unlock()
-	return infos
-}
-
 // pickAccount 挑一个「目录里登记了这个模型」的健康账号，没有则退回普通轮转。
 //
 // 混合账号池里各账号的套餐不同：/v1/models 展示的是并集，若把请求先发给目录里
@@ -616,7 +553,7 @@ func (h *Handler) pickByCatalog(tried map[string]bool, wantLower string) *pool.A
 		if acct == nil || tried[acct.Name] || !h.cfg.Pool.Healthy(acct.Name) {
 			continue
 		}
-		if models, known := upstream.AccountModels(acct.UID); known && catalogHas(models, wantLower) {
+		if models, known := upstream.AccountModelsForAuth(acct.UID, acct.AuthSnapshot()); known && catalogHas(models, wantLower) {
 			if st, _ := modelAvailability(acct.UID, wantLower); st == availUnusable {
 				continue // 该账号实测调不通这个模型，别选它
 			}
@@ -632,11 +569,8 @@ func (h *Handler) accountCanServe(acct *pool.Account, model string) bool {
 	if acct == nil {
 		return true
 	}
-	models, known := upstream.AccountModels(acct.UID)
-	if !known {
-		return true
-	}
-	return catalogHas(models, strings.ToLower(upstream.CanonicalModel(model)))
+	present, complete := upstream.AccountModelKnowledgeForAuth(acct.UID, upstream.CanonicalModel(model), acct.AuthSnapshot())
+	return present || !complete
 }
 
 // catalogHas 按小写 ID 在模型目录里查模型。

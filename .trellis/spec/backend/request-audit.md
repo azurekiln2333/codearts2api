@@ -14,10 +14,13 @@ audit.Open(audit.Options) (*audit.Sink, error)
 (*audit.Sink).Snapshot(audit.Query) audit.Page
 (*audit.Sink).Stats() audit.Stats
 (*audit.Sink).Close(context.Context)
+(*audit.Sink).Begin(id string, started time.Time) *audit.Tracker
+(*audit.Sink).Connections() audit.Connections
+(*audit.Tracker).Finish(audit.Event)
 ```
 
 Authenticated APIs: `GET /admin/api/requests`, `GET /admin/api/audit` and
-`GET /admin/api/overview`. Requests use `limit` (default 50, maximum 200), `before`
+`GET /admin/api/overview` and `GET /admin/api/connections`. Requests use `limit` (default 50, maximum 200), `before`
 (exclusive uint64 sequence cursor), `outcome`, `account`, `model` (requested or
 canonical, case insensitive), `status` and RFC3339 `since`.
 
@@ -71,6 +74,36 @@ directory is `audit` beside `state_file`, preserving the existing data mount.
 The sink clamps all numeric settings; total bytes also cannot exceed the combined
 file limits, and one file cannot exceed the total budget.
 
+### Live connection tracking
+
+`internal/telemetry` owns fixed phase/progress callbacks carried by the request
+context; it never receives request/response content. The sink tracks at most 512
+active requests with 32 phase points each. Overflow and trace truncation are
+cumulative visible counters. Disabled/nil/closed sinks have no stranded tracker.
+`Connections()` returns bounded in-memory `active` records and the latest 50
+completed `recent` events, plus `disabled`, `capacity`, `overflow` and
+`trace_truncated`. No endpoint read performs network or disk I/O.
+
+Active records contain `id`, `ts`, `model`, `model_canonical`, `stream`, nullable
+`account`, `attempt`, `phase`, `phase_age_ms`, `total_ms`, nullable
+`last_upstream_progress_age_ms` / `first_sse_data_ms`, `timeline` and
+`trace_truncated`. Points are `{phase,at_ms,attempt,account?}`. Completed events
+optionally add `trace{timeline,first_sse_data_ms,last_upstream_progress_ms,truncated}`;
+old JSON without `trace` remains valid and is not given fabricated history.
+
+Callbacks happen outside pool/account/stream locks, have bounded memory cost and
+perform no I/O. Only actual upstream reads returning bytes update progress;
+only accepted SSE data sets first SSE timing. HTTP header wait includes client
+request work, not an isolated TCP metric. Credential observers report each
+caller's wait after unlock; shared background refresh inherits no request observer.
+There is no upstream session-creation RPC in the v2 request flow.
+
+Finish once after body/lease/admission cleanup using the existing final
+status/outcome/cause classifier. Ignore late callbacks after finish; close detaches
+trackers without inventing a completion. Trace sanitization/copying applies on
+record, page and replay, and encoded events still fit the existing 16-KiB ceiling.
+Streaming request age alone does not imply a hang or justify cancellation.
+
 ### Account state and build identity
 
 Schedulable/cooling/disabled describe current availability; failure class/text/time
@@ -101,6 +134,10 @@ local checkout or claim a successful deployment without checking the running bui
 | Audit closed / disabled | No stranded enqueues; post-close drops counted; disabled API honest |
 | Unauthenticated audit API | Existing 401 envelope; no metadata disclosure |
 | Old state JSON | Schedulability preserved; unknown historic time; no auth migration |
+| Header or first-SSE wait | Active phase/age visible; absent first SSE remains null |
+| Long healthy stream | Recent actual-read age stays visible; no lifetime-based termination |
+| Active/phase caps reached | Fixed bounds, explicit loss/truncation counters, eventual capacity reuse |
+| Late callbacks / legacy replay | No resurrected active entry or invented legacy trace |
 
 ## 5. Good / Base / Bad Cases
 
@@ -126,6 +163,11 @@ local checkout or claim a successful deployment without checking the running bui
   derived audit directory and normalized effective limits. Verify actual Compose
   interpolation, synchronized ports and credential mount preservation.
 - Run full tests, race detector, vet, build and diff checks after integration.
+- Connection regressions exercise actual stalled HTTP headers, silent SSE,
+  comment-only progress, long stream/aggregate, blocked downstream, slot and
+  credential waits, admission rejection and cancellation. Assert resource cleanup,
+  final classifier consistency, no sensitive strings, active/trace bounds,
+  worst-case escaped event size, replay and late-callback suppression.
 
 ## 7. Wrong vs Correct
 

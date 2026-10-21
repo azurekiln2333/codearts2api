@@ -16,7 +16,7 @@ delivery. The app uses the existing service-scoped API-key localStorage entry an
 `Authorization: Bearer` API requests.
 
 Navigation uses allowlisted hashes: `#overview`, `#accounts`, `#requests`,
-`#models`, `#settings`. `data-page` controls select `data-view` sections. Preserve
+`#connections`, `#models`, `#settings`. `data-page` controls select `data-view` sections. Preserve
 operational element IDs or update their renderer, listener and verification
 together. `/admin/api/overview` and `/admin/api/requests` keep their existing
 response schema, filters and exclusive sequence cursor.
@@ -26,6 +26,10 @@ response schema, filters and exclusive sequence cursor.
 - Keep shell/header/sidebar distinct from the active page. Use neutral surfaces,
   restrained blue selection, semantic status colors, compact legible controls,
   visible focus, reduced-motion support and a dismissible mobile drawer.
+- Keep corners at 8 px for controls/navigation, 12 px for cards and no more than
+  16 px for workspace/login/dialog shells. Sidebar branding/build footers, the
+  service-region header caption and duplicate overview shortcut card are removed.
+  Build metadata remains in authenticated runtime settings and API diagnostics.
 - Hash routing must not replace the API base path. Root panel/admin aliases use
   root APIs; `/proxy/panel/` uses `/proxy/admin/api/...`. Unknown hashes resolve to
   overview. Navigating/reloading/deep-linking cannot duplicate event handlers,
@@ -56,6 +60,24 @@ response schema, filters and exclusive sequence cursor.
 - Tables own necessary horizontal scrolling; long data must not widen the whole
   page on mobile. API failures should have visible feedback, and pending requests
   must not enable duplicate destructive controls.
+- Constrain the application shell to the dynamic viewport height. Page content
+  scrolls inside the workspace; neither long source tables nor short mobile
+  viewports may create document-level vertical overflow that scrolls away the
+  header/navigation. Verify reachability of the final source table and local
+  horizontal scrolling as well as absence of document overflow.
+- Models reads `GET /admin/api/models`, and `重新拉取` posts `{}` to
+  `/admin/api/models/refresh`. Report the actual job/source results, retained stale
+  entries and scoped exclusions; never report overview reloading as a new pull.
+  The backend DTO/limits are owned by [Model Discovery](./model-discovery.md).
+- Connections reads `GET /admin/api/connections`, showing active phase/age,
+  actual upstream read progress and recent optional traces. Missing legacy
+  traces stay unknown; accepted SSE data is not labeled as a generated token.
+  HTTP response-header wait is not presented as exact TCP-connect duration.
+- Each operational view has one cancellable GET and at most one future poll,
+  scheduled about two seconds after completion. Connections polls only while
+  authenticated, visible and active; Models also requires a running pull job.
+  Navigation, visibility changes and logout abort/version out obsolete work;
+  a late POST result cannot start a snapshot request in another login epoch.
 
 ## 4. Validation & Error Matrix
 
@@ -73,6 +95,9 @@ response schema, filters and exclusive sequence cursor.
 | Uncommitted disconnect | No fabricated status code |
 | Malicious display text | Text escaped; no element/event handler executes |
 | OAuth/drawer dismissed | Focus returns appropriately and temporary work stops |
+| Model pull partially fails | Retained catalog plus visible per-source failure and job state |
+| Connections GET fails | Preserve prior snapshot with visible error; no false empty success |
+| Model/connection view hidden or logged out | Stop polling, ignore late results and clear metadata on logout |
 
 ## 5. Good / Base / Bad Cases
 
@@ -93,6 +118,14 @@ aliases. Inspect actual desktop and mobile screenshots and browser errors; a VM
 DOM stub alone cannot validate layout, visibility, focus or CSS overflow.
 Include exact identifier clipboard copying and logout during an in-flight refresh
 so asynchronous responses cannot cross authentication state.
+Include real model-pull POST/duplicate suppression, source and exclusion tables,
+connection trace expansion across polls, old events without traces and late
+model GET/POST or connection GET after logout. Exercise visibility events as
+well as navigation, and inspect source-result and expanded-trace screenshots.
+Assert root width and height against the viewport on every mobile view, scroll to
+the final source table inside the workspace, and exercise its horizontal scroll.
+Render failed claims even when an omitted JSON `succeeded:false` leaves only the
+safe `error` result.
 
 Run relevant Go server tests and a build because the HTML is embedded. Check JS
 syntax and `git diff --check`. Broaden Go/race checks when the change actually

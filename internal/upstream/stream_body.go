@@ -6,6 +6,8 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"codearts2api/internal/telemetry"
 )
 
 // IdleTimeoutError identifies a request/header/body wait that made no progress.
@@ -113,6 +115,10 @@ func (b *timeoutReadCloser) Read(p []byte) (int, error) {
 	}
 	n, err := b.body.Read(p)
 	b.wait.end()
+	if n > 0 {
+		// end released the idle-timer lock before invoking request telemetry.
+		telemetry.UpstreamProgress(b.wait.ctx)
+	}
 	err = b.wait.result(err)
 	if err != nil {
 		_ = b.Close()

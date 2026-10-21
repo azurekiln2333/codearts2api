@@ -10,7 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"codearts2api/internal/audit"
 	"codearts2api/internal/pool"
+	"codearts2api/internal/telemetry"
 	"codearts2api/internal/upstream"
 )
 
@@ -63,12 +65,14 @@ func (l *chatLifetime) close() {
 type chatAttempt struct {
 	lease *pool.Lease
 	body  io.ReadCloser
+	ctx   context.Context
 }
 
 func (a *chatAttempt) close() {
 	if a == nil {
 		return
 	}
+	telemetry.SetPhase(a.ctx, telemetry.Cleanup)
 	if a.body != nil {
 		_ = a.body.Close()
 		a.body = nil
@@ -77,6 +81,37 @@ func (a *chatAttempt) close() {
 		a.lease.Release()
 		a.lease = nil
 	}
+}
+
+// chatObserver keeps first accepted SSE timing available even when audit is
+// disabled. The sink tracker is optional and never receives message content.
+// Shared background refresh work does not inherit this request observer.
+type chatObserver struct {
+	tracker *audit.Tracker
+	started time.Time
+	mu      sync.Mutex
+	first   time.Time
+}
+
+func (o *chatObserver) Phase(phase telemetry.Phase) { o.tracker.Phase(phase) }
+func (o *chatObserver) UpstreamProgress()           { o.tracker.UpstreamProgress() }
+
+func (o *chatObserver) FirstSSEData() {
+	o.mu.Lock()
+	if o.first.IsZero() {
+		o.first = time.Now()
+	}
+	o.mu.Unlock()
+	o.tracker.FirstSSEData()
+}
+
+func (o *chatObserver) firstData() time.Duration {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.first.IsZero() {
+		return 0
+	}
+	return o.first.Sub(o.started)
 }
 
 type chatResponseWriter struct {
@@ -200,12 +235,12 @@ func (h *Handler) chatCandidates(tried map[string]bool, model, sticky string) []
 		if state == availUnusable {
 			continue
 		}
-		catalog, known := upstream.AccountModels(a.UID)
-		if state != availUsable && known && !catalogHas(catalog, want) {
+		present, complete := upstream.AccountModelKnowledgeForAuth(a.UID, want, a.AuthSnapshot())
+		if state != availUsable && complete && !present {
 			continue
 		}
 		priority := 1
-		if known {
+		if present {
 			priority = 0
 		}
 		candidate := pool.AccountCandidate{Name: a.Name, Priority: priority}

@@ -56,9 +56,10 @@ const (
 )
 
 type availEntry struct {
-	state  availState
-	reason string
-	at     time.Time
+	state    availState
+	reason   string
+	at       time.Time
+	revision uint64
 }
 
 // probesStop 在服务退出时关闭，让带 sleep 的探测循环尽快结束。
@@ -70,6 +71,7 @@ var availability = struct {
 	probing   map[string]bool       // 正在探测的 key（去重）
 	sweeping  bool                  // 是否已有一轮后台批量探测在跑
 	lastSweep time.Time
+	revision  uint64
 	// lastTraffic accountID -> 最后一次真实请求时间。探测只为「补齐结论」，
 	// 有真实流量的账号不探测（真实请求本身就会写结论，且探测占用的上游会话
 	// 槽位释放很慢，会挤掉用户请求）。
@@ -98,7 +100,8 @@ func markUnusable(accountID, model, reason string) {
 	}
 	availability.Lock()
 	defer availability.Unlock()
-	availability.byKey[availKey(accountID, model)] = availEntry{state: availUnusable, reason: reason, at: time.Now()}
+	availability.revision++
+	availability.byKey[availKey(accountID, model)] = availEntry{state: availUnusable, reason: reason, at: time.Now(), revision: availability.revision}
 }
 
 // markUsable 记录某账号下某模型可用。
@@ -108,7 +111,42 @@ func markUsable(accountID, model string) {
 	}
 	availability.Lock()
 	defer availability.Unlock()
-	availability.byKey[availKey(accountID, model)] = availEntry{state: availUsable, at: time.Now()}
+	availability.revision++
+	availability.byKey[availKey(accountID, model)] = availEntry{state: availUsable, at: time.Now(), revision: availability.revision}
+}
+
+// invalidateCatalogNegatives permits another real call; discovery alone never
+// marks a model usable. The caller holds the exact pool account/auth identity
+// during publication. A denial recorded after the job began must survive.
+func invalidateCatalogNegatives(accountID string, freshModels []string, before time.Time, revision uint64) int {
+	availability.Lock()
+	defer availability.Unlock()
+	cleared := 0
+	for _, model := range freshModels {
+		key := availKey(accountID, model)
+		if entry, ok := availability.byKey[key]; ok && entry.state == availUnusable && !entry.at.After(before) && entry.revision <= revision {
+			delete(availability.byKey, key)
+			cleared++
+		}
+	}
+	return cleared
+}
+
+func availabilityRevision() uint64 {
+	availability.Lock()
+	defer availability.Unlock()
+	return availability.revision
+}
+
+func availabilityReasonCode(reason string) string {
+	switch {
+	case strings.Contains(reason, "未注册"), strings.Contains(reason, "未在当前账号注册"), strings.Contains(reason, "not registered"), strings.Contains(reason, "002002009"):
+		return "not_registered"
+	case strings.Contains(reason, "福利"), strings.Contains(reason, "benefit"):
+		return "benefit_unavailable"
+	default:
+		return "unknown"
+	}
 }
 
 // noteTraffic 记录账号上一次真实请求时间（探测据此避让）。
@@ -201,7 +239,7 @@ func (h *Handler) probeModel(acct *pool.Account, model string) {
 		"messages": []any{map[string]any{"role": "user", "content": "hi"}},
 	}
 	rc, err := acct.Client.SendChatV2(ctx, body, "", cred, cred.SecurityToken,
-		upstream.IsBenefitModel(acct.UID, model))
+		upstream.IsBenefitModelForAuth(acct.UID, model, authz))
 	if err != nil {
 		// 并发上限是暂时的，不代表模型不可用。
 		if strings.Contains(err.Error(), "TM.00001041") {
@@ -306,7 +344,7 @@ func (h *Handler) pendingProbes() []pendingProbe {
 		if acct == nil || acct.AuthSnapshot() == nil || !h.cfg.Pool.Healthy(acct.Name) {
 			continue
 		}
-		models, ok := upstream.AccountModels(acct.UID)
+		models, ok := upstream.AccountModelsForAuth(acct.UID, acct.AuthSnapshot())
 		if !ok {
 			continue
 		}

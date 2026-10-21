@@ -13,13 +13,8 @@
 package upstream
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -74,11 +69,11 @@ type accountCatalog struct {
 	infos   []ModelInfo
 	benefit map[string]bool // lower(id) -> true（本轮发现确认的福利）
 	knows   map[string]bool // lower(id) -> true（该账号目录里登记过的全部模型）
-	// lastBenefit 上一次福利来源成功时的福利条目。福利网关临时故障时用它兜底：
-	// 只在内置来源明确说「它不是福利」时才摘标记，否则保留，避免把
-	// maas_type: benefit 头弄丢（丢了就是 InferHub.002002009.404）。
-	lastBenefit map[string]ModelInfo
-	fetched     time.Time
+	sources map[string]sourceSnapshot
+	claim   ClaimStatus
+	owner   *auth.Auth
+	fetched time.Time
+	known   bool
 }
 
 var catalog = struct {
@@ -111,78 +106,98 @@ func setAccountModels(accountID string, infos []ModelInfo, keepBenefit bool) {
 	if accountID == "" {
 		return
 	}
-	ac := &accountCatalog{
-		infos:       append([]ModelInfo(nil), infos...),
-		benefit:     make(map[string]bool),
-		knows:       make(map[string]bool),
-		lastBenefit: map[string]ModelInfo{},
-		fetched:     time.Now(),
-	}
 	catalog.Lock()
 	defer catalog.Unlock()
-	if catalog.known == nil {
-		catalog.known = map[string]string{}
-	}
-	if prev := catalog.accounts[accountID]; prev != nil {
-		for k, v := range prev.lastBenefit {
-			ac.lastBenefit[k] = v
-		}
-	}
-	for _, mi := range ac.infos {
-		if mi.ID == "" {
-			continue
-		}
-		key := strings.ToLower(mi.ID)
-		ac.knows[key] = true
-		if mi.Benefit {
-			ac.benefit[key] = true
-			ac.lastBenefit[key] = mi
-		}
-		if _, ok := catalog.known[key]; !ok || mi.ID != key {
-			catalog.known[key] = mi.ID
-		}
-	}
 	if keepBenefit {
-		// 本轮内置来源没有提到的福利模型：继续按福利路由（宁可多带，不可漏带）。
-		for key, mi := range ac.lastBenefit {
-			if ac.knows[key] {
-				continue // 内置来源明确登记了它 → 已转正，不保留标记
+		if prev := catalog.accounts[accountID]; prev != nil {
+			var retained []ModelInfo
+			for _, mi := range prev.infos {
+				if mi.Benefit {
+					retained = append(retained, mi)
+				}
 			}
-			ac.benefit[key] = true
-			ac.knows[key] = true
-			ac.infos = append(ac.infos, mi)
-			if _, ok := catalog.known[key]; !ok || mi.ID != key {
-				catalog.known[key] = mi.ID
-			}
+			infos = MergeModels(infos, retained)
 		}
-		sort.Slice(ac.infos, func(i, j int) bool {
-			li, lj := strings.ToLower(ac.infos[i].ID), strings.ToLower(ac.infos[j].ID)
-			if li != lj {
-				return li < lj
-			}
-			return ac.infos[i].ID < ac.infos[j].ID
-		})
 	}
+	ac := &accountCatalog{infos: MergeModels(infos), fetched: time.Now(), known: true}
+	indexCatalog(ac)
 	catalog.accounts[accountID] = ac
+	rebuildKnownLocked()
 }
 
 // AccountModels 返回某账号的模型目录快照（未发现时 ok=false）。
 func AccountModels(accountID string) ([]ModelInfo, bool) {
 	catalog.RLock()
 	defer catalog.RUnlock()
+	return accountModelsLocked(accountID, nil, false)
+}
+
+// AccountModelsForAuth hides a previous login's retained catalog immediately.
+func AccountModelsForAuth(accountID string, owner *auth.Auth) ([]ModelInfo, bool) {
+	catalog.RLock()
+	defer catalog.RUnlock()
+	return accountModelsLocked(accountID, owner, true)
+}
+
+func accountModelsLocked(accountID string, owner *auth.Auth, checkOwner bool) ([]ModelInfo, bool) {
 	ac, ok := catalog.accounts[accountID]
-	if !ok {
+	if !ok || !ac.known || (checkOwner && ac.owner != nil && ac.owner != owner) {
 		return nil, false
 	}
 	return append([]ModelInfo(nil), ac.infos...), true
+}
+
+// AccountModelKnowledgeForAuth reads membership and authoritative completeness
+// from one catalog generation. Missing entries in partial or expired discovery
+// stay unknown; retained present entries remain useful for account selection.
+func AccountModelKnowledgeForAuth(accountID, model string, owner *auth.Auth) (present, complete bool) {
+	catalog.RLock()
+	defer catalog.RUnlock()
+	ac := catalog.accounts[accountID]
+	if ac == nil || !ac.known || (ac.owner != nil && ac.owner != owner) {
+		return false, false
+	}
+	present = ac.knows[strings.ToLower(strings.TrimSpace(model))]
+	// Compatibility snapshots are explicit whole-catalog replacements.
+	if len(ac.sources) == 0 {
+		return present, true
+	}
+	if time.Since(ac.fetched) >= CatalogTTL {
+		return present, false
+	}
+	for _, name := range modelSources {
+		source, ok := ac.sources[name]
+		if !ok || source.LastSuccessAt == nil || (source.Status != "ok" && source.Status != "empty") {
+			return present, false
+		}
+	}
+	return present, true
 }
 
 // AccountCatalogStale 报告某账号目录是否需重新发现（未发现或超过 CatalogTTL）。
 func AccountCatalogStale(accountID string) bool {
 	catalog.RLock()
 	defer catalog.RUnlock()
+	return accountCatalogStaleLocked(accountID, nil, false)
+}
+
+func AccountCatalogStaleForAuth(accountID string, owner *auth.Auth) bool {
+	catalog.RLock()
+	defer catalog.RUnlock()
+	return accountCatalogStaleLocked(accountID, owner, true)
+}
+
+func accountCatalogStaleLocked(accountID string, owner *auth.Auth, checkOwner bool) bool {
 	ac, ok := catalog.accounts[accountID]
-	return !ok || time.Since(ac.fetched) >= CatalogTTL
+	if !ok || (checkOwner && ac.owner != nil && ac.owner != owner) || time.Since(ac.fetched) >= CatalogTTL {
+		return true
+	}
+	for _, src := range ac.sources {
+		if src.Status != "ok" && src.Status != "empty" && (src.RetryAt == nil || !time.Now().Before(*src.RetryAt)) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsBenefitModel 报告该账号下该模型是否走限时福利路由（大小写不敏感）。
@@ -194,17 +209,30 @@ func AccountCatalogStale(accountID string) bool {
 //  3. 目录里没有这个模型（尚未发现、福利来源失败或未领取）→ 回退冷启动种子，
 //     少带一次头就是一次 InferHub.002002009.404，宁可多带
 func IsBenefitModel(accountID, model string) bool {
+	return isBenefitModel(accountID, model, nil, false)
+}
+
+func IsBenefitModelForAuth(accountID, model string, owner *auth.Auth) bool {
+	return isBenefitModel(accountID, model, owner, true)
+}
+
+func isBenefitModel(accountID, model string, owner *auth.Auth, checkOwner bool) bool {
 	key := strings.ToLower(strings.TrimSpace(model))
 	if key == "" {
 		return false
 	}
 	catalog.RLock()
 	defer catalog.RUnlock()
-	if ac, ok := catalog.accounts[accountID]; ok {
+	if ac, ok := catalog.accounts[accountID]; ok && (!checkOwner || ac.owner == nil || ac.owner == owner) {
 		if ac.benefit[key] {
 			return true
 		}
 		if ac.knows[key] {
+			return false
+		}
+		// Once benefit discovery has authoritatively succeeded, its current
+		// (possibly retained empty) snapshot also overrides cold-start seeds.
+		if source, found := ac.sources["benefit"]; found && source.LastSuccessAt != nil {
 			return false
 		}
 	}
@@ -286,296 +314,22 @@ func betterModel(a, b ModelInfo) bool {
 	return a.ID != strings.ToLower(a.ID) && b.ID == strings.ToLower(b.ID)
 }
 
-// FetchModels 拉取指定账号当前可用模型（三路合并），并写入该账号的模型目录。
-//
-// 任一路失败只记日志不阻断：福利接口不可用时仍能拿到内置模型。
+// FetchModels keeps the CLI compatibility surface while sharing the bounded,
+// context-aware source discovery and publication used by the server.
 func (c *Client) FetchModels(acct *auth.Auth) ([]ModelInfo, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	return c.FetchModelsContext(ctx, acct)
+}
+
+func (c *Client) FetchModelsContext(ctx context.Context, acct *auth.Auth) ([]ModelInfo, error) {
 	if acct == nil {
 		return nil, fmt.Errorf("account required for model fetch")
 	}
-	cred := SignCredential{
-		AccessKeyID:     acct.AccessKeyID,
-		SecretAccessKey: acct.SecretAccessKey,
-		SecurityToken:   acct.CloudDragonTok,
-	}
-	accountID := acct.UserID
-	var sets [][]ModelInfo
-	if infos, err := c.fetchAgentModels(cred); err != nil {
-		Log("agent models: %v", err)
-	} else {
-		sets = append(sets, infos)
-	}
-	builtinOK := false
-	if infos, err := c.fetchBuiltinModels(accountID, cred); err != nil {
-		Log("builtin models: %v", err)
-	} else {
-		builtinOK = true
-		sets = append(sets, infos)
-	}
-	benefitOK := false
-	if infos, err := c.fetchBenefitModels(accountID, cred); err != nil {
-		Log("benefit models: %v", err)
-	} else {
-		benefitOK = true
-		sets = append(sets, infos)
-	}
-	out := MergeModels(sets...)
-	if len(out) == 0 {
-		return nil, fmt.Errorf("models api returned empty list")
-	}
-	// 福利来源失败但内置来源成功：保留上一轮已确认的福利条目，别把标记弄丢。
-	setAccountModels(accountID, out, builtinOK && !benefitOK)
-	return out, nil
-}
-
-// fetchAgentModels 官方 fetchAgentModels 等价实现：agent-center detail 的 gpts.models。
-func (c *Client) fetchAgentModels(cred SignCredential) ([]ModelInfo, error) {
-	agentID, err := c.defaultAgentID(cred)
-	if err != nil {
-		return nil, err
-	}
-	if agentID == "" {
-		return nil, fmt.Errorf("no default agent found")
-	}
-	raw, err := c.getSigned(context.Background(), c.snapURL(EpAgentDetail)+"?agent_id="+url.QueryEscape(agentID), cred, true)
-	if err != nil {
-		return nil, err
-	}
-	var detail struct {
-		Gpts struct {
-			Models []struct {
-				ModelAlias string `json:"model_alias"`
-				ModelName  string `json:"model_name"`
-				ModelID    string `json:"model_id"`
-				Params     struct {
-					ContextWindow int64  `json:"context_window"`
-					MaxTokens     int64  `json:"max_tokens"`
-					ModelID       string `json:"model_id"`
-					ModelDesc     string `json:"model_desc"`
-				} `json:"model_parameters"`
-			} `json:"models"`
-		} `json:"gpts"`
-	}
-	if err := json.Unmarshal(raw, &detail); err != nil {
-		return nil, fmt.Errorf("parse models: %w", err)
-	}
-	out := make([]ModelInfo, 0, len(detail.Gpts.Models))
-	for _, m := range detail.Gpts.Models {
-		id := firstNonEmpty(m.ModelName, m.ModelID, m.ModelAlias, m.Params.ModelID)
-		if id == "" {
-			continue
-		}
-		out = append(out, ModelInfo{
-			ID:            id,
-			Name:          id,
-			ContextWindow: m.Params.ContextWindow,
-			MaxTokens:     m.Params.MaxTokens,
-			Desc:          m.Params.ModelDesc,
-		})
-	}
-	return out, nil
-}
-
-// defaultAgentID 拉取用户 agent 列表，返回 CodeAgent 的 agent_id。
-// 过滤条件与官方客户端一致：agent_name=="CodeAgent" && alias.alias_zh_cn=="智能体" && show_in_ide，
-// 退化为 is_primary_agent，再退化为首个。
-func (c *Client) defaultAgentID(cred SignCredential) (string, error) {
-	raw, err := c.getSigned(context.Background(), c.snapURL(EpAgentList)+"?offset=0&limit=100&is_primary_agent=true", cred, true)
-	if err != nil {
-		return "", err
-	}
-	var out struct {
-		Agents []struct {
-			AgentID   string `json:"agent_id"`
-			AgentName string `json:"agent_name"`
-			Primary   bool   `json:"is_primary_agent"`
-			ShowInIDE bool   `json:"show_in_ide"`
-			Alias     struct {
-				ZhCN string `json:"alias_zh_cn"`
-			} `json:"alias"`
-		} `json:"agents"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return "", fmt.Errorf("parse agents: %w", err)
-	}
-	for _, a := range out.Agents {
-		if a.AgentName == "CodeAgent" && a.Alias.ZhCN == "智能体" && a.ShowInIDE {
-			return a.AgentID, nil
-		}
-	}
-	for _, a := range out.Agents {
-		if a.Primary {
-			return a.AgentID, nil
-		}
-	}
-	if len(out.Agents) > 0 {
-		return out.Agents[0].AgentID, nil
-	}
-	return "", nil
-}
-
-// fetchBuiltinModels GET /v1/model/builtin（Agent-Type: PromptCenter）。
-func (c *Client) fetchBuiltinModels(accountID string, cred SignCredential) ([]ModelInfo, error) {
-	key := accountID + "|builtin"
-	if c.srcBlocked(key) {
-		return nil, fmt.Errorf("builtin source backoff")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.snapURL(EpModelBuiltin), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Agent-Type", "PromptCenter")
-	req.Header.Set("X-Language", "zh-cn")
-	if cred.SecurityToken != "" {
-		req.Header.Set("X-Security-Token", cred.SecurityToken)
-	}
-	signRequest(req, []byte{}, cred)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		c.noteSrcFail(key)
-		return nil, err
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if resp.StatusCode >= 400 {
-		c.noteSrcFail(key)
-		return nil, &ApiError{Code: resp.StatusCode, Status: resp.StatusCode, Message: truncateStr(string(raw), 300), Path: EpModelBuiltin}
-	}
-	var out struct {
-		BuiltinModels []struct {
-			ModelID       string `json:"model_id"`
-			ModelName     string `json:"model_name"`
-			ModelDesc     string `json:"model_desc"`
-			ContextWindow int64  `json:"context_window"`
-			MaxTokens     int64  `json:"max_tokens"`
-		} `json:"builtinModels"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		c.noteSrcFail(key)
-		return nil, fmt.Errorf("parse builtin models: %w", err)
-	}
-	c.clearSrcFail(key)
-	infos := make([]ModelInfo, 0, len(out.BuiltinModels))
-	for _, m := range out.BuiltinModels {
-		id := firstNonEmpty(m.ModelID, m.ModelName)
-		if id == "" {
-			continue
-		}
-		infos = append(infos, ModelInfo{ID: id, Name: id, ContextWindow: m.ContextWindow, MaxTokens: m.MaxTokens, Desc: m.ModelDesc})
-	}
-	return infos, nil
-}
-
-// ClaimBenefit 领取限时福利（幂等：已领取返回成功）。官方客户端打开模型菜单即调用。
-//
-// 这是对账号的写操作，默认不随模型发现自动执行（见 Client.SetBenefitAutoClaim）：
-// 需要领取时显式调用（`codearts2api models -claim` 或打开自动领取开关）。
-func (c *Client) ClaimBenefit(cred SignCredential) error {
-	body, _ := json.Marshal(map[string]any{})
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.benefitURL(EpBenefitClaim), bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Language", "zh-cn")
-	if cred.SecurityToken != "" {
-		req.Header.Set("X-Security-Token", cred.SecurityToken)
-	}
-	signRequest(req, body, cred)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode >= 400 {
-		return &ApiError{Code: resp.StatusCode, Status: resp.StatusCode, Message: truncateStr(string(raw), 300), Path: EpBenefitClaim}
-	}
-	var out struct {
-		ErrorCode string `json:"error_code"`
-		ErrorMsg  string `json:"error_msg"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return fmt.Errorf("parse claim: %w", err)
-	}
-	if out.ErrorCode != "0000" {
-		return fmt.Errorf("claim failed: error_code=%s msg=%s", out.ErrorCode, out.ErrorMsg)
-	}
-	return nil
-}
-
-// fetchBenefitModels 拉取限时福利模型（gateway/config），返回结果整体标记 Benefit。
-func (c *Client) fetchBenefitModels(accountID string, cred SignCredential) ([]ModelInfo, error) {
-	key := accountID + "|benefit"
-	if c.srcBlocked(key) {
-		return nil, fmt.Errorf("benefit source backoff")
-	}
-	if c.claimAuto.Load() {
-		if err := c.ClaimBenefit(cred); err != nil {
-			Log("benefit claim: %v", err)
-		}
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.benefitURL(EpBenefitConfig), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Language", "zh-cn")
-	if cred.SecurityToken != "" {
-		req.Header.Set("X-Security-Token", cred.SecurityToken)
-	}
-	signRequest(req, []byte{}, cred)
-	resp, err := c.http.Do(req)
-	if err != nil {
-		c.noteSrcFail(key)
-		return nil, err
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if resp.StatusCode >= 400 {
-		c.noteSrcFail(key)
-		return nil, &ApiError{Code: resp.StatusCode, Status: resp.StatusCode, Message: truncateStr(string(raw), 300), Path: EpBenefitConfig}
-	}
-	var out struct {
-		ErrorCode string `json:"error_code"`
-		Result    struct {
-			BaseURL string `json:"base_url"`
-			Models  []struct {
-				ModelID       string `json:"model_id"`
-				ModelName     string `json:"model_name"`
-				ModelDesc     string `json:"model_desc"`
-				ContextWindow int64  `json:"context_window"`
-				MaxTokens     int64  `json:"max_tokens"`
-			} `json:"models"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		c.noteSrcFail(key)
-		return nil, fmt.Errorf("parse benefit config: %w", err)
-	}
-	if out.ErrorCode != "0000" {
-		c.noteSrcFail(key)
-		return nil, fmt.Errorf("gateway/config error_code=%s", out.ErrorCode)
-	}
-	c.clearSrcFail(key)
-	infos := make([]ModelInfo, 0, len(out.Result.Models))
-	for _, m := range out.Result.Models {
-		id := firstNonEmpty(m.ModelID, m.ModelName)
-		if id == "" {
-			continue
-		}
-		infos = append(infos, ModelInfo{
-			ID: id, Name: id,
-			ContextWindow: m.ContextWindow, MaxTokens: m.MaxTokens, Desc: m.ModelDesc,
-			Benefit: true,
-		})
+	result := c.DiscoverModels(ctx, acct, false)
+	infos, _ := PublishModelDiscovery(acct.UserID, acct, result)
+	if result.Successes() == 0 {
+		return infos, fmt.Errorf("all model sources failed")
 	}
 	return infos, nil
 }

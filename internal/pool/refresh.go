@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"codearts2api/internal/auth"
+	"codearts2api/internal/telemetry"
 	"codearts2api/internal/upstream"
 )
 
@@ -58,6 +59,9 @@ func (p *Pool) refreshAccountContext(ctx context.Context, a *Account) error {
 		go p.runRefresh(a, authz, flight)
 	}
 	a.mu.Unlock()
+	// Observe this caller's wait only, after releasing the account lock. The
+	// shared runRefresh goroutine deliberately keeps its background context.
+	telemetry.SetPhase(ctx, telemetry.WaitRefresh)
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
