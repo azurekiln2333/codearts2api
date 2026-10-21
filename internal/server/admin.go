@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"codearts2api/internal/audit"
 	"codearts2api/internal/auth"
 )
 
@@ -35,7 +37,116 @@ func (h *Handler) adminOverview(w http.ResponseWriter, r *http.Request) {
 		"schedule": map[string]any{
 			"watch": h.cfg.WatchInfo,
 		},
+		// Actual effective runtime limits (no provenance subsystem).
+		"effective": h.effectiveLimits(),
+		// Explicit build identity: known:false rather than a guessed commit.
+		"build": h.buildInfo(),
+		"audit": h.auditStats(),
 	})
+}
+
+// effectiveLimits reports the values actually in force, so an operator can
+// verify a deployment without reading config files.
+func (h *Handler) effectiveLimits() map[string]any {
+	maxConcurrent := map[string]int{}
+	for _, st := range h.cfg.Pool.List() {
+		name, _ := st["name"].(string)
+		if v, ok := st["max_concurrent"].(int); ok && name != "" {
+			maxConcurrent[name] = v
+		}
+	}
+	pc := h.cfg.Pool.Config()
+	return map[string]any{
+		"startup_timeout":       h.cfg.StartupTimeout.String(),
+		"account_wait_timeout":  h.cfg.AccountWaitTimeout.String(),
+		"upstream_idle_timeout": pc.UpstreamTimeout.String(),
+		"stream_write_timeout":  h.cfg.StreamWriteTimeout.String(),
+		"max_rotate":            h.cfg.MaxRotate,
+		"max_pending":           pc.MaxPending,
+		"queue_max_attempts":    h.cfg.QueueMaxAttempts,
+		"queue_retry_delay":     h.cfg.QueueRetryDelay.String(),
+		"default_model":         h.cfg.DefaultModel,
+		"max_concurrent":        maxConcurrent,
+	}
+}
+
+// buildInfo exposes an explicit known/unknown build identity.
+func (h *Handler) buildInfo() map[string]any {
+	commit := BuildCommit
+	known := commit != ""
+	out := map[string]any{"commit": commit, "known": known}
+	if known {
+		out["commit"] = truncateMsg(commit, 64)
+	}
+	if BuildTime != "" {
+		out["built_at"] = truncateMsg(BuildTime, 40)
+	} else {
+		out["built_at"] = nil
+	}
+	return out
+}
+
+func (h *Handler) auditStats() any {
+	if h.cfg.Audit == nil {
+		return map[string]any{"enabled": false}
+	}
+	return h.cfg.Audit.Stats()
+}
+
+// adminRequests serves the bounded recent audit window. Older retained files are
+// the on-disk archive and are intentionally not served here.
+func (h *Handler) adminRequests(w http.ResponseWriter, r *http.Request) {
+	if h.cfg.Audit == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"events": []any{}, "disabled": true, "window": 0, "archive": "disabled",
+		})
+		return
+	}
+	q := r.URL.Query()
+	query := audit.Query{
+		Limit:   atoiDefault(q.Get("limit"), 50),
+		Outcome: q.Get("outcome"),
+		Account: q.Get("account"),
+		Model:   q.Get("model"),
+		Status:  atoiDefault(q.Get("status"), 0),
+	}
+	if before := q.Get("before"); before != "" {
+		if n, err := strconv.ParseUint(before, 10, 64); err == nil {
+			query.Before = n
+		}
+	}
+	if since := q.Get("since"); since != "" {
+		if ts, err := time.Parse(time.RFC3339, since); err == nil {
+			query.Since = ts
+		}
+	}
+	page := h.cfg.Audit.Snapshot(query)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"events":         page.Events,
+		"next_before":    page.NextBefore,
+		"has_more":       page.HasMore,
+		"dropped":        page.Dropped,
+		"write_failures": page.WriteFailed,
+		"window":         page.Window,
+		"disabled":       page.Disabled,
+		"archive":        "older retained files are on-disk only",
+	})
+}
+
+// adminAudit exposes sink counters and effective retention limits.
+func (h *Handler) adminAudit(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"audit": h.auditStats()})
+}
+
+func atoiDefault(s string, fallback int) int {
+	if s == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 type uidBody struct {

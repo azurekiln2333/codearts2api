@@ -1,14 +1,50 @@
 services:
   codearts2api:
-    build: .
-    container_name: codearts2api
-    restart: unless-stopped
+    build:
+      context: ${CA2A_BUILD_CONTEXT:-.}
+      args:
+        BUILD_COMMIT: ${CA2A_BUILD_COMMIT:-}
+        BUILD_TIME: ${CA2A_BUILD_TIME:-}
+    container_name: ${CA2A_CONTAINER_NAME:-codearts2api}
+    restart: ${CA2A_RESTART_POLICY:-unless-stopped}
     ports:
-      - "7866:7866"
+      - "${CA2A_PORT:-7866}:${CA2A_PORT:-7866}"
     environment:
       CA2A_API_KEY: ${CA2A_API_KEY:?需要设置 CA2A_API_KEY（写 .env 或 export 到环境变量）}
-      TZ: Asia/Shanghai
+      TZ: ${TZ:-Asia/Shanghai}
+      # Keep the published port and the server listener in sync.
+      CA2A_LISTEN: ":${CA2A_PORT:-7866}"
+      # Empty overrides preserve config.json values and application defaults.
+      CA2A_AUTH_DIR: ${CA2A_AUTH_DIR:-}
+      CA2A_STATE_FILE: ${CA2A_STATE_FILE:-}
+      CA2A_DEFAULT_MODEL: ${CA2A_DEFAULT_MODEL:-}
+      CA2A_OAUTH_CALLBACK_HOST: ${CA2A_OAUTH_CALLBACK_HOST:-}
+      CA2A_MAX_CONCURRENT: ${CA2A_MAX_CONCURRENT:-}
+      CA2A_MAX_PENDING: ${CA2A_MAX_PENDING:-}
+      CA2A_STARTUP_TIMEOUT_SECONDS: ${CA2A_STARTUP_TIMEOUT_SECONDS:-}
+      CA2A_ACCOUNT_WAIT_SECONDS: ${CA2A_ACCOUNT_WAIT_SECONDS:-}
+      CA2A_UPSTREAM_TIMEOUT_SECONDS: ${CA2A_UPSTREAM_TIMEOUT_SECONDS:-}
+      CA2A_STREAM_WRITE_TIMEOUT_SECONDS: ${CA2A_STREAM_WRITE_TIMEOUT_SECONDS:-}
+      CA2A_QUEUE_RETRY_SECONDS: ${CA2A_QUEUE_RETRY_SECONDS:-}
+      CA2A_QUEUE_MAX_ATTEMPTS: ${CA2A_QUEUE_MAX_ATTEMPTS:-}
+      CA2A_KEEPALIVE_WINDOW: ${CA2A_KEEPALIVE_WINDOW:-}
+      CA2A_WATCH_ENABLED: ${CA2A_WATCH_ENABLED:-}
+      CA2A_WATCH_POLL_MINUTES: ${CA2A_WATCH_POLL_MINUTES:-}
+      CA2A_WATCH_REFRESH_SKEW: ${CA2A_WATCH_REFRESH_SKEW:-}
+      CA2A_WATCH_KEEPALIVE_INTERVAL: ${CA2A_WATCH_KEEPALIVE_INTERVAL:-}
+      CA2A_BENEFIT_AUTO_CLAIM: ${CA2A_BENEFIT_AUTO_CLAIM:-}
+      CA2A_CREDITS_AUTO_CLAIM: ${CA2A_CREDITS_AUTO_CLAIM:-}
+      CA2A_LOGIN_CLIENT_ID: ${CA2A_LOGIN_CLIENT_ID:-}
+      CA2A_AUDIT_ENABLED: ${CA2A_AUDIT_ENABLED:-}
+      CA2A_AUDIT_DIR: ${CA2A_AUDIT_DIR:-}
+      CA2A_AUDIT_MAX_QUEUE: ${CA2A_AUDIT_MAX_QUEUE:-}
+      CA2A_AUDIT_RECENT: ${CA2A_AUDIT_RECENT:-}
+      CA2A_AUDIT_MAX_FILE_BYTES: ${CA2A_AUDIT_MAX_FILE_BYTES:-}
+      CA2A_AUDIT_MAX_FILES: ${CA2A_AUDIT_MAX_FILES:-}
+      CA2A_AUDIT_MAX_TOTAL_BYTES: ${CA2A_AUDIT_MAX_TOTAL_BYTES:-}
+      CA2A_AUDIT_RETENTION_DAYS: ${CA2A_AUDIT_RETENTION_DAYS:-}
+      CA2A_AUDIT_FLUSH_INTERVAL: ${CA2A_AUDIT_FLUSH_INTERVAL:-}
     volumes:
-      - ./auths:/app/auths
-      - ./data:/app/data
-      - ./config.json:/app/config.json:ro
+      - "${CA2A_AUTHS_PATH:-./auths}:/app/auths"
+      - "${CA2A_DATA_PATH:-./data}:/app/data"
+      - "${CA2A_CONFIG_PATH:-./config.json}:/app/config.json:ro"

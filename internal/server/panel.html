@@ -152,9 +152,18 @@ input{font:inherit}
 
   <div class="grid">
     <div class="stat"><div class="k">账号总数</div><div class="v" id="sTotal">—</div></div>
-    <div class="stat"><div class="k">健康可用</div><div class="v" id="sHealthy">—</div></div>
+    <div class="stat"><div class="k">可调度账号</div><div class="v" id="sHealthy">—</div></div>
     <div class="stat"><div class="k">冷却 / 禁用</div><div class="v" id="sBad">—</div></div>
     <div class="stat"><div class="k">自动签到 / 新手领取</div><div class="v" id="sCredits">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h2>运行配置</h2><span class="badge info mono" id="buildBadge">未知构建</span></div>
+    <div class="card-b">
+      <div class="chips" id="runtimeLimits"></div>
+      <div class="muted mono" style="font-size:11px;margin-top:10px;overflow-wrap:anywhere" id="buildDetails"></div>
+      <div class="muted" style="font-size:12px;margin-top:8px" id="auditLimits"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -193,6 +202,37 @@ input{font:inherit}
       <div class="foot">
         <span>OpenAI base: <span class="mono" id="baseUrl"></span></span>
         <span>API: <span class="mono">/v1/chat/completions</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <h2>最近请求</h2>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="muted" id="reqMeta"></span>
+        <button class="btn" id="btnReqRefresh" style="padding:6px 10px">刷新</button>
+      </div>
+    </div>
+    <div class="card-b" style="padding:0;overflow-x:auto">
+      <div class="chips" id="reqFilters" style="padding:10px 12px 0"></div>
+      <table class="table" id="reqTable">
+        <thead>
+          <tr>
+            <th>时间 / ID</th>
+            <th>模型</th>
+            <th>账号</th>
+            <th>状态</th>
+            <th>结果</th>
+            <th>尝试</th>
+            <th>排队 / 首数据 / 总</th>
+          </tr>
+        </thead>
+        <tbody id="reqBody"><tr><td colspan="7" class="empty">加载中…</td></tr></tbody>
+      </table>
+      <div class="foot" style="padding:10px 12px">
+        <span id="reqArchive"></span>
+        <button class="btn" id="btnReqMore" style="padding:6px 10px;display:none">更早</button>
       </div>
     </div>
   </div>
@@ -277,7 +317,28 @@ async function api(path, opts={}){
 function statusBadge(a){
   if (a.disabled) return '<span class="badge bad">禁用</span>';
   if (a.cooling) return '<span class="badge warn">冷却</span>';
-  return '<span class="badge ok">健康</span>';
+  return '<span class="badge ok">可调度</span>';
+}
+
+// currentReason shows only what is true *now*; a stale last_error is not a
+// current fault, so it moves to failureHistory instead of being printed here.
+function currentReason(a){
+  if (a.disabled) return a.reason || "已禁用";
+  if (a.cooling) return a.reason || "冷却中";
+  return "可调度";
+}
+
+// failureHistory is presentation-only history; unknown legacy timestamps are
+// labelled honestly instead of being invented.
+function failureHistory(a){
+  const parts = [];
+  if (a.last_failure_text) parts.push(a.last_failure_text);
+  else if (a.last_error) parts.push(a.last_error);
+  if (a.err_count) parts.push("连续失败 " + a.err_count + " 次");
+  if (!parts.length) return "无失败记录";
+  const at = a.last_failure_at || a.last_error_at;
+  const when = at ? fmtTime(at) : "时间未知（旧记录）";
+  return "上次失败：" + when + " · " + parts.join(" · ");
 }
 
 function fmtTime(t){
@@ -304,6 +365,19 @@ function render(data){
   $("baseUrl").textContent = location.origin + BASE + "/v1";
   $("subTitle").textContent = (data.service || SERVICE) + " · " + (data.region || "cn");
 
+  const build = data.build || {};
+  const knownBuild = build.known && build.commit;
+  $("buildBadge").textContent = knownBuild ? String(build.commit).slice(0,12) : "未知构建";
+  $("buildDetails").textContent = (knownBuild ? "提交 " + build.commit : "未提供构建身份") + " · 构建时间 " + (build.built_at ? fmtTime(build.built_at) : "未知");
+  const limits = data.effective || {};
+  const labels = [["startup_timeout","启动预算"],["account_wait_timeout","账号等待"],["upstream_idle_timeout","上游空闲"],["stream_write_timeout","下游写入"],["max_pending","等待上限"],["queue_max_attempts","每账号尝试"],["queue_retry_delay","重试间隔"]];
+  $("runtimeLimits").innerHTML = labels.map(([key,label]) => `<span class="chip">${label} ${escapeHtml(limits[key] ?? "未知")}</span>`).join("");
+  const audit = data.audit || {};
+  const mib = value => Math.round(Number(value || 0) / 1048576 * 10) / 10;
+  $("auditLimits").textContent = audit.enabled
+    ? `审计：保留 ${audit.retention_days} 天 · 最多 ${audit.max_files} 个文件 · 单文件 ${mib(audit.max_file_bytes)} MiB · 合计 ${mib(audit.max_total_bytes)} MiB · 近期 ${audit.recent} 条 · 队列 ${audit.max_queue}`
+    : "请求审计已关闭";
+
   const body = $("acctBody");
   const accounts = data.accounts || [];
   if (!accounts.length){
@@ -318,8 +392,12 @@ function render(data){
           <div class="mono muted" title="${escapeHtml(a.uid||"")}">${escapeHtml(shortUID(a.uid))}</div>
         </td>
         <td><div class="${a.checkin && !a.checkin.ok ? 'muted' : ''}">${escapeHtml(a.checkin?.message || "尚未查询")}</div><div class="muted" style="font-size:11px">${a.checkin ? escapeHtml(fmtTime(a.checkin.checked_at)) : ""}</div></td>
-        <td>${statusBadge(a)}${a.err_count?` <span class="badge info">err ${a.err_count}</span>`:""}</td>
-        <td><div class="muted">${escapeHtml(reason)}</div><div class="mono muted" style="font-size:11px">${escapeHtml(until)}</div></td>
+        <td>${statusBadge(a)}${a.err_count?` <span class="badge info">连续失败 ${a.err_count}</span>`:""}<div class="muted mono" style="font-size:11px;margin-top:5px">并发 ${Number(a.active_concurrent)||0} / ${Number(a.max_concurrent)||0}</div></td>
+        <td>
+          <div class="muted">${escapeHtml(currentReason(a))}</div>
+          <div class="mono muted" style="font-size:11px">${escapeHtml(until)}</div>
+          <div class="muted" style="font-size:11px">${escapeHtml(failureHistory(a))}</div>
+        </td>
         <td><div class="row-actions">
           <button class="btn" data-act="credits" data-uid="${escapeAttr(a.uid)}">校验</button>
           <button class="btn" data-act="checkin" data-uid="${escapeAttr(a.uid)}">签到</button>
@@ -351,6 +429,89 @@ function escapeHtml(s){
 }
 function escapeAttr(s){ return escapeHtml(s).replace(/`/g,""); }
 
+// ---- recent request audit (bounded in-memory window; older files are archive)
+const reqState = { before: 0, outcome: "", model: "", account: "", rows: [], hasMore: false };
+
+function reqStatusCell(ev){
+  if (ev.committed) return `<span class="mono">${escapeHtml(String(ev.status||0))}</span>`;
+  return `<span class="muted">未提交</span>`;
+}
+
+function reqCause(ev){
+  const c = ev.cause || {};
+  const bits = [];
+  if (c.class && c.class !== "none") bits.push(`<span class="muted">${escapeHtml(c.class)}</span>`);
+  if (c.text) bits.push(escapeHtml(c.text));
+  // Safe provider code (token alphabet only) alongside the fixed description.
+  let out = bits.join(" · ");
+  if (c.code) out += ` <span class="mono muted" style="font-size:11px">[${escapeHtml(c.code)}]</span>`;
+  if (!out) return "—";
+  if (ev.error_code) out += `<div class="mono muted" style="font-size:11px">${escapeHtml(ev.error_code)}</div>`;
+  return out;
+}
+
+function reqMs(v){
+  if (v === null || v === undefined) return "—";
+  return Number(v) + "ms";
+}
+
+function renderRequests(page){
+  const events = page.events || [];
+  const body = $("reqBody");
+  if (page.disabled){
+    body.innerHTML = `<tr><td colspan="7" class="empty">审计已关闭</td></tr>`;
+    $("reqMeta").textContent = "已关闭";
+    $("reqArchive").textContent = "";
+    $("btnReqMore").style.display = "none";
+    return;
+  }
+  const rows = reqState.before ? reqState.rows.concat(events) : events;
+  reqState.rows = rows;
+  reqState.hasMore = !!page.has_more;
+  if (page.next_before) reqState.before = page.next_before;
+  const dropped = Number(page.dropped || 0), failed = Number(page.write_failures || 0);
+  $("reqMeta").textContent = `窗口 ${page.window||0} 条 · 丢弃 ${dropped} · 写入失败 ${failed}`;
+  $("reqArchive").textContent = "更早的记录保存在本地磁盘归档文件中（不在此窗口内）。";
+  $("btnReqMore").style.display = page.has_more ? "inline-block" : "none";
+  if (!rows.length){
+    body.innerHTML = `<tr><td colspan="7" class="empty">暂无请求记录</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(ev => `<tr>
+    <td><div class="mono" style="font-size:11px">${escapeHtml(fmtTime(ev.ts))}</div><div class="mono muted" style="font-size:11px" title="${escapeAttr(ev.id)}">${escapeHtml(String(ev.id||"").slice(0,8))}</div></td>
+    <td><div class="mono">${escapeHtml(ev.model || "—")}</div><div class="muted" style="font-size:11px">${ev.stream ? "stream" : "non-stream"}</div></td>
+    <td class="mono" style="font-size:11px">${escapeHtml(ev.account || "—")}</td>
+    <td>${reqStatusCell(ev)}<div class="muted" style="font-size:11px">${escapeHtml(ev.outcome || "")}</div></td>
+    <td style="font-size:12px">${reqCause(ev)}</td>
+    <td class="mono">${escapeHtml(String(ev.attempts||0))}</td>
+    <td class="mono" style="font-size:11px">${reqMs(ev.queue_ms)} / ${reqMs(ev.first_data_ms)} / ${reqMs(ev.total_ms)}</td>
+  </tr>`).join("");
+}
+
+async function loadRequests(reset){
+  if (reset){ reqState.before = 0; reqState.rows = []; }
+  const params = new URLSearchParams();
+  params.set("limit", "50");
+  if (reqState.before) params.set("before", String(reqState.before));
+  if (reqState.outcome) params.set("outcome", reqState.outcome);
+  if (reqState.model) params.set("model", reqState.model);
+  if (reqState.account) params.set("account", reqState.account);
+  const page = await api("/admin/api/requests?" + params.toString());
+  renderRequests(page);
+}
+
+function renderReqFilters(){
+  const opts = ["", "ok", "model_unavailable", "upstream_saturated", "queue_wait_timeout", "admission_rejected", "timeout", "request_body_timeout", "canceled", "downstream_canceled", "upstream_body_error", "upstream_stream_error", "invalid_request", "no_healthy_account"];
+  const chips = opts.map(o => {
+    const label = o || "全部";
+    const cls = reqState.outcome === o ? "chip active" : "chip";
+    return `<span class="${cls}" data-outcome="${escapeAttr(o)}" style="cursor:pointer">${escapeHtml(label)}</span>`;
+  }).join("");
+  $("reqFilters").innerHTML = chips + `
+    <input id="reqModel" class="mono" placeholder="model 过滤" value="${escapeAttr(reqState.model)}" style="margin-left:8px;padding:4px 8px;border-radius:6px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;width:150px">
+    <input id="reqAccount" class="mono" placeholder="账号过滤" value="${escapeAttr(reqState.account)}" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;width:150px">`;
+}
+
 async function loadOverview(){
   const data = await api("/admin/api/overview");
   render(data);
@@ -366,7 +527,10 @@ async function showApp(){
     toast("登录失败: " + e.message, false);
     clearKey();
     showLogin();
+    return;
   }
+  renderReqFilters();
+  try { await loadRequests(true); } catch (e) { $("reqBody").innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(e.message)}</td></tr>`; }
 }
 function showLogin(){
   $("appView").classList.add("hidden");
@@ -384,8 +548,30 @@ $("loginBtn").onclick = async () => {
 $("keyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
 $("btnLogout").onclick = () => { clearKey(); showLogin(); toast("已退出"); };
 $("btnRefresh").onclick = async () => {
-  try { await loadOverview(); toast("已刷新"); } catch(e){ toast(e.message,false); }
+  try { await loadOverview(); await loadRequests(true); toast("已刷新"); } catch(e){ toast(e.message,false); }
 };
+$("btnReqRefresh").onclick = async () => {
+  try { await loadRequests(true); toast("已刷新"); } catch(e){ toast(e.message,false); }
+};
+$("btnReqMore").onclick = async () => {
+  try { await loadRequests(false); } catch(e){ toast(e.message,false); }
+};
+$("reqFilters").addEventListener("click", async (e) => {
+  const el = e.target.closest("[data-outcome]");
+  if (!el) return;
+  reqState.outcome = el.getAttribute("data-outcome") || "";
+  renderReqFilters();
+  try { await loadRequests(true); } catch(err){ toast(err.message,false); }
+});
+$("reqFilters").addEventListener("change", async (e) => {
+  if (e.target.id === "reqModel") reqState.model = e.target.value.trim();
+  else if (e.target.id === "reqAccount") reqState.account = e.target.value.trim();
+  else return;
+  try { await loadRequests(true); } catch(err){ toast(err.message,false); }
+});
+$("reqFilters").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && (e.target.id === "reqModel" || e.target.id === "reqAccount")) e.target.blur();
+});
 
 async function runAction(path, body){
   try {

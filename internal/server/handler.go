@@ -18,9 +18,17 @@ import (
 	"sync"
 	"time"
 
+	"codearts2api/internal/audit"
 	"codearts2api/internal/auth"
 	"codearts2api/internal/pool"
 	"codearts2api/internal/upstream"
+)
+
+// 构建信息由 -ldflags -X 注入（镜像内没有 .git，无法回读 VCS 信息）。
+// 未注入时保持空串，对外显式呈现为 unknown，绝不猜一个 commit。
+var (
+	BuildCommit string
+	BuildTime   string
 )
 
 // Config handler 依赖。
@@ -50,6 +58,8 @@ type Config struct {
 	LoginConfig upstream.LoginConfig
 	// OAuthCallbackHost 可选：覆盖授权链接回调 host（如 https://oneapi.example.com/codearts）。
 	OAuthCallbackHost string
+	// Audit 可选的元数据审计接收端。为 nil 时不记录（进程级日志仍保留）。
+	Audit *audit.Sink
 }
 
 var dynamicModelsCache struct {
@@ -173,6 +183,8 @@ func NewHandler(cfg Config) *Handler {
 	h.mux.HandleFunc("GET /panel", h.servePanel)
 	h.mux.HandleFunc("GET /panel/", h.servePanel)
 	h.mux.HandleFunc("GET /admin/api/overview", h.withAuth(h.adminOverview))
+	h.mux.HandleFunc("GET /admin/api/requests", h.withAuth(h.adminRequests))
+	h.mux.HandleFunc("GET /admin/api/audit", h.withAuth(h.adminAudit))
 	h.mux.HandleFunc("POST /admin/api/credits", h.withAuth(h.adminCredits))
 	h.mux.HandleFunc("POST /admin/api/checkin", h.withAuth(h.adminCheckin))
 	h.mux.HandleFunc("POST /admin/api/keepalive", h.withAuth(h.adminKeepalive))
@@ -910,6 +922,9 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func writeOpenAIError(w http.ResponseWriter, status int, code, msg string) {
+	if cw, ok := w.(*chatResponseWriter); ok {
+		cw.setErrorCode(code)
+	}
 	writeJSON(w, status, map[string]any{
 		"error": map[string]any{"message": msg, "type": "api_error", "code": code},
 	})

@@ -20,12 +20,14 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 | [Chat Request Lifecycle](./request-lifecycle.md) | Admission, fairness, ownership, streaming deadlines, SSE completion, and refresh/reload contracts | Implemented |
+| [Request Audit](./request-audit.md) | Bounded metadata, audit API/UI, storage limits, recovery state and build diagnostics | Implemented |
 
 ## Pre-Development Checklist
 
 For chat, pool, streaming, or related config changes, read
 [Chat Request Lifecycle](./request-lifecycle.md) and the active task's context before
-editing. Other guideline pages remain bootstrap placeholders.
+editing. For audit, account diagnostics or build identity, also read
+[Request Audit](./request-audit.md). Other guideline pages remain bootstrap placeholders.
 
 ## Quality Check
 

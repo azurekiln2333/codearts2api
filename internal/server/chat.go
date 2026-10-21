@@ -6,14 +6,52 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
+	"codearts2api/internal/audit"
 	"codearts2api/internal/pool"
 	"codearts2api/internal/upstream"
 )
 
+// auditOutcome refines the internal outcome into a truthful record value.
+// The lifecycle helpers collapse "client canceled" and "timed out" into one
+// string; a record must not, because the operator action differs.
+func auditOutcome(outcome string, cause audit.Cause, canceled bool) string {
+	switch outcome {
+	case "canceled_or_timeout":
+		if cause.Class == audit.CauseTimeout {
+			return "timeout"
+		}
+		return "canceled"
+	case "timeout_or_saturation":
+		switch cause.Class {
+		case audit.CauseTimeout:
+			return "timeout"
+		case audit.CauseQueueWait:
+			return "queue_wait_timeout"
+		}
+		if canceled {
+			return "canceled"
+		}
+		return "unavailable"
+	case "downstream_canceled":
+		return "downstream_canceled"
+	case "unavailable":
+		if cause.Class == audit.CauseQueueWait {
+			return "queue_wait_timeout"
+		}
+		return outcome
+	}
+	return outcome
+}
+
 func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request) {
 	started := time.Now()
+	// A stable correlation id is generated for every request, independent of
+	// whether audit is enabled, so logs and records can always be joined.
+	requestID := randHex(16)
+	original.Header().Set("X-Request-Id", requestID)
 	lifetime := newChatLifetime(r.Context(), h.cfg.StartupTimeout)
 	defer lifetime.close()
 	w := newChatResponseWriter(original, h.cfg.StreamWriteTimeout)
@@ -21,9 +59,74 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	model := h.cfg.DefaultModel
 	outcome, accountName, attempts := "invalid_request", "", 0
 	var waited, firstData time.Duration
+	var (
+		streamFlag     bool
+		requestedModel string
+		canonical      string
+		triedOrder     []string
+		auditErr       error
+	)
+	// Registered first, so it runs last: after the attempt lease/body cleanup
+	// below. The sink call is a non-blocking enqueue and never holds a lock or
+	// a slot when it runs.
 	defer func() {
-		log.Printf("chat model=%s account=%s attempts=%d wait=%s first_data=%s total=%s outcome=%s", model, accountName, attempts,
-			waited.Round(time.Millisecond), firstData.Round(time.Millisecond), time.Since(started).Round(time.Millisecond), outcome)
+		total := time.Since(started)
+		log.Printf("chat id=%s model=%s account=%s attempts=%d wait=%s first_data=%s total=%s outcome=%s", requestID, model, accountName, attempts,
+			waited.Round(time.Millisecond), firstData.Round(time.Millisecond), total.Round(time.Millisecond), outcome)
+		if h.cfg.Audit == nil {
+			return
+		}
+		status, committed := w.Status()
+		canceled := r.Context().Err() != nil
+		// The final context cause takes precedence over an earlier provider
+		// failure. Acquire/refresh return context.Canceled for both caller
+		// cancellation and our startup deadline; they are different outcomes.
+		recordOutcome, recordErr := outcome, auditErr
+		if outcome != "ok" && outcome != "request_body_timeout" {
+			switch {
+			case canceled:
+				recordOutcome, recordErr = "canceled", r.Context().Err()
+			case w.err != nil:
+				recordOutcome, recordErr = "downstream_canceled", &upstream.DownstreamWriteError{Err: w.err}
+			case isChatTimeout(context.Cause(lifetime.ctx)):
+				recordOutcome, recordErr = "timeout", context.Cause(lifetime.ctx)
+			}
+		}
+		cause := classifyChatCause(recordOutcome, recordErr)
+		// TS is the request start time, not the completion time.
+		ev := audit.Event{
+			ID:             requestID,
+			TS:             started.UTC().Format(time.RFC3339Nano),
+			Model:          requestedModel,
+			ModelCanonical: canonical,
+			Stream:         streamFlag,
+			Committed:      committed,
+			Status:         status,
+			Outcome:        auditOutcome(recordOutcome, cause, canceled),
+			ErrorCode:      w.ErrorCode(),
+			Attempts:       attempts,
+			Tried:          triedOrder,
+			WaitMS:         waited.Milliseconds(),
+			QueueMS:        waited.Milliseconds(),
+			TotalMS:        total.Milliseconds(),
+			Canceled:       canceled,
+			Cause:          cause,
+		}
+		// Capture the Retry-After actually offered to the client.
+		if v := w.Header().Get("Retry-After"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				ev.RetryAfterS = n
+			}
+		}
+		if accountName != "" {
+			name := accountName
+			ev.Account = &name
+		}
+		if firstData > 0 {
+			ms := firstData.Milliseconds()
+			ev.FirstDataMS = &ms
+		}
+		h.cfg.Audit.Record(ev)
 	}()
 
 	// Include request reads and retry sleeps in the process-wide limit, across
@@ -31,6 +134,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	releaseAdmission, err := h.cfg.Pool.AdmitRequest(lifetime.ctx)
 	if err != nil {
 		outcome = "admission_rejected"
+		auditErr = err
 		writeChatLifecycleError(w, r, lifetime, err)
 		return
 	}
@@ -58,6 +162,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		// net/http cancels Request.Context on a body read deadline as well as
 		// on peer disconnect. This deadline belongs to our startup budget.
 		outcome = "request_body_timeout"
+		auditErr = err
 		writeOpenAIError(w, http.StatusGatewayTimeout, "request_timeout", "request body timed out")
 		return
 	}
@@ -75,11 +180,21 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	}
 	req, err := parseChatRequest(body)
 	if err != nil {
+		auditErr = err
 		writeOpenAIError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
+	// Requested model is recorded exactly as sent (literal "auto" included) and
+	// is available even when a later validation step rejects the request.
+	requestedModel = req.Model
+	streamFlag = req.Stream
+	if req.Model != "" && req.Model != "auto" {
+		model = req.Model
+	}
+	canonical = upstream.CanonicalModel(model)
 	tools, err := nativeTools(req.Tools, req.ToolChoice)
 	if err != nil {
+		auditErr = err
 		writeOpenAIError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
@@ -101,6 +216,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	toolsOn := toolsActive(req)
 	if req.Model != "" && req.Model != "auto" {
 		model = req.Model
+		canonical = upstream.CanonicalModel(req.Model)
 	}
 	outcome = "unavailable"
 
@@ -139,7 +255,16 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		return lease, err
 	}
 
-	for rotation := 0; rotation < h.cfg.MaxRotate; rotation++ {
+	// Rotation budget: only generic provider failures (5xx, 429, transport,
+	// timeouts) are charged. A capability rejection (model not registered /
+	// benefit not found) says nothing about account health or the next
+	// account, so it must not consume this budget — otherwise three
+	// capability-refusing accounts can exhaust MaxRotate and report a model
+	// unavailable while later eligible accounts were never tried. The tried
+	// set (finite) and the shared startup deadline still bound the loop.
+	rotations := 0
+	maxIterations := h.cfg.MaxRotate + len(h.cfg.Pool.Accounts()) + 1
+	for iteration := 0; iteration < maxIterations && rotations < h.cfg.MaxRotate; iteration++ {
 		if writeChatLifecycleError(w, r, lifetime, nil) {
 			outcome = "canceled_or_timeout"
 			return
@@ -150,8 +275,15 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		}
 		lease, aerr := acquire(candidates)
 		if aerr != nil {
+			auditErr = aerr
 			if writeChatLifecycleError(w, r, lifetime, aerr) {
-				outcome = "admission_rejected"
+				// Distinguish "waited too long for a slot" from "the ticket cap
+				// rejected this request": the operator action differs.
+				if errors.Is(aerr, pool.ErrAcquireTimeout) {
+					outcome = "queue_wait_timeout"
+				} else {
+					outcome = "admission_rejected"
+				}
 				return
 			}
 			lastErr = aerr
@@ -159,7 +291,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			// cached candidates without charging an upstream attempt for it.
 			if stickyAcct != "" && errors.Is(aerr, pool.ErrNoHealthyAccount) {
 				stickyAcct = ""
-				rotation--
+				iteration-- // Not charged: no upstream attempt was made.
 				continue
 			}
 			break
@@ -167,12 +299,16 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		acct := lease.Account
 		current = &chatAttempt{lease: lease}
 		tried[acct.Name] = true
+		if len(triedOrder) < audit.MaxTried {
+			triedOrder = append(triedOrder, acct.Name)
+		}
 		accountName = acct.Name
 		stickyAcct = "" // Only the first still-valid affinity choice is pinned.
 
 		valid, verr := h.cfg.Pool.ValidateContext(lifetime.ctx, acct)
 		if verr != nil || !valid {
 			current.close()
+			auditErr = verr
 			if writeChatLifecycleError(w, r, lifetime, verr) {
 				outcome = "canceled_or_timeout"
 				return
@@ -180,7 +316,9 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			lastErr = verr
 			if lastErr == nil {
 				lastErr = errors.New("account token is invalid")
+				auditErr = lastErr
 			}
+			rotations++ // Account-level failure, not model capability.
 			continue
 		}
 
@@ -194,6 +332,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			authz := acct.AuthSnapshot()
 			if authz == nil {
 				sendErr = errors.New("account credentials are missing")
+				auditErr = sendErr
 				break
 			}
 			token, ak, sk := authz.Credentials()
@@ -208,6 +347,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			if writeChatLifecycleError(w, r, lifetime, sendErr) {
 				outcome = "canceled_or_timeout"
+				auditErr = sendErr
 				return
 			}
 			if current.body != nil {
@@ -220,6 +360,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				refreshErr := h.cfg.Pool.RefreshTokenContext(lifetime.ctx, acct.Name)
 				if writeChatLifecycleError(w, r, lifetime, refreshErr) {
 					outcome = "canceled_or_timeout"
+					auditErr = refreshErr
 					return
 				}
 				if refreshErr == nil {
@@ -234,13 +375,21 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			current = nil
 			if err := waitChatRetry(lifetime.ctx, h.cfg.QueueRetryDelay); err != nil {
 				outcome = "canceled_or_timeout"
+				auditErr = err
 				writeChatLifecycleError(w, r, lifetime, err)
 				return
 			}
 			lease, err = acquire([]pool.AccountCandidate{{Name: acct.Name}})
 			if err != nil {
+				auditErr = err
 				if writeChatLifecycleError(w, r, lifetime, err) {
-					outcome = "admission_rejected"
+					// Retry re-acquisition timing out is a queue wait, not a ticket
+					// cap rejection.
+					if errors.Is(err, pool.ErrAcquireTimeout) {
+						outcome = "queue_wait_timeout"
+					} else {
+						outcome = "admission_rejected"
+					}
 					return
 				}
 				lastErr = err
@@ -255,13 +404,18 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		if sendErr != nil {
 			current.close()
 			lastErr = sendErr
+			auditErr = sendErr
 			if isParamInvalidError(sendErr) {
 				outcome = "invalid_request"
 				writeOpenAIError(w, http.StatusBadRequest, "invalid_request", "upstream rejected request params: "+truncateMsg(sendErr.Error(), 200))
 				return
 			}
-			// Account-specific capability failures may succeed on another account.
-			h.handleUpstreamError(acct, model, sendErr)
+			// Account-specific capability failures may succeed on another account
+			// and are not charged against the generic rotation budget.
+			capabilityOnly := h.handleUpstreamError(acct, model, sendErr)
+			if !capabilityOnly {
+				rotations++
+			}
 			continue
 		}
 		if err := lifetime.started(); err != nil {
@@ -294,6 +448,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			if streamErr != nil {
 				outcome = "upstream_stream_error"
+				auditErr = streamErr
 				h.handleUpstreamError(acct, model, streamErr)
 				return
 			}
@@ -308,6 +463,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		comp, aggregateErr := upstream.AggregateRaw(current.body)
 		current.close()
 		if aggregateErr != nil {
+			auditErr = aggregateErr
 			if writeChatLifecycleError(w, r, lifetime, aggregateErr) {
 				outcome = "canceled_or_timeout"
 				return
@@ -357,9 +513,14 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	}
 	if writeChatLifecycleError(w, r, lifetime, lastErr) {
 		outcome = "timeout_or_saturation"
+		auditErr = lastErr
 		return
 	}
-	if h.modelKnownUnusable(model) || upstreamUnavailableReason(lastErr) != "" {
+	auditErr = lastErr
+	// Truthful unavailability: only claim the model is unavailable when every
+	// eligible candidate was actually evaluated. Remaining untried candidates
+	// means the rotation budget stopped us, which is not the same thing.
+	if len(h.chatCandidates(tried, model, "")) == 0 && (h.modelKnownUnusable(model) || upstreamUnavailableReason(lastErr) != "") {
 		outcome = "model_unavailable"
 		writeOpenAIError(w, http.StatusNotFound, "model_not_available", "model "+model+" is not available on eligible configured accounts")
 		return
@@ -371,6 +532,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		writeOpenAIError(w, http.StatusTooManyRequests, "upstream_busy", "upstream is busy; retry later")
 		return
 	}
+	outcome = "no_healthy_account"
 	writeOpenAIError(w, http.StatusServiceUnavailable, "no_healthy_account", "no eligible account is currently available")
 }
 

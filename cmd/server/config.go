@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"codearts2api/internal/audit"
 	"codearts2api/internal/pool"
 )
 
@@ -63,6 +65,21 @@ type Config struct {
 		TimeoutSeconds int `json:"timeout_seconds"`
 	} `json:"upstream"`
 
+	// Audit 元数据审计（只记录元数据，不含提示词/回复/凭证）。
+	Audit struct {
+		Enabled       bool   `json:"enabled"`
+		Dir           string `json:"dir"`
+		MaxQueue      int    `json:"max_queue"`
+		Recent        int    `json:"recent"`
+		MaxFileBytes  int64  `json:"max_file_bytes"`
+		MaxFiles      int    `json:"max_files"`
+		MaxTotalBytes int64  `json:"max_total_bytes"`
+		RetentionDays int    `json:"retention_days"`
+		FlushInterval string `json:"flush_interval"`
+	} `json:"audit"`
+
+	AuditFlushIntervalDur time.Duration
+
 	SoftRateDur    time.Duration
 	ErrCooldownDur time.Duration
 }
@@ -93,6 +110,15 @@ func Default() *Config {
 	c.StreamWriteTimeoutSeconds = 30
 	c.BenefitAutoClaim = true // 不领取时福利模型调用必然失败（benefit not found）
 	c.CreditsAutoClaim = true
+	// 审计默认：7 天 / 8 个 8MiB 文件（含活动文件，合计 64MiB）/ 队列 256 / 近期窗口 512。
+	c.Audit.Enabled = true
+	c.Audit.MaxQueue = audit.DefaultMaxQueue
+	c.Audit.Recent = audit.DefaultRecent
+	c.Audit.MaxFileBytes = audit.DefaultMaxFileBytes
+	c.Audit.MaxFiles = audit.DefaultMaxFiles
+	c.Audit.MaxTotalBytes = audit.DefaultMaxTotalBytes
+	c.Audit.RetentionDays = audit.DefaultRetentionDays
+	c.Audit.FlushInterval = "1s"
 	return c
 }
 
@@ -253,6 +279,41 @@ func applyEnv(c *Config) {
 	if v := os.Getenv("CA2A_CREDITS_AUTO_CLAIM"); v != "" {
 		c.CreditsAutoClaim = v == "1" || strings.EqualFold(v, "true")
 	}
+	if v := os.Getenv("CA2A_AUDIT_ENABLED"); v != "" {
+		c.Audit.Enabled = v == "1" || strings.EqualFold(v, "true")
+	}
+	if v := os.Getenv("CA2A_AUDIT_DIR"); v != "" {
+		c.Audit.Dir = v
+	}
+	if v := os.Getenv("CA2A_AUDIT_FLUSH_INTERVAL"); v != "" {
+		c.Audit.FlushInterval = v
+	}
+	if v := os.Getenv("CA2A_AUDIT_RETENTION_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.Audit.RetentionDays = n
+		}
+	}
+	for name, target := range map[string]*int{
+		"CA2A_AUDIT_MAX_QUEUE": &c.Audit.MaxQueue,
+		"CA2A_AUDIT_RECENT":    &c.Audit.Recent,
+		"CA2A_AUDIT_MAX_FILES": &c.Audit.MaxFiles,
+	} {
+		if v := os.Getenv(name); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				*target = n
+			}
+		}
+	}
+	for name, target := range map[string]*int64{
+		"CA2A_AUDIT_MAX_FILE_BYTES":  &c.Audit.MaxFileBytes,
+		"CA2A_AUDIT_MAX_TOTAL_BYTES": &c.Audit.MaxTotalBytes,
+	} {
+		if v := os.Getenv(name); v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+				*target = n
+			}
+		}
+	}
 }
 
 func (c *Config) normalize() error {
@@ -308,7 +369,33 @@ func (c *Config) normalize() error {
 	if c.MaxConcurrent <= 0 {
 		c.MaxConcurrent = 1 // 上游并发会话释放慢，单账号串行最稳
 	}
+	if c.Audit.FlushInterval != "" {
+		if c.AuditFlushIntervalDur, err = time.ParseDuration(c.Audit.FlushInterval); err != nil {
+			return fmt.Errorf("audit.flush_interval: %w", err)
+		}
+	}
+	if c.AuditFlushIntervalDur <= 0 {
+		c.AuditFlushIntervalDur = audit.DefaultFlushInterval
+	}
+	if c.Audit.Dir == "" && c.StateFile != "" {
+		c.Audit.Dir = filepath.Join(filepath.Dir(c.StateFile), "audit")
+	}
 	return nil
+}
+
+// ToAuditOptions 转换为审计选项（sink 内部再做一次上限夹紧）。
+func (c *Config) ToAuditOptions() audit.Options {
+	return audit.Options{
+		Enabled:       c.Audit.Enabled,
+		Dir:           c.Audit.Dir,
+		MaxQueue:      c.Audit.MaxQueue,
+		Recent:        c.Audit.Recent,
+		MaxFileBytes:  c.Audit.MaxFileBytes,
+		MaxFiles:      c.Audit.MaxFiles,
+		MaxTotalBytes: c.Audit.MaxTotalBytes,
+		RetentionDays: c.Audit.RetentionDays,
+		FlushInterval: c.AuditFlushIntervalDur,
+	}
 }
 
 // ToPoolConfig 转换为 pool.Config。

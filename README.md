@@ -177,10 +177,40 @@ sudo cp deploy/codearts2api.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now codearts2api
 
 # 或 Docker
-export CA2A_API_KEY=你的随机密钥
+# 首次部署才复制示例；升级时保留已有 .env、config.json、auths/ 和 data/。
+cp -n .env.example .env
+cp -n config.example.json config.json
+# 编辑 .env：设置 CA2A_API_KEY；如需 21508 端口，设置 CA2A_PORT=21508。
 mkdir -p auths data
+docker compose config --quiet
 docker compose up -d --build
 ```
+
+Compose 支持通过同目录 `.env` 或 shell 环境变量配置端口、时区、容器名、重启策略、构建目录与宿主机挂载路径，完整示例见 `.env.example`。`CA2A_PORT` 默认 `7866`，同时控制宿主机端口、容器端口与容器内服务监听，覆盖 `config.json` 中的 `listen`；原生运行仍使用 `CA2A_LISTEN`。
+
+应用支持的其他环境变量也已全部接入 Compose，非空值覆盖 `config.json`，未设置或留空则沿用配置文件及内置默认值。宿主机挂载路径使用 `CA2A_AUTHS_PATH`、`CA2A_DATA_PATH`、`CA2A_CONFIG_PATH`；`CA2A_AUTH_DIR` 和 `CA2A_STATE_FILE` 则是容器内应用使用的路径。升级时保持原有挂载路径即可继续使用已添加的凭证。
+
+升级前备份现有 `.env`、`config.json`、`auths/` 和 `data/`，记录正在使用的镜像 ID；保留原目录和挂载路径。升级只重建容器，不要求重新导入凭证。若此前在 `config.json` 显式配置过并发 `5`，该值仍然生效；初次验证上游额度时可在 `.env` 明确设置 `CA2A_MAX_CONCURRENT=1`。
+
+镜像构建身份需随源码注入，可在 Linux 部署目录执行：
+
+```bash
+docker compose config --quiet
+docker inspect --format '{{.Image}}' codearts2api
+CA2A_BUILD_COMMIT="$(git rev-parse HEAD)" \
+CA2A_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" docker compose build
+docker compose up -d --no-build
+```
+
+容器名改过时替换上述 `codearts2api`。发布前确认工作目录对应预期提交且产品源码没有未提交改动。进入后台核对构建提交、实际账号并发和等待/超时配置，再做有边界的模型测试；未注入身份时后台显示“未知构建”，不能据此认定已运行新版本。需要回退时使用之前记录的镜像并保留同一组挂载目录。持续有上游数据的非流式生成可能超过启动预算，客户端长时间收不到最终响应并不单独证明网关卡死。
+
+## 请求审计与账号状态
+
+后台的“请求审计”展示最近请求的模型、所选账号、HTTP 状态与执行结果、安全供应商错误码、尝试次数，以及排队/首数据/总耗时。响应头 `X-Request-Id` 可关联服务日志和审计记录。`GET /admin/api/requests` 与 `GET /admin/api/audit` 使用现有 Bearer Key 鉴权；请求列表支持 `limit`（最多 200）、`before`（序号游标）、`model`、`account`、`outcome`、`status`、`since` 过滤。
+
+默认审计保留 7 天，最多 8 个 8 MiB 文件（含当前文件，合计不超过 64 MiB），入队上限 256，近期窗口 512 条。重启会恢复近期记录和序号；新请求可能让窗口中最旧的记录退出分页。更早的保留文件位于 `<state_file 所在目录>/audit/`，供本地归档查看。队列满或磁盘写入失败不会等待写盘，后台会显示丢弃与写入失败计数。审计仅保存元数据，不保存提示词、回复、工具参数、请求头、密钥或登录凭证；共享服务 Key 无法区分 New API 的具体终端用户。
+
+账号的“可调度 / 冷却 / 禁用”与历史失败分别展示。`err N` 是连续失败计数，默认达到 3 次冷却 10 分钟；冷却自然到期不会自动清除历史计数。实际请求成功后会清理已过时的当前错误并持久化一次，保留历史失败，不会撤销当前冷却或人工禁用。升级前的失败时间无法恢复，显示为“时间未知”。签到领取积分与具体模型的福利资格不同，`benefit not found` 仍需要核对该模型的权益。
 
 ## 环境变量配置
 
@@ -210,6 +240,15 @@ docker compose up -d --build
 | `CA2A_BENEFIT_AUTO_CLAIM` | 发现模型时自动领取限时福利（幂等；关闭则福利模型不可用） | `true` |
 | `CA2A_CREDITS_AUTO_CLAIM` | watchdog 自动领取每日签到及新用户积分 | `true` |
 | `CA2A_LOGIN_CLIENT_ID` | WebUI 登录使用的 OAuth client_id | 已有账号的取值，否则 `codearts-agent` |
+| `CA2A_AUDIT_ENABLED` | 开启请求元数据审计 | `true` |
+| `CA2A_AUDIT_DIR` | 容器内审计目录 | `<state_file 所在目录>/audit` |
+| `CA2A_AUDIT_MAX_QUEUE` | 非阻塞审计队列容量 | `256` |
+| `CA2A_AUDIT_RECENT` | 可查询的近期记录数 | `512` |
+| `CA2A_AUDIT_MAX_FILE_BYTES` | 单个审计文件上限（字节） | `8388608` |
+| `CA2A_AUDIT_MAX_FILES` | 文件数量上限（含当前文件） | `8` |
+| `CA2A_AUDIT_MAX_TOTAL_BYTES` | 所有审计文件合计上限（字节） | `67108864` |
+| `CA2A_AUDIT_RETENTION_DAYS` | 审计文件保留天数 | `7` |
+| `CA2A_AUDIT_FLUSH_INTERVAL` | 审计文件同步周期 | `1s` |
 
 ## 目录结构
 

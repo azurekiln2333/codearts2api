@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"codearts2api/internal/audit"
 	"codearts2api/internal/auth"
 	"codearts2api/internal/pool"
 	"codearts2api/internal/scheduler"
@@ -46,6 +47,13 @@ func main() {
 
 	c := upstream.New(time.Duration(cfg.Upstream.TimeoutSeconds) * time.Second)
 	c.SetBenefitAutoClaim(cfg.BenefitAutoClaim)
+
+	sink, err := audit.Open(cfg.ToAuditOptions())
+	if err != nil {
+		// Audit is diagnostic only: never fail startup because of it.
+		log.Printf("WARNING: audit disabled: %v", err)
+		sink = nil
+	}
 
 	sch := scheduler.New(scheduler.Config{
 		Pool:              p,
@@ -86,12 +94,20 @@ func main() {
 		OAuthClient:       upstream.New(15 * time.Second),
 		LoginConfig:       loginConfig(cfg),
 		OAuthCallbackHost: cfg.OAuthCallbackHost,
+		Audit:             sink,
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go sch.Run(ctx)
 	h.StartAvailabilityProber(ctx)
+	if sink != nil {
+		defer func() {
+			closeCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			sink.Close(closeCtx)
+		}()
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
@@ -106,6 +122,13 @@ func main() {
 	}()
 
 	log.Printf("codearts2api listening on %s (api_key=%v)", cfg.Listen, cfg.APIKey != "")
+	if sink != nil && sink.Enabled() {
+		st := sink.Stats()
+		log.Printf("audit enabled dir=%s recent=%d queue=%d files=%dx%dMiB retention=%dd",
+			st.Dir, st.Recent, st.MaxQueue, st.MaxFiles, st.MaxFileBytes>>20, st.RetentionDays)
+	} else {
+		log.Printf("audit disabled")
+	}
 	log.Printf("chat limits per_account=%d pending=%d startup=%ds account_wait=%ds upstream_idle=%ds write=%ds queue_attempts=%d queue_delay=%ds",
 		cfg.MaxConcurrent, cfg.MaxPending, cfg.StartupTimeoutSeconds, cfg.AccountWaitSeconds,
 		cfg.Upstream.TimeoutSeconds, cfg.StreamWriteTimeoutSeconds, cfg.QueueMaxAttempts, cfg.QueueRetrySeconds)

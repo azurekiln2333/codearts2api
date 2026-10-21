@@ -52,6 +52,11 @@ write/flush error and supports `errors.As`.
   it performs no synchronous model discovery. Unknown catalogs remain eligible.
   A positive availability entry alone must not raise an unknown account's
   priority and starve other unknown accounts.
+- Account-specific capability rejections do not consume the generic `MaxRotate`
+  failure budget. Keep the tried-account set and startup budget finite. More
+  capability-refusing accounts than `MaxRotate` must not prevent reaching a later
+  capable account. A global 404 requires exhausting the evaluated eligible
+  capability candidates; remaining untried candidates require truthful failure.
 - Derived sticky affinity requires explicit `conversation_id`, one of the
   `X-Codearts-Chat-Id` / `X-Session-Affinity` / `X-Session-Id` headers, or actual
   assistant/tool/function history. Identical independent first-turn prompts use
@@ -158,6 +163,12 @@ first-data latency, total duration, and outcome; omit messages and credentials.
   Include `TestProbeLeaseSurvivesAccountRemoveAndReAdd` and
   `TestChatStartupTimeoutDuringRefreshWaitReleasesEverything` for the background
   and credential-wait integration paths.
+- Capability rotation tests must cover five accounts with `MaxRotate=3`, only the
+  fifth capable, all-unavailable exhaustion, and the unchanged generic 5xx bound.
+  `TestProductionWaveEighteenMixedRequestsWithPartialCooling` exercises live HTTP
+  with three cooling accounts, five silent holders, mixed queued calls and
+  cancellation; assert explicit failures, health response, ticket/slot reuse and
+  later success/capability/retry behavior. Use fresh account/model cache keys.
 - Run the full Go tests, race detector, vet, build, and `git diff --check`. Review
   new untracked source files explicitly because plain `git diff` omits them.
   Deterministic localhost saturation proves bounds, not production throughput.

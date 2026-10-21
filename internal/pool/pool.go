@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,19 +36,30 @@ type Account struct {
 	Auth   *auth.Auth       `json:"-"`
 	Client *upstream.Client `json:"-"`
 
-	mu                sync.Mutex
-	refresh           *tokenRefresh
-	checkinMu         sync.Mutex
-	checkin           *CheckinStatus
-	lastValidated     time.Time
-	errCount          int
-	coolUntil         time.Time
-	coolKind          CoolKind
-	disabled          bool
-	disabledRevision  uint64
-	removed           bool
-	disabledReason    string
-	lastErr           string
+	mu               sync.Mutex
+	refresh          *tokenRefresh
+	checkinMu        sync.Mutex
+	checkin          *CheckinStatus
+	lastValidated    time.Time
+	errCount         int
+	coolUntil        time.Time
+	coolKind         CoolKind
+	disabled         bool
+	disabledRevision uint64
+	removed          bool
+	disabledReason   string
+	lastErr          string
+	// lastErrAt / lastSuccessAt separate *current* schedulability from
+	// *historical* failure. They are presentation-only and never feed the
+	// cooldown decision. Zero means unknown (e.g. legacy state.json).
+	lastErrAt     time.Time
+	lastSuccessAt time.Time
+	// Historical failure survives a recovery, so the panel can still explain
+	// what went wrong after lastErr is cleared. Class and text come from a
+	// fixed safe table; no raw provider error is ever stored here.
+	lastFailureAt     time.Time
+	lastFailureClass  string
+	lastFailureText   string
 	activeConcurrent  int       // 当前活跃并发请求数
 	maxConcurrent     int       // 最大允许并发数
 	keepaliveLastPing time.Time // 最后保活心跳时间
@@ -209,24 +221,43 @@ func (p *Pool) List() []map[string]any {
 		if reason == "" {
 			reason = a.lastErr
 		}
+		lastErrAt, lastSuccessAt := "", ""
+		if !a.lastErrAt.IsZero() {
+			lastErrAt = a.lastErrAt.Format(time.RFC3339)
+		}
+		if !a.lastSuccessAt.IsZero() {
+			lastSuccessAt = a.lastSuccessAt.Format(time.RFC3339)
+		}
+		lastFailureAt := ""
+		if !a.lastFailureAt.IsZero() {
+			lastFailureAt = a.lastFailureAt.Format(time.RFC3339)
+		}
 		out = append(out, map[string]any{
-			"name":              a.Name,
-			"uid":               a.UID,
-			"nickname":          a.UserName,
-			"user_name":         a.UserName,
-			"default_model":     a.DefaultModel,
-			"credits":           int64(0), // 保留旧字段；未查询真实余额
-			"checkin":           a.checkin,
-			"disabled":          a.disabled,
-			"cooling":           cooling,
-			"until":             until,
-			"err_count":         a.errCount,
-			"reason":            reason,
-			"last_error":        a.lastErr,
-			"active_concurrent": a.activeConcurrent,
-			"max_concurrent":    a.maxConcurrent,
-			"token_remaining":   a.Auth.Remaining().Round(time.Minute).String(),
-			"expires_at":        a.Auth.ExpiresAt().Format(time.RFC3339),
+			"name":          a.Name,
+			"uid":           a.UID,
+			"nickname":      a.UserName,
+			"user_name":     a.UserName,
+			"default_model": a.DefaultModel,
+			"credits":       int64(0), // 保留旧字段；未查询真实余额
+			"checkin":       a.checkin,
+			"disabled":      a.disabled,
+			"cooling":       cooling,
+			"until":         until,
+			"err_count":     a.errCount,
+			"reason":        reason,
+			"last_error":    a.lastErr,
+			// Current schedulability, separate from failure history below.
+			"schedulable":     !a.disabled && !cooling,
+			"last_error_at":   lastErrAt,
+			"last_success_at": lastSuccessAt,
+			// Historical failure survives recovery; empty means unknown.
+			"last_failure_at":    lastFailureAt,
+			"last_failure_class": a.lastFailureClass,
+			"last_failure_text":  a.lastFailureText,
+			"active_concurrent":  a.activeConcurrent,
+			"max_concurrent":     a.maxConcurrent,
+			"token_remaining":    a.Auth.Remaining().Round(time.Minute).String(),
+			"expires_at":         a.Auth.ExpiresAt().Format(time.RFC3339),
 		})
 		a.mu.Unlock()
 	}
@@ -235,6 +266,9 @@ func (p *Pool) List() []map[string]any {
 }
 
 // Stats 汇总。
+// Config returns the effective pool configuration (read-only copy).
+func (p *Pool) Config() Config { return p.cfg }
+
 func (p *Pool) Stats() (total, healthy, disabled, cooling int, credits int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -422,6 +456,8 @@ func (p *Pool) disableAuth(ctx context.Context, a *Account, authz *auth.Auth, re
 	changed := !a.removed && a.Auth == authz
 	if changed {
 		a.disabled, a.disabledReason, a.lastErr = true, reason, reason
+		a.lastErrAt = time.Now()
+		setFailureLocked(a, reason)
 		a.disabledRevision++
 	}
 	a.mu.Unlock()
@@ -443,6 +479,8 @@ func (p *Pool) Cooldown(name string, kind CoolKind, dur time.Duration, reason st
 		a.coolUntil = time.Now().Add(dur)
 		a.coolKind = kind
 		a.lastErr = reason
+		a.lastErrAt = time.Now()
+		setFailureLocked(a, reason)
 		a.mu.Unlock()
 		log.Printf("pool cooldown account=%s kind=%d dur=%s reason=%s", name, kind, dur, reason)
 	}
@@ -460,6 +498,10 @@ func (p *Pool) NoteError(name string, threshold int, cooldown time.Duration) {
 		}
 		a.mu.Lock()
 		a.errCount++
+		// Every counted error refreshes the failure timestamp, including counts
+		// below the threshold: "failing now" must not depend on cooling.
+		a.lastErrAt = time.Now()
+		setFailureLocked(a, "consecutive errors")
 		if a.errCount >= threshold {
 			a.coolUntil = time.Now().Add(cooldown)
 			a.lastErr = "consecutive errors"
@@ -470,15 +512,66 @@ func (p *Pool) NoteError(name string, threshold int, cooldown time.Duration) {
 	p.saveState()
 }
 
-// NoteSuccess 清零错误计数。
+// setFailureLocked records the historical failure for an account. Class and
+// text come from a fixed table, so no raw provider error text can be persisted.
+// The historical record survives a later recovery; the caller keeps updating
+// lastErr separately for *current* state.
+func setFailureLocked(a *Account, reason string) {
+	class, text := failureClass(reason)
+	a.lastFailureAt = time.Now()
+	a.lastFailureClass = class
+	a.lastFailureText = text
+}
+
+// failureClass maps an internally generated failure reason to a fixed
+// (class, description) pair. Unknown input collapses to a bounded generic
+// description rather than being echoed back.
+func failureClass(reason string) (string, string) {
+	low := strings.ToLower(reason)
+	switch {
+	case strings.Contains(low, "429"), strings.Contains(low, "rate limit"):
+		return "rate_limit", "upstream rate limited"
+	case strings.Contains(low, "401"), strings.Contains(low, "authentication"),
+		strings.Contains(low, "credential"), strings.Contains(low, "token invalid"):
+		return "auth", "upstream rejected credentials"
+	case strings.Contains(low, "consecutive"):
+		return "unknown", "consecutive upstream errors"
+	case strings.Contains(low, "http 5"), strings.Contains(low, "server error"):
+		return "upstream_5xx", "upstream server error"
+	case strings.Contains(low, "refresh"):
+		return "auth", "token refresh failed"
+	case strings.Contains(low, "manual"), strings.Contains(low, "禁用"):
+		return "manual", "manually disabled"
+	}
+	return "unknown", "unclassified account failure"
+}
+
+// NoteSuccess records a completed request.
+//
+// It clears obsolete *current* error state only on a real error-to-success
+// transition and persists exactly once for that transition, so a restart cannot
+// resurrect a stale errCount. Routine successes perform no disk write at all.
+// An active cooldown or a manual disable is never overridden.
 func (p *Pool) NoteSuccess(name string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	now := time.Now()
 	for _, a := range p.accounts {
-		if a.Name == name {
-			a.mu.Lock()
+		if a.Name != name {
+			continue
+		}
+		a.mu.Lock()
+		recovering := a.errCount > 0 || a.lastErr != ""
+		cooling := now.Before(a.coolUntil)
+		blocked := a.disabled || cooling
+		a.lastSuccessAt = now
+		if recovering && !blocked {
 			a.errCount = 0
-			a.mu.Unlock()
+			a.lastErr = ""
+		}
+		a.mu.Unlock()
+		if recovering && !blocked {
+			p.saveState()
 		}
 	}
 }
@@ -494,6 +587,8 @@ func (p *Pool) Disable(name, reason string) {
 			a.disabledRevision++
 			a.disabledReason = reason
 			a.lastErr = reason
+			a.lastErrAt = time.Now()
+			setFailureLocked(a, reason)
 			a.mu.Unlock()
 			log.Printf("pool disable account=%s reason=%s", name, reason)
 		}
@@ -829,12 +924,17 @@ func (p *Pool) loadState() {
 		return
 	}
 	var data []struct {
-		Name      string    `json:"name"`
-		ErrCount  int       `json:"err_count"`
-		CoolUntil time.Time `json:"cool_until"`
-		Disabled  bool      `json:"disabled"`
-		Reason    string    `json:"reason"`
-		LastErr   string    `json:"last_error"`
+		Name             string    `json:"name"`
+		ErrCount         int       `json:"err_count"`
+		CoolUntil        time.Time `json:"cool_until"`
+		Disabled         bool      `json:"disabled"`
+		Reason           string    `json:"reason"`
+		LastErr          string    `json:"last_error"`
+		LastErrAt        time.Time `json:"last_error_at"`
+		LastSuccessAt    time.Time `json:"last_success_at"`
+		LastFailureAt    time.Time `json:"last_failure_at"`
+		LastFailureClass string    `json:"last_failure_class"`
+		LastFailureText  string    `json:"last_failure_text"`
 	}
 	if json.Unmarshal(raw, &data) != nil {
 		return
@@ -848,6 +948,13 @@ func (p *Pool) loadState() {
 				a.disabled = s.Disabled
 				a.disabledReason = s.Reason
 				a.lastErr = s.LastErr
+				// Missing in legacy state files: stays zero (unknown), never
+				// inferred from cool_until or the journal.
+				a.lastErrAt = s.LastErrAt
+				a.lastSuccessAt = s.LastSuccessAt
+				a.lastFailureAt = s.LastFailureAt
+				a.lastFailureClass = s.LastFailureClass
+				a.lastFailureText = s.LastFailureText
 				a.mu.Unlock()
 			}
 		}
@@ -859,23 +966,33 @@ func (p *Pool) saveState() {
 		return
 	}
 	type entry struct {
-		Name      string    `json:"name"`
-		ErrCount  int       `json:"err_count"`
-		CoolUntil time.Time `json:"cool_until"`
-		Disabled  bool      `json:"disabled"`
-		Reason    string    `json:"reason"`
-		LastErr   string    `json:"last_error"`
+		Name             string    `json:"name"`
+		ErrCount         int       `json:"err_count"`
+		CoolUntil        time.Time `json:"cool_until"`
+		Disabled         bool      `json:"disabled"`
+		Reason           string    `json:"reason"`
+		LastErr          string    `json:"last_error"`
+		LastErrAt        time.Time `json:"last_error_at,omitempty"`
+		LastSuccessAt    time.Time `json:"last_success_at,omitempty"`
+		LastFailureAt    time.Time `json:"last_failure_at,omitempty"`
+		LastFailureClass string    `json:"last_failure_class,omitempty"`
+		LastFailureText  string    `json:"last_failure_text,omitempty"`
 	}
 	out := make([]entry, 0, len(p.accounts))
 	for _, a := range p.accounts {
 		a.mu.Lock()
 		out = append(out, entry{
-			Name:      a.Name,
-			ErrCount:  a.errCount,
-			CoolUntil: a.coolUntil,
-			Disabled:  a.disabled,
-			Reason:    a.disabledReason,
-			LastErr:   a.lastErr,
+			Name:             a.Name,
+			ErrCount:         a.errCount,
+			CoolUntil:        a.coolUntil,
+			Disabled:         a.disabled,
+			Reason:           a.disabledReason,
+			LastErr:          a.lastErr,
+			LastErrAt:        a.lastErrAt,
+			LastSuccessAt:    a.lastSuccessAt,
+			LastFailureAt:    a.lastFailureAt,
+			LastFailureClass: a.lastFailureClass,
+			LastFailureText:  a.lastFailureText,
 		})
 		a.mu.Unlock()
 	}

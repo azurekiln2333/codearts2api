@@ -84,6 +84,10 @@ type chatResponseWriter struct {
 	controller *http.ResponseController
 	timeout    time.Duration
 	err        error
+	// status is the real status committed to the client, 0 before commitment.
+	status    int
+	committed bool
+	errCode   string
 }
 
 func newChatResponseWriter(w http.ResponseWriter, timeout time.Duration) *chatResponseWriter {
@@ -91,6 +95,34 @@ func newChatResponseWriter(w http.ResponseWriter, timeout time.Duration) *chatRe
 }
 
 func (w *chatResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// WriteHeader records the actual committed status so a record never has to guess.
+func (w *chatResponseWriter) WriteHeader(status int) {
+	if w.committed {
+		return
+	}
+	if status < http.StatusOK {
+		w.ResponseWriter.WriteHeader(status)
+		return
+	}
+	w.status = status
+	w.committed = true
+	w.ResponseWriter.WriteHeader(status)
+}
+
+// Status reports the committed status and whether anything was committed.
+func (w *chatResponseWriter) Status() (int, bool) { return w.status, w.committed }
+
+// setErrorCode records the error code actually emitted to the client, so a
+// record never has to guess what the caller saw.
+func (w *chatResponseWriter) setErrorCode(code string) {
+	if w.errCode == "" {
+		w.errCode = code
+	}
+}
+
+// ErrorCode returns the emitted OpenAI error code (empty on success).
+func (w *chatResponseWriter) ErrorCode() string { return w.errCode }
 
 func (w *chatResponseWriter) deadline() error {
 	err := w.controller.SetWriteDeadline(time.Now().Add(w.timeout))
@@ -107,6 +139,10 @@ func (w *chatResponseWriter) Write(p []byte) (int, error) {
 	if w.err != nil {
 		return 0, w.err
 	}
+	if !w.committed {
+		// Implicit 200: net/http commits only when a write is attempted.
+		w.WriteHeader(http.StatusOK)
+	}
 	n, err := w.ResponseWriter.Write(p)
 	if err != nil {
 		w.err = err
@@ -119,6 +155,9 @@ func (w *chatResponseWriter) FlushError() error {
 		w.err = w.deadline()
 	}
 	if w.err == nil {
+		if !w.committed {
+			w.WriteHeader(http.StatusOK)
+		}
 		w.err = w.controller.Flush()
 		if errors.Is(w.err, http.ErrNotSupported) {
 			w.err = nil
