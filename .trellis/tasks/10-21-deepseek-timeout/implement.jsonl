@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Project backend conventions and specification index."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace configuration, account state, cancellation, transport, and SSE across boundaries."}
+{"file":".trellis/tasks/10-21-deepseek-timeout/research/findings.md","reason":"Reproduced defects, exact evidence, compatibility constraints, and available toolchain."}
+{"file":".trellis/tasks/10-21-deepseek-timeout/research/contracts.md","reason":"Approved multi-user scope, native agent ownership, and shared pool/upstream/server APIs."}

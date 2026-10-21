@@ -36,7 +36,7 @@ type Account struct {
 	Client *upstream.Client `json:"-"`
 
 	mu                sync.Mutex
-	refreshMu         sync.Mutex
+	refresh           *tokenRefresh
 	checkinMu         sync.Mutex
 	checkin           *CheckinStatus
 	lastValidated     time.Time
@@ -44,6 +44,8 @@ type Account struct {
 	coolUntil         time.Time
 	coolKind          CoolKind
 	disabled          bool
+	disabledRevision  uint64
+	removed           bool
 	disabledReason    string
 	lastErr           string
 	activeConcurrent  int       // 当前活跃并发请求数
@@ -57,7 +59,9 @@ type Config struct {
 	ErrCooldown     time.Duration
 	SoftCooldown    time.Duration
 	RefreshSkew     time.Duration        // token 到期前多久自动刷新
-	MaxConcurrent   int                  // 单账号最大并发数（默认 5）
+	MaxConcurrent   int                  // 单账号最大并发数（默认 1）
+	MaxPending      int                  // 全池等待请求上限（默认 64）
+	UpstreamTimeout time.Duration        // 上游短请求/静默超时（默认 60s）
 	KeepaliveWindow time.Duration        // 保活心跳窗口，超过此时间无活动则发送心跳
 	LoginConfig     upstream.LoginConfig // OAuth/refresh 端点；零值使用生产默认
 	CheckinClient   CheckinClient        // 可选活动客户端；nil 使用账号 Client
@@ -65,10 +69,13 @@ type Config struct {
 
 // Pool 账号池。
 type Pool struct {
-	cfg      Config
-	state    string
-	mu       sync.Mutex
-	accounts []*Account
+	cfg              Config
+	state            string
+	mu               sync.Mutex
+	accounts         []*Account
+	waiters          []*admissionWaiter
+	nextAccount      int
+	admittedRequests int
 }
 
 // New 构建池。
@@ -86,9 +93,13 @@ func New(auths []*auth.Auth, cfg Config, stateFile string) (*Pool, error) {
 		cfg.RefreshSkew = 30 * time.Minute
 	}
 	if cfg.MaxConcurrent <= 0 {
-		// 上游单账号最多 3 个并发会话（TM.00001041），但会话槽位释放慢，
-		// 串行（1）最稳，避免撞限。可按多账号情况调高。
 		cfg.MaxConcurrent = 1
+	}
+	if cfg.MaxPending <= 0 {
+		cfg.MaxPending = 64
+	}
+	if cfg.UpstreamTimeout <= 0 {
+		cfg.UpstreamTimeout = 60 * time.Second
 	}
 	if cfg.KeepaliveWindow <= 0 {
 		cfg.KeepaliveWindow = 10 * time.Minute // 10 分钟无活动则保活
@@ -103,7 +114,7 @@ func New(auths []*auth.Auth, cfg Config, stateFile string) (*Pool, error) {
 			UID:               a.UserID,
 			UserName:          a.UserName,
 			Auth:              a,
-			Client:            upstream.New(120 * time.Second),
+			Client:            upstream.New(cfg.UpstreamTimeout),
 			maxConcurrent:     cfg.MaxConcurrent,
 			keepaliveLastPing: time.Now(),
 		}
@@ -117,7 +128,18 @@ func New(auths []*auth.Auth, cfg Config, stateFile string) (*Pool, error) {
 func (p *Pool) Accounts() []*Account {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.accounts
+	return append([]*Account(nil), p.accounts...)
+}
+
+// AuthSnapshot returns the current credential object safely across reloads.
+// Credential fields must still be read through auth.Auth's synchronized methods.
+func (a *Account) AuthSnapshot() *auth.Auth {
+	if a == nil {
+		return nil
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.Auth
 }
 
 // Get 按名字取账号。
@@ -139,12 +161,12 @@ func (p *Pool) AddAccount(a *auth.Auth) *Account {
 		UID:               a.UserID,
 		UserName:          a.UserName,
 		Auth:              a,
-		Client:            upstream.New(120 * time.Second),
+		Client:            upstream.New(p.cfg.UpstreamTimeout),
 		maxConcurrent:     p.cfg.MaxConcurrent,
 		keepaliveLastPing: time.Now(),
 	}
 	p.mu.Lock()
-	for i, existing := range p.accounts {
+	for _, existing := range p.accounts {
 		if existing.Name == acct.Name {
 			existing.mu.Lock()
 			existing.Auth = a
@@ -152,18 +174,20 @@ func (p *Pool) AddAccount(a *auth.Auth) *Account {
 			existing.maxConcurrent = p.cfg.MaxConcurrent
 			existing.lastValidated = time.Time{}
 			existing.disabled = false
+			existing.disabledRevision++
 			existing.disabledReason = ""
 			existing.lastErr = ""
 			existing.mu.Unlock()
-			p.mu.Unlock()
+			p.dispatchWaitersLocked()
 			p.saveState()
+			p.mu.Unlock()
 			return existing
 		}
-		p.accounts[i] = existing
 	}
 	p.accounts = append(p.accounts, acct)
-	p.mu.Unlock()
+	p.dispatchWaitersLocked()
 	p.saveState()
+	p.mu.Unlock()
 	log.Printf("pool account added name=%s uid=%s", acct.Name, a.UserID)
 	return acct
 }
@@ -239,9 +263,11 @@ func (p *Pool) Enable(name string) bool {
 		if a.Name == name || a.UID == name {
 			a.mu.Lock()
 			a.disabled = false
+			a.disabledRevision++
 			a.disabledReason = ""
 			a.lastErr = ""
 			a.mu.Unlock()
+			p.dispatchWaitersLocked()
 			p.saveState()
 			return true
 		}
@@ -259,6 +285,7 @@ func (p *Pool) ClearCooldown(name string) bool {
 			a.coolUntil = time.Time{}
 			a.coolKind = CoolSoft
 			a.mu.Unlock()
+			p.dispatchWaitersLocked()
 			p.saveState()
 			return true
 		}
@@ -281,6 +308,7 @@ func (p *Pool) SyncToDir(auths []*auth.Auth) {
 			existing.Auth = a
 			existing.UserName = a.UserName
 			existing.maxConcurrent = p.cfg.MaxConcurrent
+			existing.lastValidated = time.Time{}
 			existing.mu.Unlock()
 			next = append(next, existing)
 			delete(byUID, a.UserID)
@@ -290,13 +318,19 @@ func (p *Pool) SyncToDir(auths []*auth.Auth) {
 				UID:               a.UserID,
 				UserName:          a.UserName,
 				Auth:              a,
-				Client:            upstream.New(120 * time.Second),
+				Client:            upstream.New(p.cfg.UpstreamTimeout),
 				maxConcurrent:     p.cfg.MaxConcurrent,
 				keepaliveLastPing: time.Now(),
 			})
 		}
 	}
+	for _, removed := range byUID {
+		removed.mu.Lock()
+		removed.removed = true
+		removed.mu.Unlock()
+	}
 	p.accounts = next
+	p.dispatchWaitersLocked()
 }
 
 // PickExcluding 挑一个健康账号。
@@ -309,7 +343,7 @@ func (p *Pool) PickExcluding(tried map[string]bool) *Account {
 			continue
 		}
 		a.mu.Lock()
-		healthy := !a.disabled && now.After(a.coolUntil)
+		healthy := !a.removed && !a.disabled && !now.Before(a.coolUntil)
 		a.mu.Unlock()
 		if healthy {
 			return a
@@ -320,45 +354,81 @@ func (p *Pool) PickExcluding(tried map[string]bool) *Account {
 
 // Validate 校验并（必要时）自动刷新 token。带 5 分钟缓存。
 func (p *Pool) Validate(a *Account) (bool, error) {
-	a.mu.Lock()
-	if time.Since(a.lastValidated) < 5*time.Minute && !a.disabled {
-		ok := true
+	return p.ValidateContext(context.Background(), a)
+}
+
+// ValidateContext allows callers waiting for a shared refresh to disconnect.
+func (p *Pool) ValidateContext(ctx context.Context, a *Account) (bool, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		if a == nil {
+			return false, ErrNoHealthyAccount
+		}
+		a.mu.Lock()
+		authz, disabled, removed, lastValidated := a.Auth, a.disabled, a.removed, a.lastValidated
+		a.mu.Unlock()
+		if disabled || removed || authz == nil {
+			return false, nil
+		}
+		expired := authz.Expired()
+		if !expired && time.Since(lastValidated) < 5*time.Minute {
+			return true, nil
+		}
+		if expired && authz.Refresh() == "" {
+			p.disableAuth(ctx, a, authz, "token expired; re-login required")
+			return false, ctx.Err()
+		}
+		if authz.ExpiringSoon(p.cfg.RefreshSkew) || expired {
+			if authz.Refresh() == "" {
+				log.Printf("pool token account=%s expiring soon (remaining=%s) but no refresh_token, re-login required", a.Name, authz.Remaining().Round(time.Minute))
+			} else if err := p.refreshAccountContext(ctx, a); err != nil {
+				if ctx.Err() != nil {
+					return false, ctx.Err()
+				}
+				var refreshExpired *upstream.RefreshTokenExpiredError
+				if errors.As(err, &refreshExpired) {
+					p.disableAuth(ctx, a, authz, "refresh_token expired; re-login required")
+					return false, ctx.Err()
+				}
+				return false, err
+			}
+		}
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		a.mu.Lock()
+		if a.Auth != authz {
+			a.mu.Unlock()
+			continue
+		}
+		ok := !a.disabled && !a.removed
+		if ok {
+			a.lastValidated = time.Now()
+		}
 		a.mu.Unlock()
 		return ok, nil
 	}
-	a.mu.Unlock()
+}
 
-	authz := a.Auth
-	if authz.Expired() && authz.Refresh() == "" {
-		p.Disable(a.Name, "token expired; re-login required")
-		return false, nil
-	}
-	if authz.ExpiringSoon(p.cfg.RefreshSkew) || authz.Expired() {
-		if authz.Refresh() == "" {
-			// 没有 refresh_token（华为云 ticket 通道不返回），不立即 disable，
-			// 未过期时只打告警；到期后由上面的分支明确标记为需重新登录。
-			log.Printf("pool token account=%s expiring soon (remaining=%s) but no refresh_token, re-login required",
-				a.Name, authz.Remaining().Round(time.Minute))
-			a.mu.Lock()
-			a.lastValidated = time.Now()
-			a.mu.Unlock()
-			return true, nil
-		}
-		if err := p.RefreshToken(a.Name); err != nil {
-			var expired *upstream.RefreshTokenExpiredError
-			if errors.As(err, &expired) {
-				p.Disable(a.Name, "refresh_token expired; re-login required")
-				return false, nil
-			}
-			// 网络/5xx 属于可重试错误：保持账号可调度，由后续
-			// watchdog tick 重试，不得把短暂故障固化为永久禁用。
-			return false, err
-		}
+func (p *Pool) disableAuth(ctx context.Context, a *Account, authz *auth.Auth, reason string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if ctx.Err() != nil {
+		return
 	}
 	a.mu.Lock()
-	a.lastValidated = time.Now()
+	changed := !a.removed && a.Auth == authz
+	if changed {
+		a.disabled, a.disabledReason, a.lastErr = true, reason, reason
+		a.disabledRevision++
+	}
 	a.mu.Unlock()
-	return true, nil
+	if changed {
+		p.dispatchWaitersLocked()
+		p.saveState()
+	}
 }
 
 // Cooldown 冷却账号。
@@ -376,6 +446,7 @@ func (p *Pool) Cooldown(name string, kind CoolKind, dur time.Duration, reason st
 		a.mu.Unlock()
 		log.Printf("pool cooldown account=%s kind=%d dur=%s reason=%s", name, kind, dur, reason)
 	}
+	p.dispatchWaitersLocked()
 	p.saveState()
 }
 
@@ -395,6 +466,7 @@ func (p *Pool) NoteError(name string, threshold int, cooldown time.Duration) {
 		}
 		a.mu.Unlock()
 	}
+	p.dispatchWaitersLocked()
 	p.saveState()
 }
 
@@ -419,12 +491,14 @@ func (p *Pool) Disable(name, reason string) {
 		if a.Name == name {
 			a.mu.Lock()
 			a.disabled = true
+			a.disabledRevision++
 			a.disabledReason = reason
 			a.lastErr = reason
 			a.mu.Unlock()
 			log.Printf("pool disable account=%s reason=%s", name, reason)
 		}
 	}
+	p.dispatchWaitersLocked()
 	p.saveState()
 }
 
@@ -475,23 +549,8 @@ func (p *Pool) Enabled(name string) bool {
 
 // AcquireLock 尝试获取账号的并发请求锁。返回 true 表示成功，false 表示已达上限。
 func (p *Pool) AcquireLock(name string) bool {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for _, a := range p.accounts {
-		if a.Name != name {
-			continue
-		}
-		a.mu.Lock()
-		defer a.mu.Unlock()
-		if a.activeConcurrent >= a.maxConcurrent {
-			log.Printf("pool concurrent limit reached account=%s current=%d max=%d",
-				name, a.activeConcurrent, a.maxConcurrent)
-			return false
-		}
-		a.activeConcurrent++
-		return true
-	}
-	return false
+	_, err := p.AcquireAccount(context.Background(), []AccountCandidate{{Name: name}}, 0)
+	return err == nil
 }
 
 // ReleaseLock 释放账号的并发请求锁，并唤醒等待槽位的请求。
@@ -500,49 +559,19 @@ func (p *Pool) ReleaseLock(name string) {
 	defer p.mu.Unlock()
 	for _, a := range p.accounts {
 		if a.Name == name {
-			a.mu.Lock()
-			if a.activeConcurrent > 0 {
-				a.activeConcurrent--
-			}
-			a.mu.Unlock()
+			p.releaseAccountLocked(a)
 			break
 		}
 	}
-	// 唤醒等待槽位的 AcquireLockWait（轮询方式无需 broadcast，此处保留语义占位）。
+	p.dispatchWaitersLocked()
 }
 
 // AcquireLockWait 阻塞等待账号并发槽位，超时返回 false。
 //
-// 上游单账号并发会话上限 3，本池 maxConcurrent 默认 2 留余量。
-// 高并发请求在此排队等待槽位释放，而非立即失败跳号。
-// timeout=0 时等价于非阻塞 AcquireLock。
+// Compatibility helper; request handlers should retain an AcquireAccount lease.
 func (p *Pool) AcquireLockWait(name string, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for {
-		p.mu.Lock()
-		acquired := false
-		for _, a := range p.accounts {
-			if a.Name != name {
-				continue
-			}
-			a.mu.Lock()
-			if a.activeConcurrent < a.maxConcurrent {
-				a.activeConcurrent++
-				acquired = true
-			}
-			a.mu.Unlock()
-			break
-		}
-		p.mu.Unlock()
-		if acquired {
-			return true
-		}
-		if timeout <= 0 || time.Now().After(deadline) {
-			return false
-		}
-		// 避免忙轮询：每次 100ms 重试。
-		time.Sleep(100 * time.Millisecond)
-	}
+	_, err := p.AcquireAccount(context.Background(), []AccountCandidate{{Name: name}}, timeout)
+	return err == nil
 }
 
 // NeedKeepalive 检查账号是否需要保活心跳。
@@ -581,26 +610,29 @@ func (p *Pool) PingKeepalive(name string) {
 // 此前该配置从未生效：原实现硬编码 1 小时阈值，调度器传进来的 RefreshSkew
 // 只出现在日志里，README 写的「提前刷新时间」实际不起作用。
 func (p *Pool) CheckAndRefreshTokenWithin(name string, skew time.Duration) error {
+	return p.CheckAndRefreshTokenWithinContext(context.Background(), name, skew)
+}
+
+// CheckAndRefreshTokenWithinContext makes background watchdog shutdown and
+// cancellation independent of a shared account refresh already in progress.
+func (p *Pool) CheckAndRefreshTokenWithinContext(ctx context.Context, name string, skew time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if skew <= 0 {
 		skew = time.Hour
 	}
-	p.mu.Lock()
-	var acct *Account
-	for _, a := range p.accounts {
-		if a.Name == name {
-			acct = a
-			break
-		}
-	}
-	p.mu.Unlock()
+	acct := p.Get(name)
 	if acct == nil {
 		return fmt.Errorf("account not found: %s", name)
 	}
 
-	acct.mu.Lock()
-	remaining := acct.Auth.Remaining()
-	hasRefresh := acct.Auth.Refresh() != ""
-	acct.mu.Unlock()
+	authz := acct.AuthSnapshot()
+	if authz == nil {
+		return ErrNoHealthyAccount
+	}
+	remaining := authz.Remaining()
+	hasRefresh := authz.Refresh() != ""
 
 	if remaining > skew {
 		return nil
@@ -611,7 +643,7 @@ func (p *Pool) CheckAndRefreshTokenWithin(name string, skew time.Duration) error
 	}
 	log.Printf("pool proactive refresh account=%s remaining=%s skew=%s",
 		name, remaining.Round(time.Minute), skew)
-	return p.RefreshToken(name)
+	return p.refreshAccountContext(ctx, acct)
 }
 
 // CheckAndRefreshToken 检查 token 是否快过期并主动刷新（比 scheduler 更积极）。
@@ -621,53 +653,7 @@ func (p *Pool) CheckAndRefreshToken(name string) error {
 
 // RefreshToken 手动刷新指定账号的 token。
 func (p *Pool) RefreshToken(name string) error {
-	p.mu.Lock()
-	var acct *Account
-	for _, a := range p.accounts {
-		if a.Name == name {
-			acct = a
-			break
-		}
-	}
-	p.mu.Unlock()
-	if acct == nil {
-		return fmt.Errorf("account not found: %s", name)
-	}
-	acct.refreshMu.Lock()
-	defer acct.refreshMu.Unlock()
-
-	authz := acct.Auth
-	refreshToken := authz.Refresh()
-	if refreshToken == "" {
-		return fmt.Errorf("no refresh_token available")
-	}
-	dpopPrivateJWK := authz.DPoPPrivateJWK()
-	if dpopPrivateJWK["d"] == "" {
-		return fmt.Errorf("no DPoP private key available; re-login required")
-	}
-
-	resp, err := acct.Client.RefreshToken(context.Background(), p.cfg.LoginConfig, refreshToken, authz.Verifier(), upstream.DPoPPrivateJWK(dpopPrivateJWK))
-	if err != nil {
-		return fmt.Errorf("refresh failed: %w", err)
-	}
-
-	if err := authz.UpdateCredentials(
-		resp.Credentials.SecurityToken,
-		resp.Credentials.AccessKeyID,
-		resp.Credentials.SecretAccessKey,
-		resp.Credentials.Expiration,
-		resp.RefreshToken,
-	); err != nil {
-		return fmt.Errorf("save token: %w", err)
-	}
-	acct.mu.Lock()
-	acct.disabled = false
-	acct.disabledReason = ""
-	acct.lastErr = ""
-	acct.lastValidated = time.Now()
-	acct.mu.Unlock()
-	log.Printf("pool token refreshed manually account=%s", name)
-	return nil
+	return p.RefreshTokenContext(context.Background(), name)
 }
 
 // RefreshAllTokens 批量刷新所有临期 token（用于 cron 或脚本）。
@@ -683,54 +669,12 @@ func (p *Pool) RefreshAllTokens() int {
 
 // Acquire 尝试获取账号并发 slot（返回 true 表示成功，调用方需随后 Release）。
 func (p *Pool) Acquire(name string) bool {
-	p.mu.Lock()
-	var target *Account
-	for _, a := range p.accounts {
-		if a.Name == name {
-			target = a
-			break
-		}
-	}
-	p.mu.Unlock()
-	if target == nil {
-		return false
-	}
-	target.mu.Lock()
-	defer target.mu.Unlock()
-
-	// 检查是否超过最大并发限制
-	if target.activeConcurrent >= target.maxConcurrent {
-		return false
-	}
-	// 检查是否正在冷却
-	if !time.Now().After(target.coolUntil) {
-		return false
-	}
-	// 增加活跃计数
-	target.activeConcurrent++
-	target.keepaliveLastPing = time.Now()
-	return true
+	return p.AcquireLock(name)
 }
 
 // Release 释放账号并发 slot。
 func (p *Pool) Release(name string) {
-	p.mu.Lock()
-	var target *Account
-	for _, a := range p.accounts {
-		if a.Name == name {
-			target = a
-			break
-		}
-	}
-	p.mu.Unlock()
-	if target == nil {
-		return
-	}
-	target.mu.Lock()
-	defer target.mu.Unlock()
-	if target.activeConcurrent > 0 {
-		target.activeConcurrent--
-	}
+	p.ReleaseLock(name)
 }
 
 // CheckKeepalive 检查是否需要保活心跳。
@@ -809,36 +753,7 @@ func (p *Pool) GetConcurrentStats() []map[string]any {
 
 // TryAcquire 尝试获取账号的并发槽位，成功返回 true 并增加计数。
 func (p *Pool) TryAcquire(name string) bool {
-	p.mu.Lock()
-	var target *Account
-	for _, a := range p.accounts {
-		if a.Name == name {
-			target = a
-			break
-		}
-	}
-	p.mu.Unlock()
-
-	if target == nil {
-		return false
-	}
-
-	target.mu.Lock()
-	defer target.mu.Unlock()
-
-	if target.disabled || time.Now().Before(target.coolUntil) {
-		return false
-	}
-
-	if target.activeConcurrent >= target.maxConcurrent {
-		log.Printf("pool concurrent limit reached account=%s active=%d max=%d",
-			name, target.activeConcurrent, target.maxConcurrent)
-		return false
-	}
-
-	target.activeConcurrent++
-	target.keepaliveLastPing = time.Now()
-	return true
+	return p.AcquireLock(name)
 }
 
 // NeedsKeepalive 检查账号是否需要保活心跳。
@@ -885,7 +800,11 @@ func (p *Pool) UpdateKeepalive(name string) {
 
 // SetMaxConcurrent 设置账号的最大并发数。
 func (p *Pool) SetMaxConcurrent(name string, max int) {
+	if max <= 0 {
+		max = 1
+	}
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	var target *Account
 	for _, a := range p.accounts {
 		if a.Name == name {
@@ -893,12 +812,11 @@ func (p *Pool) SetMaxConcurrent(name string, max int) {
 			break
 		}
 	}
-	p.mu.Unlock()
-
 	if target != nil {
 		target.mu.Lock()
 		target.maxConcurrent = max
 		target.mu.Unlock()
+		p.dispatchWaitersLocked()
 	}
 }
 

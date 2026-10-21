@@ -75,18 +75,22 @@ func (s *Scheduler) Tick(ctx context.Context) {
 		if !s.cfg.Pool.Enabled(acct.Name) {
 			continue
 		}
-		ok, _ := s.cfg.Pool.Validate(acct)
+		ok, _ := s.cfg.Pool.ValidateContext(ctx, acct)
 		if ok {
-			remaining := acct.Auth.Remaining().Round(time.Minute)
+			authz := acct.AuthSnapshot()
+			if authz == nil {
+				continue
+			}
+			remaining := authz.Remaining().Round(time.Minute)
 			log.Printf("token account=%s ok remaining=%s", acct.Name, remaining)
 
 			// ticket 登录不返回 refresh_token；这种账号跳过无意义的周期刷新。
-			if acct.Auth.Refresh() != "" {
-				if err := s.cfg.Pool.CheckAndRefreshTokenWithin(acct.Name, s.cfg.RefreshSkew); err != nil {
+			if authz.Refresh() != "" {
+				if err := s.cfg.Pool.CheckAndRefreshTokenWithinContext(ctx, acct.Name, s.cfg.RefreshSkew); err != nil {
 					log.Printf("proactive refresh failed account=%s err=%v", acct.Name, err)
 				} else if remaining <= s.cfg.RefreshSkew {
 					log.Printf("token refreshed account=%s new_remaining=%s", acct.Name,
-						acct.Auth.Remaining().Round(time.Minute))
+						authz.Remaining().Round(time.Minute))
 				}
 			}
 			if s.cfg.CreditsAutoClaim {

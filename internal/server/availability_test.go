@@ -127,15 +127,15 @@ func TestProbeGapExists(t *testing.T) {
 	}
 }
 
-// 排队重试不能无限等：默认值应远小于原来的 180×10s=30min。
+// 每账号默认最多 3 次（含首次），两次等待；整个启动阶段另受共享预算限制。
 func TestQueueRetryDefaultBounded(t *testing.T) {
 	h := NewHandler(Config{})
-	total := time.Duration(h.cfg.QueueMaxAttempts) * h.cfg.QueueRetryDelay
-	if total > 10*time.Minute {
+	total := time.Duration(h.cfg.QueueMaxAttempts-1) * h.cfg.QueueRetryDelay
+	if total > 10*time.Second {
 		t.Fatalf("排队重试上限 %s 过长，交互式请求会像挂死", total)
 	}
-	if total < time.Minute {
-		t.Fatalf("排队重试上限 %s 过短，瞬时的上游排队会直接失败", total)
+	if h.cfg.QueueMaxAttempts != 3 || total != 4*time.Second || h.cfg.StartupTimeout != 90*time.Second {
+		t.Fatalf("默认启动/重试预算不一致: attempts=%d delay=%s startup=%s", h.cfg.QueueMaxAttempts, h.cfg.QueueRetryDelay, h.cfg.StartupTimeout)
 	}
 }
 
@@ -155,7 +155,7 @@ func TestModelErrorDoesNotCoolAccount(t *testing.T) {
 		Message: "InferHub.002002009.404 The model is not registered, please request other model",
 	}
 	if !h.handleUpstreamError(p.Get("u-cool"), "GLM-5.2-ArkTS-SPARK", err404) {
-		t.Error("模型级错误应返回 true，让调用方立即结束轮转")
+		t.Error("模型级错误应返回 true，让调用方尝试其他候选账号")
 	}
 
 	if !p.Healthy("u-cool") {

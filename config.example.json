@@ -16,7 +16,13 @@
   "benefit_auto_claim": true,    // 模型发现时自动领取限时福利（幂等；关闭则福利模型调用必然失败）
   "credits_auto_claim": true,    // watchdog 自动领取每日签到/新手活动积分；与模型 Token 福利独立
   // "login_client_id": "codearts-agent",  // WebUI 登录用 OAuth client；留空自动沿用已有账号的取值
-  "max_concurrent": 5,           // 单账号最大并发数（默认 5）
+  "max_concurrent": 1,           // 单账号最大活跃请求数；按账号实际额度调整，默认 1
+  "max_pending": 64,             // 进程级等待上限；总在途请求不超过启用账号容量之和 + 64（含重试等待）
+  "startup_timeout_seconds": 90, // 读请求体、排队、刷新、重试、换号至上游首个数据的总预算
+  "account_wait_seconds": 10,    // 同一请求所有账号槽位等待的累计预算
+  "stream_write_timeout_seconds": 30, // 下游单次写入/flush 超时，避免不读响应的客户端占住连接
+  "queue_retry_seconds": 2,      // 上游排队/TPM 错误重试间隔；末次失败后不再等待
+  "queue_max_attempts": 3,       // 每账号最多 3 次（含首次），仍受启动总预算约束
   "keepalive_window": "10m",     // 保活心跳窗口，超过此时间无活动则发送心跳（默认 10m）
   "watch": {
     "enabled": true,
@@ -25,6 +31,6 @@
     "keepalive_interval_minutes": 15  // 保活心跳间隔（新增，默认 15m）
   },
   "upstream": {
-    "timeout_seconds": 120
+    "timeout_seconds": 60        // 上游响应头、首数据及后续读空闲超时；持续输出不受总时长限制
   }
 }

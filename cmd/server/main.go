@@ -44,7 +44,7 @@ func main() {
 		log.Fatalf("build pool: %v", err)
 	}
 
-	c := upstream.New(120 * time.Second)
+	c := upstream.New(time.Duration(cfg.Upstream.TimeoutSeconds) * time.Second)
 	c.SetBenefitAutoClaim(cfg.BenefitAutoClaim)
 
 	sch := scheduler.New(scheduler.Config{
@@ -57,22 +57,20 @@ func main() {
 	})
 
 	h := server.NewHandler(server.Config{
-		Pool:         p,
-		Upstream:     c,
-		APIKey:       cfg.APIKey,
-		MaxRotate:    3,
-		SoftCooldown: cfg.SoftRateDur,
-		ErrThreshold: cfg.Cooldown.ErrThresh,
-		ErrCooldown:  cfg.ErrCooldownDur,
-		DefaultModel: cfg.DefaultModel,
-		QueueRetryDelay: func() time.Duration {
-			if cfg.QueueRetrySeconds > 0 {
-				return time.Duration(cfg.QueueRetrySeconds) * time.Second
-			}
-			return 10 * time.Second
-		}(),
-		QueueMaxAttempts: cfg.QueueMaxAttempts,
-		ConvStateFile:    cfg.StateFile + ".chats.json",
+		Pool:               p,
+		Upstream:           c,
+		APIKey:             cfg.APIKey,
+		MaxRotate:          3,
+		SoftCooldown:       cfg.SoftRateDur,
+		ErrThreshold:       cfg.Cooldown.ErrThresh,
+		ErrCooldown:        cfg.ErrCooldownDur,
+		DefaultModel:       cfg.DefaultModel,
+		QueueRetryDelay:    time.Duration(cfg.QueueRetrySeconds) * time.Second,
+		QueueMaxAttempts:   cfg.QueueMaxAttempts,
+		StartupTimeout:     time.Duration(cfg.StartupTimeoutSeconds) * time.Second,
+		AccountWaitTimeout: time.Duration(cfg.AccountWaitSeconds) * time.Second,
+		StreamWriteTimeout: time.Duration(cfg.StreamWriteTimeoutSeconds) * time.Second,
+		ConvStateFile:      cfg.StateFile + ".chats.json",
 		WatchInfo: map[string]any{
 			"enabled":              cfg.Watch.Enabled,
 			"credits_auto_claim":   cfg.CreditsAutoClaim,
@@ -80,6 +78,7 @@ func main() {
 			"refresh_skew_minutes": cfg.Watch.RefreshSkewM,
 			"keepalive_interval":   cfg.Watch.KeepaliveInterval,
 			"max_concurrent":       cfg.MaxConcurrent,
+			"max_pending":          cfg.MaxPending,
 			"keepalive_window":     "10m",
 		},
 		AuthDir:           cfg.AuthDir,
@@ -107,6 +106,9 @@ func main() {
 	}()
 
 	log.Printf("codearts2api listening on %s (api_key=%v)", cfg.Listen, cfg.APIKey != "")
+	log.Printf("chat limits per_account=%d pending=%d startup=%ds account_wait=%ds upstream_idle=%ds write=%ds queue_attempts=%d queue_delay=%ds",
+		cfg.MaxConcurrent, cfg.MaxPending, cfg.StartupTimeoutSeconds, cfg.AccountWaitSeconds,
+		cfg.Upstream.TimeoutSeconds, cfg.StreamWriteTimeoutSeconds, cfg.QueueMaxAttempts, cfg.QueueRetrySeconds)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("http: %v", err)
 	}

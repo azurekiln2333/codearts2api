@@ -9,9 +9,8 @@ import (
 	"codearts2api/internal/upstream"
 )
 
-// 客户端只调 /v1/chat/completions（没调过 /v1/models）时目录为空。
-// pickAccount 必须先补齐目录再挑号，否则 MaxRotate 用尽也轮不到有能力的账号。
-func TestPickAccountDiscoversCatalogLazily(t *testing.T) {
+// 挑号必须使用已有模型目录，避免耗尽轮转次数后仍没轮到有能力的账号。
+func TestPickAccountUsesCachedCatalog(t *testing.T) {
 	var as []*auth.Auth
 	for _, n := range []string{"a", "b", "c", "d"} {
 		as = append(as, &auth.Auth{UserID: n, UserName: n})
@@ -22,7 +21,7 @@ func TestPickAccountDiscoversCatalogLazily(t *testing.T) {
 	}
 	h := NewHandler(Config{Pool: p, Upstream: upstream.New(time.Second)})
 
-	// 模拟「惰性发现后」d 账号的目录里有该模型
+	// 模拟已缓存的 d 账号目录里有该模型。
 	upstream.SetAccountModels("d", []upstream.ModelInfo{{ID: "brand-new-benefit-0915", Benefit: true}})
 
 	got := h.pickAccount(map[string]bool{}, "brand-new-benefit-0915")

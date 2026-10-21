@@ -37,16 +37,20 @@ type Config struct {
 		KeepaliveInterval int  `json:"keepalive_interval_minutes"` // 保活心跳间隔（新增）
 	} `json:"watch"`
 
-	MaxConcurrent   int    `json:"max_concurrent"`   // 单账号最大并发数（新增）
+	MaxConcurrent   int    `json:"max_concurrent"`   // 单账号最大并发数，默认 1
+	MaxPending      int    `json:"max_pending"`      // 进程内等待请求上限，默认 64
 	KeepaliveWindow string `json:"keepalive_window"` // 保活窗口（新增）
 
 	// LoginClientID WebUI 登录使用的 OAuth client_id（留空用默认 codearts-agent）。
 	LoginClientID string `json:"login_client_id"`
 
-	// QueueRetrySeconds 上游并发/TPM 排队时的重试间隔（秒，默认 10）。
+	// QueueRetrySeconds 上游并发/TPM 排队时的重试间隔（秒，默认 2）。
 	QueueRetrySeconds int `json:"queue_retry_seconds"`
-	// QueueMaxAttempts 排队重试次数上限（默认 30，约 5 分钟）。
-	QueueMaxAttempts int `json:"queue_max_attempts"`
+	// QueueMaxAttempts 每账号总尝试次数（含首次，默认 3）。
+	QueueMaxAttempts          int `json:"queue_max_attempts"`
+	StartupTimeoutSeconds     int `json:"startup_timeout_seconds"`
+	AccountWaitSeconds        int `json:"account_wait_seconds"`
+	StreamWriteTimeoutSeconds int `json:"stream_write_timeout_seconds"`
 
 	// BenefitAutoClaim 模型发现时自动领取限时福利（默认 true）。
 	// 领取是幂等操作（官方客户端打开模型菜单即调用），不领取时福利模型一律
@@ -78,9 +82,15 @@ func Default() *Config {
 	c.Watch.PollMinutes = 30
 	c.Watch.RefreshSkewM = 30
 	c.Watch.KeepaliveInterval = 15 // 新增：保活间隔 15 分钟
-	c.MaxConcurrent = 1            // 上游单账号最多 3 并发会话但释放慢，串行最稳
-	c.KeepaliveWindow = "10m"      // 新增：保活窗口 10 分钟
-	c.Upstream.TimeoutSeconds = 120
+	c.MaxConcurrent = 1            // 默认串行；实际配额与上游账号有关
+	c.MaxPending = 64
+	c.KeepaliveWindow = "10m" // 新增：保活窗口 10 分钟
+	c.Upstream.TimeoutSeconds = 60
+	c.QueueRetrySeconds = 2
+	c.QueueMaxAttempts = 3
+	c.StartupTimeoutSeconds = 90
+	c.AccountWaitSeconds = 10
+	c.StreamWriteTimeoutSeconds = 30
 	c.BenefitAutoClaim = true // 不领取时福利模型调用必然失败（benefit not found）
 	c.CreditsAutoClaim = true
 	return c
@@ -224,6 +234,19 @@ func applyEnv(c *Config) {
 			c.QueueMaxAttempts = n
 		}
 	}
+	for name, target := range map[string]*int{
+		"CA2A_MAX_PENDING":                  &c.MaxPending,
+		"CA2A_STARTUP_TIMEOUT_SECONDS":      &c.StartupTimeoutSeconds,
+		"CA2A_ACCOUNT_WAIT_SECONDS":         &c.AccountWaitSeconds,
+		"CA2A_STREAM_WRITE_TIMEOUT_SECONDS": &c.StreamWriteTimeoutSeconds,
+		"CA2A_UPSTREAM_TIMEOUT_SECONDS":     &c.Upstream.TimeoutSeconds,
+	} {
+		if v := os.Getenv(name); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				*target = n
+			}
+		}
+	}
 	if v := os.Getenv("CA2A_BENEFIT_AUTO_CLAIM"); v != "" {
 		c.BenefitAutoClaim = v == "1" || strings.EqualFold(v, "true")
 	}
@@ -244,7 +267,25 @@ func (c *Config) normalize() error {
 		c.Cooldown.ErrThresh = 3
 	}
 	if c.Upstream.TimeoutSeconds <= 0 {
-		c.Upstream.TimeoutSeconds = 120
+		c.Upstream.TimeoutSeconds = 60
+	}
+	if c.MaxPending <= 0 {
+		c.MaxPending = 64
+	}
+	if c.StartupTimeoutSeconds <= 0 {
+		c.StartupTimeoutSeconds = 90
+	}
+	if c.AccountWaitSeconds <= 0 {
+		c.AccountWaitSeconds = 10
+	}
+	if c.StreamWriteTimeoutSeconds <= 0 {
+		c.StreamWriteTimeoutSeconds = 30
+	}
+	if c.QueueRetrySeconds <= 0 {
+		c.QueueRetrySeconds = 2
+	}
+	if c.QueueMaxAttempts <= 0 {
+		c.QueueMaxAttempts = 3
 	}
 	if c.DefaultModel == "" {
 		c.DefaultModel = "glm-5.2"
@@ -286,6 +327,8 @@ func (c *Config) ToPoolConfig() pool.Config {
 		SoftCooldown:    c.SoftRateDur,
 		RefreshSkew:     time.Duration(c.Watch.RefreshSkewM) * time.Minute,
 		MaxConcurrent:   c.MaxConcurrent,
+		MaxPending:      c.MaxPending,
+		UpstreamTimeout: time.Duration(c.Upstream.TimeoutSeconds) * time.Second,
 		KeepaliveWindow: dur,
 	}
 }

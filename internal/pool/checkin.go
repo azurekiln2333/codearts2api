@@ -37,14 +37,18 @@ func (p *Pool) Checkin(ctx context.Context, name string) (upstream.CheckinResult
 	if disabled {
 		return upstream.CheckinResult{}, fmt.Errorf("account disabled")
 	}
-	ok, err := p.Validate(a)
+	ok, err := p.ValidateContext(ctx, a)
 	if err != nil || !ok {
 		if err == nil {
 			err = fmt.Errorf("token invalid; re-login required")
 		}
 		return upstream.CheckinResult{}, err
 	}
-	token, ak, sk := a.Auth.Credentials()
+	authz := a.AuthSnapshot()
+	if authz == nil {
+		return upstream.CheckinResult{}, fmt.Errorf("account credentials unavailable")
+	}
+	token, ak, sk := authz.Credentials()
 	client := p.cfg.CheckinClient
 	if client == nil {
 		client = a.Client

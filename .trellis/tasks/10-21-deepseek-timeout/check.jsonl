@@ -1,0 +1,4 @@
+{"file":".trellis/spec/backend/index.md","reason":"Full-scope backend specification review."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check actual handler wiring, account ownership, configuration propagation, and request cancellation."}
+{"file":".trellis/tasks/10-21-deepseek-timeout/research/findings.md","reason":"Verify reproduced regressions are fixed without hiding them behind closed mock streams."}
+{"file":".trellis/tasks/10-21-deepseek-timeout/research/contracts.md","reason":"Verify bounded multi-user admission, lease ownership, and concrete integration contracts."}

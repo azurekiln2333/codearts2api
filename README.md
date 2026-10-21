@@ -62,6 +62,40 @@ curl -X POST http://127.0.0.1:7866/v1/chat/completions \
 指定函数不存在或重复定义时返回 400。上游 `InferHub.001001005` 参数错误也返回 400，
 不轮换、不冷却账号；若流式响应已开始，则用 SSE 错误事件结束，同样不处罚账号。
 
+### 多用户并发与超时（New API 接入）
+
+请求会优先使用有空闲槽位且模型能力匹配的健康账号；同负载账号轮转分配，已有会话
+保留有效账号亲和。挑号只读已缓存的模型目录，未知目录允许尝试，不在聊天请求中
+同步发现模型。单账号默认 `max_concurrent: 1`，可按账号实际容量调整。
+
+等待槽位采用有界队列，默认全进程 `max_pending: 64`。整个请求生命周期（含读取
+请求体、等待、重试间隔、生成和响应写入）的在途数也限制为**启用账号的并发容量之和
++ max_pending**，防止上游快速拒绝后累积大量重试请求。共享同一账号池的 handler
+共用限制；多进程/多副本各自计数，部署多副本时需按共享账号的实际额度分配容量。
+队列满或累计排队超过默认 10 秒，返回 429 与 `Retry-After`，网关应退避重试。
+取消请求会退出排队、关闭上游并释放槽位，不因客户端超时而冷却健康账号。
+
+默认时间预算如下，均可通过配置或环境变量覆盖：
+
+| 阶段 | 配置 | 默认 |
+|------|------|------|
+| 读请求体至上游首个数据（含排队、刷新、重试、换号） | `startup_timeout_seconds` | 90 秒 |
+| 所有账号槽位等待累计 | `account_wait_seconds` | 10 秒 |
+| 上游响应头、首数据及后续读取空闲 | `upstream.timeout_seconds` | 60 秒 |
+| 下游单次写入或 flush | `stream_write_timeout_seconds` | 30 秒 |
+| 上游并发/TPM 重试 | `queue_max_attempts` / `queue_retry_seconds` | 每账号最多 3 次（含首次），间隔 2 秒 |
+
+收到首个上游数据后停止启动计时，持续输出的长回复可以超过 90 秒；上游持续静默
+达到空闲超时才终止。响应头尚未发送时超时返回 504；已开始的流在可写时发送错误
+与 `[DONE]`。收到协议结束标记立即关闭上游连接，不继续等 TCP 断开。New API 和
+反向代理的超时应大于所配置的启动/空闲预算，并允许预期的长回复时长。
+
+升级时已有配置中的 `max_concurrent: 5`、`upstream.timeout_seconds: 120` 等显式值
+会保留。`upstream.timeout_seconds` 现在实际用于聊天客户端，初始账号与运行时
+新增/重载账号都使用它；旧版该项对聊天未生效。需要新默认值时请同步修改自己的
+`config.json`，不要只更新示例。日志记录排队、首数据、总耗时、尝试次数和结果，
+便于与 New API 请求时间对应，不记录提示词或凭证。
+
 ### 模型列表与限时福利
 
 `/v1/models` 返回上游**精确模型 ID**（区分大小写，如 `GLM-5.2`、`Qwen3-VL-235B`），
@@ -164,7 +198,14 @@ docker compose up -d --build
 | `CA2A_WATCH_POLL_MINUTES` | 轮询间隔（分钟） | `30` |
 | `CA2A_WATCH_REFRESH_SKEW` | 提前刷新时间（分钟） | `30` |
 | `CA2A_WATCH_KEEPALIVE_INTERVAL` | 保活间隔（分钟） | `15` |
-| `CA2A_MAX_CONCURRENT` | 单账号最大并发 | `5` |
+| `CA2A_MAX_CONCURRENT` | 单账号最大活跃请求数 | `1` |
+| `CA2A_MAX_PENDING` | 进程内等待上限（另限制总在途数为账号容量加此值） | `64` |
+| `CA2A_STARTUP_TIMEOUT_SECONDS` | 读取请求至上游首数据总预算（秒） | `90` |
+| `CA2A_ACCOUNT_WAIT_SECONDS` | 每请求累计账号槽位等待预算（秒） | `10` |
+| `CA2A_UPSTREAM_TIMEOUT_SECONDS` | 上游响应头/首数据/读取空闲超时（秒） | `60` |
+| `CA2A_STREAM_WRITE_TIMEOUT_SECONDS` | 下游单次写入/flush 超时（秒） | `30` |
+| `CA2A_QUEUE_RETRY_SECONDS` | 上游排队/TPM 重试间隔（秒） | `2` |
+| `CA2A_QUEUE_MAX_ATTEMPTS` | 每账号总尝试次数（含首次） | `3` |
 | `CA2A_KEEPALIVE_WINDOW` | 保活窗口 | `10m` |
 | `CA2A_BENEFIT_AUTO_CLAIM` | 发现模型时自动领取限时福利（幂等；关闭则福利模型不可用） | `true` |
 | `CA2A_CREDITS_AUTO_CLAIM` | watchdog 自动领取每日签到及新用户积分 | `true` |

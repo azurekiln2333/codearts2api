@@ -4,7 +4,7 @@
 //   - onAnswer:  {"text":"增量","custom_extra_info":...}
 //   - reasoning / thinking: 思考链增量
 //   - done:      {"error_code":"0","error_msg":"","related_question_answer":[...],"response_message_id":"..."}
-//                 related_question_answer 是「相关追问」建议，不是正文，解析时忽略。
+//     related_question_answer 是「相关追问」建议，不是正文，解析时忽略。
 //   - error / heartbeat 等
 //
 // 另：部分帧可能直接给出 structured QA 对象 {question,options,answer}（无 text 字段）。
@@ -14,6 +14,7 @@ package upstream
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,6 +34,74 @@ func (e *UpstreamError) Error() string {
 		return fmt.Sprintf("codearts error code=%s msg=%s", e.Code, e.Msg)
 	}
 	return fmt.Sprintf("codearts error: %s", e.Msg)
+}
+
+// DownstreamWriteError identifies a disconnected or stalled response consumer.
+// It must not count as an upstream account failure.
+type DownstreamWriteError struct {
+	Err error
+}
+
+func (e *DownstreamWriteError) Error() string { return "downstream response: " + e.Err.Error() }
+func (e *DownstreamWriteError) Unwrap() error { return e.Err }
+
+// sseEvent is the shared payload/terminal contract for both response modes.
+// finish_reason alone is not terminal: a later frame can still contain usage.
+type sseEvent struct {
+	name     string
+	data     string
+	payload  map[string]any
+	terminal bool
+	err      error
+}
+
+func (e sseEvent) text(keys ...string) string {
+	for _, key := range keys {
+		if value, ok := e.payload[key].(string); ok && value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func doneText(text string) bool {
+	text = strings.TrimSpace(text)
+	return text == "[DONE]" || strings.EqualFold(text, "done")
+}
+
+func decodeSSEEvent(name, data string) sseEvent {
+	e := sseEvent{name: strings.ToLower(strings.TrimSpace(name)), data: strings.TrimSpace(data)}
+	_ = json.Unmarshal([]byte(e.data), &e.payload)
+	code := e.text("error_code", "code")
+	if value, ok := e.payload["error_code"].(float64); ok && value != 0 {
+		code = fmt.Sprint(value)
+	}
+	message := firstNonEmpty(e.text("error_msg", "message", "msg"), "request failed")
+	if upstreamError, ok := e.payload["error"].(map[string]any); ok {
+		if value, ok := upstreamError["code"]; ok {
+			code = fmt.Sprint(value)
+		}
+		if value, ok := upstreamError["message"].(string); ok && value != "" {
+			message = value
+		}
+		e.err = &UpstreamError{Code: code, Msg: message}
+	} else if upstreamError, ok := e.payload["error"].(string); ok && upstreamError != "" {
+		e.err = &UpstreamError{Code: code, Msg: upstreamError}
+	} else if (code != "" && code != "0") || e.name == "error" {
+		e.err = &UpstreamError{Code: code, Msg: message}
+	}
+	// Error classification precedes success-shaped terminal fields.
+	if e.err != nil || e.data == "[DONE]" {
+		e.terminal = true
+		return e
+	}
+	switch e.name {
+	case "done", "end", "finish":
+		e.terminal = true
+	case "", "data", "onanswer", "answer", "delta", "message", "content":
+		e.terminal = doneText(e.text("text", "content", "delta", "message"))
+	}
+	return e
 }
 
 // RawCompletion 聚合结果。
@@ -206,34 +275,22 @@ func sortedToolCalls(calls toolCallAccumulator) []ChatToolCall {
 }
 
 // applyEvent 把单事件应用到聚合状态。
-func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, event, data string) {
-	event = strings.ToLower(strings.TrimSpace(event))
-	var payload map[string]any
-	if strings.TrimSpace(data) != "" {
-		_ = json.Unmarshal([]byte(data), &payload)
+func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, event sseEvent) {
+	if event.err != nil {
+		*upErr = event.err
+		return
 	}
-	text := func(keys ...string) string {
-		for _, k := range keys {
-			if v, ok := payload[k].(string); ok {
-				return v
-			}
-		}
-		return ""
-	}
-	switch event {
+	payload, text := event.payload, event.text
+	switch event.name {
 	case "", "data":
 		// OpenAI 标准 SSE 终止标记
-		if strings.TrimSpace(data) == "[DONE]" {
+		if event.data == "[DONE]" {
 			if *finish == "" {
 				*finish = "stop"
 			}
 			return
 		}
 		// 纯 data 行（CodeArts 部分响应无 event 前缀）
-		if code := text("error_code", "code"); code != "" && code != "0" {
-			*upErr = &UpstreamError{Code: code, Msg: firstNonEmpty(text("error_msg", "message", "msg"), "request failed")}
-			return
-		}
 		// OpenAI 风格 delta：{choices:[{delta:{content,reasoning_content}}]} → 增量追加
 		delta, finishReason := deltaFromChunk(payload)
 		if finishReason != "" {
@@ -256,7 +313,7 @@ func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, 
 			return
 		}
 		if t := text("text", "content", "delta"); t != "" {
-			if t == "[DONE]" || t == "[DONE] " || strings.EqualFold(t, "done") {
+			if doneText(t) {
 				*finish = "stop"
 				return
 			}
@@ -284,10 +341,6 @@ func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, 
 		// 纯 structured QA 帧（无 text）：仅正文仍空时取 answer，避免整段 JSON 当回复
 		tryFillStructuredAnswer(content, payload)
 	case "onanswer", "answer", "delta", "message", "content":
-		if code := text("error_code", "code"); code != "" && code != "0" {
-			*upErr = &UpstreamError{Code: code, Msg: firstNonEmpty(text("error_msg", "message", "msg"), "request failed")}
-			return
-		}
 		delta, finishReason := deltaFromChunk(payload)
 		if finishReason != "" {
 			*finish = finishReason
@@ -302,7 +355,7 @@ func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, 
 			return
 		}
 		if t := text("text", "content", "delta", "message"); t != "" {
-			if t == "[DONE]" || t == "[DONE] " || strings.EqualFold(t, "done") {
+			if doneText(t) {
 				*finish = "stop"
 				return
 			}
@@ -316,11 +369,14 @@ func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, 
 			reason.WriteString(t)
 		}
 	case "done", "end", "finish":
-		if code := text("error_code", "code"); code != "" && code != "0" {
-			*upErr = &UpstreamError{Code: code, Msg: firstNonEmpty(text("error_msg", "message", "msg"), "request failed")}
-			return
+		delta, nativeFinish := deltaFromChunk(payload)
+		if value, ok := delta["content"].(string); ok {
+			content.WriteString(value)
 		}
-		if f := text("finish_reason", "finish", "reason"); f != "" {
+		if value, ok := delta["reasoning_content"].(string); ok {
+			reason.WriteString(value)
+		}
+		if f := firstNonEmpty(nativeFinish, text("finish_reason", "finish", "reason")); f != "" {
 			*finish = f
 		} else {
 			*finish = "stop"
@@ -409,15 +465,16 @@ func AggregateRaw(r io.Reader) (*RawCompletion, error) {
 			return nil, err
 		}
 		if ev, data, ok := scanLine(strings.TrimRight(line, "\r\n"), &pendingEvent); ok {
-			var payload map[string]any
-			if json.Unmarshal([]byte(data), &payload) == nil {
-				if u, ok := payload["usage"].(map[string]any); ok {
-					usage = u
-				}
-				delta, _ := deltaFromChunk(payload)
-				applyToolCallDeltas(delta, calls)
+			event := decodeSSEEvent(ev, data)
+			if u, ok := event.payload["usage"].(map[string]any); ok {
+				usage = u
 			}
-			applyEvent(&content, &reason, &finish, &upErr, ev, data)
+			delta, _ := deltaFromChunk(event.payload)
+			applyToolCallDeltas(delta, calls)
+			applyEvent(&content, &reason, &finish, &upErr, event)
+			if event.terminal {
+				break
+			}
 		}
 		if err == io.EOF {
 			break
@@ -478,11 +535,21 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 	h.Set("Cache-Control", "no-cache")
 	h.Set("Connection", "keep-alive")
 	h.Set("X-Accel-Buffering", "no")
-	fl, _ := w.(http.Flusher)
+	controller := http.NewResponseController(w)
+	write := func(data string) error {
+		if _, err := io.WriteString(w, data); err != nil {
+			return &DownstreamWriteError{Err: err}
+		}
+		if err := controller.Flush(); err != nil && !errors.Is(err, http.ErrNotSupported) {
+			return &DownstreamWriteError{Err: err}
+		}
+		return nil
+	}
 
 	br := bufio.NewReaderSize(r, 64*1024)
 	id := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
 	sawDone := false
+	sentFinish := false
 	var (
 		content   strings.Builder
 		reason    strings.Builder
@@ -500,6 +567,7 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 		choice := map[string]any{"index": 0, "delta": delta}
 		if fin != "" {
 			choice["finish_reason"] = fin
+			sentFinish = true
 		}
 		chunk := map[string]any{
 			"id":      id,
@@ -512,13 +580,7 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 			chunk["usage"] = nil
 		}
 		raw, _ := json.Marshal(chunk)
-		if _, err := io.WriteString(w, "data: "+string(raw)+"\n\n"); err != nil {
-			return err
-		}
-		if fl != nil {
-			fl.Flush()
-		}
-		return nil
+		return write("data: " + string(raw) + "\n\n")
 	}
 	writeDONE := func(success bool) error {
 		if success && usageFor != nil {
@@ -527,28 +589,16 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 				"model": model, "choices": []any{}, "usage": usageFor(completion()),
 			}
 			raw, _ := json.Marshal(chunk)
-			if _, err := io.WriteString(w, "data: "+string(raw)+"\n\n"); err != nil {
+			if err := write("data: " + string(raw) + "\n\n"); err != nil {
 				return err
 			}
 		}
-		if _, err := io.WriteString(w, "data: [DONE]\n\n"); err != nil {
-			return err
-		}
-		if fl != nil {
-			fl.Flush()
-		}
-		return nil
+		return write("data: [DONE]\n\n")
 	}
 	writeErr := func(msg string) error {
 		payload := map[string]any{"error": map[string]any{"message": msg, "type": "upstream_error", "code": "CODEARTS_STREAM_ERROR"}}
 		raw, _ := json.Marshal(payload)
-		if _, err := io.WriteString(w, "event: error\n"+"data: "+string(raw)+"\n\n"); err != nil {
-			return err
-		}
-		if fl != nil {
-			fl.Flush()
-		}
-		return nil
+		return write("event: error\n" + "data: " + string(raw) + "\n\n")
 	}
 
 	for {
@@ -558,36 +608,16 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 			break
 		}
 		if ev, data, ok := scanLine(strings.TrimRight(line, "\r\n"), &pendingEvent); ok {
-			if strings.TrimSpace(data) == "[DONE]" {
-				if !sawDone {
-					if werr := writeDONE(true); werr != nil {
-						streamErr = werr
-						break
-					}
-					sawDone = true
-				}
-				break
-			}
-			var payload map[string]any
-			_ = json.Unmarshal([]byte(data), &payload)
-			if u, ok := payload["usage"].(map[string]any); ok {
+			event := decodeSSEEvent(ev, data)
+			if u, ok := event.payload["usage"].(map[string]any); ok {
 				usage = u
 			}
-			nativeDelta, nativeFinish := deltaFromChunk(payload)
+			nativeDelta, nativeFinish := deltaFromChunk(event.payload)
 			applyToolCallDeltas(nativeDelta, calls)
 			var upErr error
 			beforeContent, beforeReason := content.Len(), reason.Len()
-			applyEvent(&content, &reason, &finish, &upErr, ev, data)
+			applyEvent(&content, &reason, &finish, &upErr, event)
 			if upErr != nil {
-				if werr := writeErr(upErr.Error()); werr != nil {
-					streamErr = werr
-					break
-				}
-				if werr := writeDONE(false); werr != nil {
-					streamErr = werr
-					break
-				}
-				sawDone = true
 				streamErr = upErr
 				break
 			}
@@ -610,8 +640,8 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 					break
 				}
 			}
-			if strings.EqualFold(ev, "done") || strings.EqualFold(ev, "end") || strings.EqualFold(ev, "finish") {
-				if nativeFinish == "" {
+			if event.terminal {
+				if !sentFinish && event.data != "[DONE]" {
 					if werr := writeChunk(map[string]any{}, finish); werr != nil {
 						streamErr = werr
 						break
@@ -630,6 +660,19 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 		if err == io.EOF {
 			break
 		}
+	}
+	if streamErr != nil {
+		var downstreamErr *DownstreamWriteError
+		if errors.As(streamErr, &downstreamErr) {
+			return streamErr
+		}
+		if err := writeErr(streamErr.Error()); err != nil {
+			return err
+		}
+		if err := writeDONE(false); err != nil {
+			return err
+		}
+		return streamErr
 	}
 	if streamErr == nil && !sawDone {
 		streamErr = writeDONE(true)

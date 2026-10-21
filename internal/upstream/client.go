@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -104,8 +105,9 @@ func DefaultLoginConfig() LoginConfig {
 
 // Client CodeArts 云 API 客户端。
 type Client struct {
-	http       *http.Client // 短请求，带总超时
-	streamHTTP *http.Client // SSE 长流，无总超时
+	http       *http.Client  // 短请求，带总超时
+	streamHTTP *http.Client  // SSE 长流，无总超时
+	streamWait time.Duration // 单次 HTTP/流读取等待超时，不限制持续输出的总时长
 
 	// 上游主机，生产固定为华为云；测试可替换为 httptest 服务。
 	snapBase    string
@@ -131,17 +133,20 @@ const srcFailCooldown = 5 * time.Minute
 // New 构造客户端。
 func New(timeout time.Duration) *Client {
 	if timeout <= 0 {
-		timeout = 120 * time.Second
+		timeout = 60 * time.Second
 	}
 	tr := &http.Transport{
+		DialContext:           (&net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}).DialContext,
 		MaxIdleConns:          20,
 		MaxIdleConnsPerHost:   4,
 		IdleConnTimeout:       90 * time.Second,
-		ResponseHeaderTimeout: 120 * time.Second,
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
 	}
 	c := &Client{
 		http:        &http.Client{Timeout: timeout, Transport: tr},
 		streamHTTP:  &http.Client{Transport: tr},
+		streamWait:  timeout,
 		snapBase:    SnapEngineApiHost,
 		benefitBase: BenefitHost,
 		srcFail:     map[string]time.Time{},
@@ -552,8 +557,10 @@ func (c *Client) SendChatV2(ctx context.Context, body map[string]any, traceID st
 // benefit 由调用方按账号判定，maas_type 在签名前写入，计入 SignedHeaders。
 func (c *Client) sendChatV2(ctx context.Context, body map[string]any, traceID string, cred SignCredential, userToken, chatID, sessionID string, benefit bool) (io.ReadCloser, error) {
 	raw, _ := json.Marshal(body)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.chatEndpoint(), bytes.NewReader(raw))
+	wait := newStreamWait(ctx, c.streamWait)
+	httpReq, err := http.NewRequestWithContext(wait.ctx, http.MethodPost, c.chatEndpoint(), bytes.NewReader(raw))
 	if err != nil {
+		wait.close()
 		return nil, err
 	}
 	for k, v := range ChatHeadersV2(userToken, traceID, "zh-cn") {
@@ -570,15 +577,22 @@ func (c *Client) sendChatV2(ctx context.Context, body map[string]any, traceID st
 		httpReq.Header.Set("Session-Id", sessionID)
 	}
 	resp, err := c.streamHTTP.Do(httpReq)
+	wait.end()
 	if err != nil {
+		err = wait.result(err)
+		wait.close()
 		return nil, err
 	}
+	streamBody := &timeoutReadCloser{body: resp.Body, wait: wait}
 	if resp.StatusCode >= 400 {
-		rawBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		resp.Body.Close()
+		rawBody, readErr := io.ReadAll(io.LimitReader(streamBody, 1<<20))
+		_ = streamBody.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
 		return nil, &ApiError{Code: resp.StatusCode, Status: resp.StatusCode, Message: truncateStr(string(rawBody), 200), Path: EpChatV2}
 	}
-	return preflightSSE(resp.Body)
+	return preflightSSE(streamBody)
 }
 
 type replayReadCloser struct {
@@ -592,13 +606,12 @@ type replayReadCloser struct {
 func preflightSSE(body io.ReadCloser) (io.ReadCloser, error) {
 	br := bufio.NewReaderSize(body, 1<<20)
 	var prefix bytes.Buffer
+	var pendingEvent string
 	for prefix.Len() < 2<<20 {
 		line, err := br.ReadString('\n')
 		prefix.WriteString(line)
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "data:") {
-			data := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
-			if apiErr := embeddedSSEError(data); apiErr != nil {
+		if event, data, ok := scanLine(strings.TrimSpace(line), &pendingEvent); ok {
+			if apiErr := embeddedSSEError(event, data); apiErr != nil {
 				_ = body.Close()
 				return nil, apiErr
 			}
@@ -616,20 +629,13 @@ func preflightSSE(body io.ReadCloser) (io.ReadCloser, error) {
 }
 
 // embeddedSSEError 识别 HTTP 200 里内嵌的上游业务错误。
-func embeddedSSEError(data string) *ApiError {
-	if data == "" || data == "[DONE]" {
+func embeddedSSEError(event, data string) *ApiError {
+	frame := decodeSSEEvent(event, data)
+	upErr, ok := frame.err.(*UpstreamError)
+	if !ok {
 		return nil
 	}
-	var payload map[string]any
-	if json.Unmarshal([]byte(data), &payload) != nil {
-		return nil
-	}
-	code, _ := payload["error_code"].(string)
-	if code == "" || code == "0" {
-		return nil
-	}
-	message, _ := payload["error_msg"].(string)
-	combined := strings.TrimSpace(code + " " + message)
+	combined := strings.TrimSpace(upErr.Code + " " + upErr.Msg)
 	status := http.StatusBadGateway
 	low := strings.ToLower(combined)
 	switch {

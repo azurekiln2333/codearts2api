@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestCreditsAutoClaimConfigAndEnv(t *testing.T) {
@@ -51,11 +52,52 @@ func TestLoadToleratesExampleConfigComments(t *testing.T) {
 	if cfg.Listen != ":7866" || cfg.AuthDir != "./auths" || cfg.DefaultModel != "snap-chat" {
 		t.Fatalf("示例配置字段未生效: %+v", cfg)
 	}
-	if cfg.Cooldown.SoftRate != "60s" || cfg.MaxConcurrent != 5 || cfg.Watch.PollMinutes != 30 {
+	if cfg.Cooldown.SoftRate != "60s" || cfg.MaxConcurrent != 1 || cfg.Watch.PollMinutes != 30 {
 		t.Fatalf("示例配置嵌套字段未生效: %+v", cfg)
 	}
 	if cfg.KeepaliveWindow != "10m" {
 		t.Errorf("keepalive_window 未生效: %q", cfg.KeepaliveWindow)
+	}
+}
+
+func TestChatLimitsConfigDefaultsOverridesAndPoolWiring(t *testing.T) {
+	t.Setenv("CA2A_API_KEY", "test-key")
+	for _, name := range []string{"CA2A_MAX_CONCURRENT", "CA2A_MAX_PENDING", "CA2A_STARTUP_TIMEOUT_SECONDS", "CA2A_ACCOUNT_WAIT_SECONDS", "CA2A_STREAM_WRITE_TIMEOUT_SECONDS", "CA2A_UPSTREAM_TIMEOUT_SECONDS", "CA2A_QUEUE_RETRY_SECONDS", "CA2A_QUEUE_MAX_ATTEMPTS"} {
+		t.Setenv(name, "")
+	}
+	defaults, err := Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaults.MaxConcurrent != 1 || defaults.MaxPending != 64 || defaults.StartupTimeoutSeconds != 90 || defaults.AccountWaitSeconds != 10 || defaults.StreamWriteTimeoutSeconds != 30 || defaults.Upstream.TimeoutSeconds != 60 || defaults.QueueMaxAttempts != 3 || defaults.QueueRetrySeconds != 2 {
+		t.Fatalf("chat defaults inconsistent: %+v", defaults)
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(path, []byte(`{"max_concurrent":5,"max_pending":7,"startup_timeout_seconds":80,"account_wait_seconds":4,"stream_write_timeout_seconds":12,"upstream":{"timeout_seconds":120},"queue_retry_seconds":6,"queue_max_attempts":9}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	explicit, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if explicit.MaxConcurrent != 5 || explicit.Upstream.TimeoutSeconds != 120 || explicit.MaxPending != 7 || explicit.QueueMaxAttempts != 9 || explicit.QueueRetrySeconds != 6 {
+		t.Fatalf("explicit legacy settings not preserved: %+v", explicit)
+	}
+	for name, value := range map[string]string{
+		"CA2A_MAX_CONCURRENT": "2", "CA2A_MAX_PENDING": "11", "CA2A_STARTUP_TIMEOUT_SECONDS": "70", "CA2A_ACCOUNT_WAIT_SECONDS": "3", "CA2A_STREAM_WRITE_TIMEOUT_SECONDS": "8", "CA2A_UPSTREAM_TIMEOUT_SECONDS": "45", "CA2A_QUEUE_RETRY_SECONDS": "1", "CA2A_QUEUE_MAX_ATTEMPTS": "4",
+	} {
+		t.Setenv(name, value)
+	}
+	override, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if override.MaxConcurrent != 2 || override.MaxPending != 11 || override.StartupTimeoutSeconds != 70 || override.AccountWaitSeconds != 3 || override.StreamWriteTimeoutSeconds != 8 || override.Upstream.TimeoutSeconds != 45 || override.QueueRetrySeconds != 1 || override.QueueMaxAttempts != 4 {
+		t.Fatalf("environment overrides ignored: %+v", override)
+	}
+	pc := override.ToPoolConfig()
+	if pc.MaxConcurrent != 2 || pc.MaxPending != 11 || pc.UpstreamTimeout != 45*time.Second {
+		t.Fatalf("pool did not receive chat settings: %+v", pc)
 	}
 }
 

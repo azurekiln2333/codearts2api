@@ -153,7 +153,11 @@ func upstreamUnavailableReason(err error) string {
 // 拿不到锁就让位给真实请求，等下一轮再试——否则用户请求会被探测挤成
 // TM.00001041「并发会话数已达上限」。
 func (h *Handler) probeModel(acct *pool.Account, model string) {
-	if acct == nil || acct.Auth == nil {
+	if acct == nil {
+		return
+	}
+	authz := acct.AuthSnapshot()
+	if authz == nil {
 		return
 	}
 	// 账号一旦有真实请求在跑（或刚跑过），本轮探测整体让位：探测只是为了让
@@ -161,10 +165,18 @@ func (h *Handler) probeModel(acct *pool.Account, model string) {
 	if h.cfg.Pool.Busy(acct.Name) || trafficIdleFor(acct.UID) < probeIdleBefore {
 		return
 	}
-	if !h.cfg.Pool.AcquireLock(acct.Name) {
+	// 按 lease 持有槽位，而不是按名字获取/释放：账号被删除后重新登录会生成新的
+	// Account 对象，按名字释放会扣掉新账号上另一个真实请求的槽位，使单账号并发
+	// 上限失效。lease 指向实际获得的账号，释放幂等且不会跨对象误伤。
+	lease, err := h.cfg.Pool.AcquireAccount(context.Background(), []pool.AccountCandidate{{Name: acct.Name}}, 0)
+	if err != nil {
 		return
 	}
-	defer h.cfg.Pool.ReleaseLock(acct.Name)
+	defer lease.Release()
+	if lease.Account != acct {
+		// 账号已被重载/替换：本轮探测针对的对象已失效，交给下一轮。
+		return
+	}
 	key := availKey(acct.UID, model)
 	availability.Lock()
 	if availability.probing[key] {
@@ -179,7 +191,7 @@ func (h *Handler) probeModel(acct *pool.Account, model string) {
 		availability.Unlock()
 	}()
 
-	token, ak, sk := acct.Auth.Credentials()
+	token, ak, sk := authz.Credentials()
 	cred := upstream.SignCredential{AccessKeyID: ak, SecretAccessKey: sk, SecurityToken: token}
 	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
@@ -291,7 +303,7 @@ type pendingProbe struct {
 func (h *Handler) pendingProbes() []pendingProbe {
 	var out []pendingProbe
 	for _, acct := range h.cfg.Pool.Accounts() {
-		if acct == nil || acct.Auth == nil || !h.cfg.Pool.Healthy(acct.Name) {
+		if acct == nil || acct.AuthSnapshot() == nil || !h.cfg.Pool.Healthy(acct.Name) {
 			continue
 		}
 		models, ok := upstream.AccountModels(acct.UID)
