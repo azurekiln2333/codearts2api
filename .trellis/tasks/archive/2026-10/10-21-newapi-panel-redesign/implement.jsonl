@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Single embedded panel belongs to the server package; identify applicable contracts."}
+{"file": ".trellis/spec/backend/request-audit.md", "reason": "Preserve accurate request audit, account state, unknown metadata and escaping."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse existing action/auth/API/escaping flows during the layout redesign."}
+{"file": ".trellis/tasks/10-21-newapi-panel-redesign/research/reference-style.md", "reason": "Concrete local New API visual tokens, shell dimensions and layout references."}
