@@ -27,3 +27,39 @@ Fixed cancellable startup and upstream idle budgets, SSE completion, fair bounde
 ### Status
 
 [OK] **Completed**
+
+
+## Session 2: Production concurrency repair and request audit
+<!-- trellis-session: v=2 fp=961068a52a252ddf -->
+
+**Date**: 2026-10-21
+**Task**: Production concurrency repair and request audit
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Implemented capability-aware bounded failover, metadata audit and truthful account diagnostics with Pi; completed independent review and local verification.
+
+### Main Changes
+
+- Added authenticated request audit APIs/panel, bounded nonblocking storage, safe failure causes and request-ID correlation.
+- Preserved lifecycle leases, credential mounts and state compatibility; forwarded Compose env/port and build identity.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3fefda8` | fix: improve capability failover and add request audit |
+
+### Testing
+
+- [OK] Full Go test/race, vet, build and diff/format checks passed; independent 18-request localhost wave restored all capacity.
+- [OK] Actual Compose config, embedded JavaScript fixture, isolated executable/auth/API verification and Linux amd64 build passed.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Deploy intended build with existing auth/data mounts, verify reported build/effective limits, then evaluate production traffic; no push or deployment performed.
