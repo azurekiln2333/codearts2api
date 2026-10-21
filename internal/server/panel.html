@@ -3,764 +3,794 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="color-scheme" content="light dark"/>
 <title>__SERVICE_TITLE__ · 控制台</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600;700&display=swap');
 :root{
-  --bg:#EEF2F8; --bg2:#E4EAF4; --card:rgba(255,255,255,.66); --card2:rgba(255,255,255,.88);
-  --line:rgba(100,116,139,.42); --text:#1E293B; --muted:#55657E; --accent:__ACCENT__;
-  --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --info:#0284c7;
-  --radius:16px; --radius-sm:10px;
-  --shadow:0 8px 24px rgba(30,41,59,.08), inset 0 1px 0 rgba(255,255,255,.95);
-  --shadow-lg:0 16px 40px rgba(30,41,59,.14), inset 0 1px 0 rgba(255,255,255,.95);
-  --blur:14px;
-  --font-sans:'Fira Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif;
-  --font-mono:'Fira Code',ui-monospace,SFMono-Regular,Menlo,Consolas,'Courier New',monospace;
+  --canvas:#f7f7f8;--surface:#fff;--subtle:#fafafa;--hover:#f4f4f5;--line:#e7e7e9;
+  --text:#202024;--muted:#707078;--accent:__ACCENT__;--blue:#2463c5;--blue-soft:#edf3fd;
+  --ok:#16815e;--ok-bg:#edf8f3;--warn:#a46913;--warn-bg:#fcf5e8;--bad:#c33c43;--bad-bg:#fdf0f1;
+  --radius:18px;--radius-control:12px;--shadow:0 1px 2px #00000005;
+  --font-sans:ui-sans-serif,system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --canvas:#232325;--surface:#2b2b2e;--subtle:#303033;--hover:#37373a;--line:#414144;
+  --text:#f1f1f3;--muted:#b1b1ba;--accent:#6eacfb;--blue:#a2c8ff;--blue-soft:#2a3c56;
+  --ok:#7dd9b3;--ok-bg:#263f35;--warn:#f0c477;--warn-bg:#443b2c;--bad:#ffa2aa;--bad-bg:#482f34;color-scheme:dark;
 }
 *{box-sizing:border-box}
-html,body{margin:0;min-height:100%;color:var(--text);font:14px/1.55 var(--font-sans);-webkit-font-smoothing:antialiased;
-  background:
-    radial-gradient(900px 480px at 8% -8%, rgba(191,219,254,.55), transparent),
-    radial-gradient(820px 440px at 96% 2%, rgba(221,214,254,.5), transparent),
-    radial-gradient(760px 420px at 55% 112%, rgba(165,243,252,.42), transparent),
-    linear-gradient(180deg,#F6F8FC,#ECF1F8)}
-a{color:color-mix(in srgb,var(--accent) 78%,#0F172A);text-decoration:none}
-button{font:inherit;cursor:pointer}
-button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}
-input{font:inherit}
-::selection{background:color-mix(in srgb,var(--accent) 28%,transparent)}
-::-webkit-scrollbar{width:9px;height:9px}
-::-webkit-scrollbar-thumb{background:rgba(100,116,139,.35);border-radius:99px}
-::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--accent) 45%,rgba(100,116,139,.4))}
-::-webkit-scrollbar-track{background:transparent}
-.wrap{max-width:1180px;margin:0 auto;padding:26px 18px 52px}
-.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
-.brand{display:flex;align-items:center;gap:13px}
-.logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 55%,#fff));display:grid;place-items:center;font-weight:800;color:#fff;box-shadow:var(--shadow);font-family:var(--font-mono);letter-spacing:-.5px}
-.brand h1{margin:0;font-size:20px;letter-spacing:.2px;font-weight:600;color:#0F172A}
-.brand p{margin:2px 0 0;color:var(--muted);font-size:12px}
-.actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{border:1px solid var(--line);background:rgba(255,255,255,.75);color:#334155;padding:8px 13px;border-radius:var(--radius-sm);cursor:pointer;transition:border-color .18s,background .18s,transform .12s,box-shadow .18s;box-shadow:0 2px 8px rgba(30,41,59,.05)}
-.btn:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));background:#fff;transform:translateY(-1px);box-shadow:var(--shadow)}
-.btn:active{transform:translateY(0)}
-.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.btn.primary{background:linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 78%,#fff));border-color:transparent;color:#fff;font-weight:700;box-shadow:0 4px 16px color-mix(in srgb,var(--accent) 32%,transparent)}
-.btn.primary:hover{filter:brightness(1.05);box-shadow:0 6px 20px color-mix(in srgb,var(--accent) 42%,transparent)}
-.btn.ghost{background:transparent;box-shadow:none}
-.btn.danger{border-color:color-mix(in srgb,var(--bad) 45%,var(--line));color:#b91c1c}
-.btn.danger:hover{background:color-mix(in srgb,var(--bad) 8%,#fff);border-color:var(--bad)}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
-@media (max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:520px){.grid{grid-template-columns:1fr}}
-.stat{position:relative;overflow:hidden;background:var(--card);border:1px solid rgba(255,255,255,.8);border-radius:var(--radius);padding:15px 16px 13px;box-shadow:var(--shadow);backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
-.stat::before{content:"";position:absolute;inset:0 auto 0 0;width:4px;background:linear-gradient(180deg,var(--accent),transparent);border-radius:4px}
-.stat .k{color:var(--muted);font-size:12px;font-weight:600}
-.stat .v{font-size:27px;font-weight:700;margin-top:5px;letter-spacing:-.5px;font-variant-numeric:tabular-nums;line-height:1.1;color:#0F172A}
-.card{background:var(--card);border:1px solid rgba(255,255,255,.85);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:16px;backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
-.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.35)}
-.card-h h2{margin:0;font-size:15px;font-weight:600;color:#0F172A}
-.card-b{padding:12px 16px}
-.table{width:100%;border-collapse:collapse}
-.table th,.table td{padding:11px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-.table th{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
-.table tr:last-child td{border-bottom:none}
-.table tbody tr{transition:background .15s}
-.table tbody tr:hover td{background:rgba(255,255,255,.5)}
-.table td strong{font-variant-numeric:tabular-nums}
-.badge{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid transparent}
-.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
-.badge.ok{background:rgba(22,163,74,.12);color:#15803d;border-color:rgba(22,163,74,.3)}
-.badge.warn{background:rgba(217,119,6,.12);color:#b45309;border-color:rgba(217,119,6,.3)}
-.badge.bad{background:rgba(220,38,38,.1);color:#b91c1c;border-color:rgba(220,38,38,.28)}
-.badge.info{background:rgba(2,132,199,.1);color:#0369a1;border-color:rgba(2,132,199,.28)}
-.mono{font-family:var(--font-mono);font-size:12px}
-.muted{color:var(--muted)}
-.row-actions{display:flex;gap:6px;flex-wrap:wrap}
-.toast{position:fixed;right:16px;bottom:16px;max-width:420px;background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.9);color:var(--text);padding:12px 15px;border-radius:var(--radius-sm);box-shadow:var(--shadow-lg);opacity:0;transform:translateY(8px);transition:.22s;z-index:50;pointer-events:none;font-size:13px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+html,body{margin:0;min-height:100%;color:var(--text);background:var(--canvas);font:14px/1.5 var(--font-sans);-webkit-font-smoothing:antialiased}
+body{height:100dvh;overflow:hidden}
+button,input,select{font:inherit}
+button,a,input,select{-webkit-tap-highlight-color:transparent}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.5}
+a{color:var(--blue);text-decoration:none}
+button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible,[tabindex="-1"]:focus-visible{outline:2px solid var(--blue);outline-offset:3px}
+::selection{background:var(--blue-soft);color:var(--text)}
+svg{display:block}
+.icon{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+.hidden,[hidden]{display:none!important}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.mono{font-family:var(--font-mono);font-size:12px;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}.small{font-size:12px}
+.skip-link{position:fixed;top:-50px;left:12px;z-index:100;padding:8px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
+.skip-link:focus{top:8px}
+.app{height:100dvh;display:flex;flex-direction:column}
+.app-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border-bottom:1px solid var(--line)}
+.header-brand,.header-actions,.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;background:var(--text);color:var(--surface);border-radius:9px;font:700 11px/1 var(--font-mono);letter-spacing:-.5px}
+.brand-name{font-size:14px;font-weight:650;letter-spacing:-.3px;color:var(--text)}
+.header-separator{height:16px;border-left:1px solid var(--line);margin:0 3px}
+.header-caption{color:var(--muted);font-size:12px}.header-actions{gap:6px}
+.app-body{display:flex;flex:1;min-height:0;min-width:0}
+.sidebar{width:208px;flex-shrink:0;display:flex;flex-direction:column;padding:20px 12px 12px;min-height:0}
+.nav-group{display:flex;flex-direction:column;gap:4px;margin-bottom:24px}
+.nav-label{font-size:11px;font-weight:500;color:var(--muted);padding:0 10px;margin-bottom:5px;letter-spacing:.4px}
+.nav-item{display:flex;align-items:center;gap:10px;min-height:34px;padding:7px 10px;color:var(--muted);border-radius:12px;font-size:13px;transition:background .12s,color .12s}
+.nav-item:hover{background:var(--hover);color:var(--text)}
+.nav-item[aria-current="page"]{background:var(--blue-soft);color:var(--blue);font-weight:600}
+.nav-count{margin-left:auto;color:inherit;font:11px var(--font-mono)}
+.sidebar-footer{margin-top:auto;padding:14px 10px 0;border-top:1px solid var(--line)}
+.sidebar-footer strong{display:block;font-size:12px;font-weight:500}
+.sidebar-footer p{font-size:11px;color:var(--muted);margin:4px 0 0;overflow-wrap:anywhere}
+.sidebar-mobile-head,#sidebarToggle,.drawer-backdrop{display:none}
+.workspace{min-width:0;min-height:0;flex:1;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:22px;margin:8px 8px 8px 0;overflow:hidden;box-shadow:var(--shadow)}
+.page-header{padding:22px 24px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-shrink:0}
+.page-header h1{margin:0;font-size:18px;font-weight:650;line-height:1.4;letter-spacing:-.3px}
+.page-header p{margin:5px 0 0;color:var(--muted);font-size:12px}
+.page-content{overflow:auto;min-height:0;padding:0 24px 24px;scrollbar-gutter:stable}
+.page-content>section{display:flex;flex-direction:column;gap:18px;min-width:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:32px;padding:5px 11px;border:1px solid var(--line);border-radius:var(--radius-control);background:var(--surface);color:var(--text);font-size:12px;font-weight:500;line-height:20px;white-space:nowrap;transition:background .12s,border-color .12s}
+.btn:hover:enabled{background:var(--hover);border-color:var(--muted)}
+.btn.primary{background:var(--text);color:var(--surface);border-color:var(--text)}
+.btn.primary:hover:enabled{opacity:.88;background:var(--text)}
+.btn.ghost{background:transparent;border-color:transparent}
+.btn.ghost:hover:enabled{border-color:transparent;background:var(--hover)}
+.btn.danger{color:var(--bad)}.btn.danger:hover:enabled{background:var(--bad-bg);border-color:var(--bad)}
+.btn.icon-btn{width:32px;padding:6px;flex-shrink:0}
+.btn.small-btn{min-height:28px;border-radius:9px;padding:3px 9px;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.stat{border:1px solid var(--line);border-radius:var(--radius);padding:17px 18px;background:var(--surface);min-width:0}
+.stat-head{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+.stat-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:9px;background:var(--subtle);color:var(--muted)}
+.stat .v{font-size:26px;font-weight:600;letter-spacing:-.6px;line-height:1.25;margin:9px 0 6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stat .hint{font-size:11px;color:var(--muted)}
+.two-column{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
+.card{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);min-width:0;overflow:hidden}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;min-height:54px}
+.card-h h2{font-size:13px;font-weight:600;margin:0}
+.card-h p{font-size:12px;color:var(--muted);margin:4px 0 0}
+.card-b{padding:0 18px 18px}
+.card-foot{padding:12px 18px;background:var(--subtle);border-top:1px solid var(--line);color:var(--muted);font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.health-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:3px 0 19px}
+.health-heading strong{font-weight:600;font-size:20px;letter-spacing:-.4px}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:500;line-height:17px;white-space:nowrap;max-width:100%}
+.badge.ok{color:var(--ok);background:var(--ok-bg)}.badge.warn{color:var(--warn);background:var(--warn-bg)}
+.badge.bad{color:var(--bad);background:var(--bad-bg)}.badge.info{color:var(--blue);background:var(--blue-soft)}
+.badge.neutral{color:var(--muted);background:var(--hover)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+.health-meter{height:7px;background:var(--hover);border-radius:8px;display:flex;overflow:hidden;gap:2px}
+.health-meter>span{display:block;min-width:0}.health-meter .ready{background:var(--ok)}.health-meter .cooling{background:var(--warn)}.health-meter .disabled{background:var(--muted)}
+.health-legend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:17px}
+.legend-label{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+.legend-value{margin:5px 0 0 12px;font-size:17px;font-weight:550;font-variant-numeric:tabular-nums}
+.detail-list{margin:0;display:grid;grid-template-columns:minmax(110px,.9fr) minmax(0,1.2fr);font-size:12px}
+.detail-list>dt,.detail-list>dd{margin:0;padding:10px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.detail-list>dt{color:var(--muted);padding-right:16px}.detail-list>dd{text-align:right;font-variant-numeric:tabular-nums}
+.detail-list>dt:last-of-type,.detail-list>dd:last-of-type{border-bottom:0}
+.connection-value{font-size:13px;background:var(--subtle);border:1px solid var(--line);border-radius:12px;padding:11px 12px;display:flex;align-items:center;gap:10px;min-width:0}
+.connection-value code{flex:1;overflow-wrap:anywhere;min-width:0;user-select:all}
+.connection-caption{color:var(--muted);font-size:11px;margin:12px 0 8px}
+.shortcut-list{display:flex;flex-direction:column;gap:4px}
+.shortcut{display:flex;align-items:center;gap:12px;padding:11px 10px;border-radius:12px;color:var(--text)}
+.shortcut:hover{background:var(--subtle)}.shortcut>.stat-icon{width:34px;height:34px;border:1px solid var(--line);background:var(--surface)}
+.shortcut div:nth-child(2){flex:1;min-width:0}.shortcut strong{font-weight:500;font-size:12px;display:block}
+.shortcut p{margin:3px 0 0;font-size:11px;color:var(--muted)}
+.toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}
+.toolbar-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap;min-width:0}
+.input,select{height:32px;padding:5px 10px;border:1px solid var(--line);border-radius:var(--radius-control);background:var(--surface);color:var(--text);font-size:12px;max-width:100%;min-width:0;transition:border-color .12s}
+.input::placeholder{color:var(--muted);opacity:.8}.input:focus,select:focus{border-color:var(--blue)}
+.search-field{position:relative;display:flex;align-items:center;min-width:0}
+.search-field>.icon{position:absolute;left:10px;color:var(--muted);width:14px;height:14px;pointer-events:none}
+.search-field>.input{padding-left:32px;width:230px}
+.table-card .card-h{border-bottom:1px solid var(--line)}.table-scroll{overflow-x:auto;max-width:100%}
+.table{width:100%;border-collapse:collapse;font-size:13px;text-align:left;table-layout:fixed}
+.table th{padding:10px 14px;color:var(--muted);background:var(--subtle);font-size:11px;font-weight:500;white-space:nowrap;border-bottom:1px solid var(--line)}
+.table td{padding:14px;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.table tr:last-child td{border-bottom:0}.table tbody tr:hover{background:var(--subtle)}
+.table td strong{font-size:13px;font-weight:550}.table td .secondary{display:block;color:var(--muted);font-size:11px;margin-top:5px;overflow-wrap:anywhere}
+#acctTable{min-width:930px}
+#acctTable th:nth-child(1){width:18%}#acctTable th:nth-child(2){width:18%}#acctTable th:nth-child(3){width:15%}#acctTable th:nth-child(4){width:27%}#acctTable th:nth-child(5){width:22%}
+.row-actions{display:flex;gap:5px;flex-wrap:wrap}
+.empty{padding:46px 18px!important;text-align:center;color:var(--muted);font-size:12px}
+.empty>.icon{width:24px;height:24px;margin:0 auto 12px;color:var(--muted)}
+.empty strong{display:block;color:var(--text);font-weight:500;margin-bottom:5px}
+.table-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+.table-updating{opacity:.6}
+.request-filters{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;margin:0}
+.filter-field{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1 1 140px}
+.filter-field label{font-size:11px;color:var(--muted)}.filter-field select,.filter-field input{width:100%}
+.filter-field.outcome-field{flex:1.4 1 190px}.filter-field.status-field{flex:.55 1 90px}
+#reqTable{min-width:1180px}
+#reqTable th:nth-child(1){width:18%}#reqTable th:nth-child(2){width:16%}#reqTable th:nth-child(3){width:13%}#reqTable th:nth-child(4){width:13%}#reqTable th:nth-child(5){width:20%}#reqTable th:nth-child(6){width:5%}#reqTable th:nth-child(7){width:15%}
+.outcome-label{font-size:11px;display:block;margin-top:6px;overflow-wrap:anywhere;color:var(--bad)}
+.outcome-label.success{color:var(--ok)}.outcome-label.canceled{color:var(--warn)}
+.notice{padding:11px 14px;border:1px solid var(--line);border-radius:12px;font-size:12px;color:var(--muted);background:var(--subtle);overflow-wrap:anywhere}
+.notice.warning{color:var(--warn);background:var(--warn-bg);border-color:transparent}.notice.error{color:var(--bad);background:var(--bad-bg);border-color:transparent}
+.model-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.model-item{display:flex;align-items:center;gap:12px;min-width:0;border:1px solid var(--line);border-radius:16px;padding:16px}
+.model-item>.stat-icon{width:34px;height:34px}.model-item .model-info{flex:1;min-width:0}
+.model-item h3{margin:0;font:500 12px/1.6 var(--font-mono);overflow-wrap:anywhere}.model-item p{margin:3px 0 0;font-size:11px;color:var(--muted)}
+.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}.settings-grid .card-b{padding-top:0}
+.settings-note{font-size:11px;color:var(--muted);margin:12px 0 0;overflow-wrap:anywhere}
+.toast{position:fixed;right:20px;bottom:20px;max-width:min(420px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);color:var(--text);padding:12px 16px;border-radius:14px;box-shadow:0 4px 20px #00000012;opacity:0;transform:translateY(8px);transition:opacity .15s,transform .15s;z-index:90;pointer-events:none;font-size:12px;overflow-wrap:anywhere}
 .toast.show{opacity:1;transform:none}
-.login{min-height:100vh;display:grid;place-items:center;padding:24px}
-.login-box{width:min(420px,100%);background:var(--card2);border:1px solid rgba(255,255,255,.9);border-radius:20px;padding:30px;box-shadow:var(--shadow-lg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-.login-box h1{margin:0 0 6px;font-size:22px;color:#0F172A}
-.login-box p{margin:0 0 18px;color:var(--muted)}
-.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
-.field label{font-size:12px;color:var(--muted);font-weight:600}
-.field input{background:rgba(255,255,255,.85);border:1px solid var(--line);border-radius:var(--radius-sm);padding:11px 12px;color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s}
-.field input:focus{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 20%,transparent)}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
-.chip{background:rgba(255,255,255,.8);border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12px;color:var(--muted);font-family:var(--font-mono)}
-.hidden{display:none!important}
-.empty{padding:28px;text-align:center;color:var(--muted)}
-.foot{margin-top:10px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.modal-mask{position:fixed;inset:0;background:rgba(148,163,184,.32);display:flex;align-items:center;justify-content:center;padding:18px;z-index:40;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
-.modal{width:min(560px,100%);background:var(--card2);border:1px solid rgba(255,255,255,.9);border-radius:18px;box-shadow:var(--shadow-lg);overflow:hidden;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
-.modal-h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
-.modal-h h3{margin:0;font-size:16px;font-weight:600;color:#0F172A}
-.modal-b{padding:16px;display:flex;flex-direction:column;gap:12px}
-.modal-f{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
-.urlbox{background:rgba(255,255,255,.85);border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 12px;word-break:break-all;font-family:var(--font-mono);font-size:12px;max-height:120px;overflow:auto;user-select:all}
-.steps{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
-.steps b{color:#0F172A}
-.spin{display:inline-block;width:12px;height:12px;border:2px solid color-mix(in srgb,var(--accent) 30%,transparent);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}
-@keyframes sp{to{transform:rotate(360deg)}}
-.status-line{min-height:20px;font-size:13px}
-@media (prefers-reduced-motion:reduce){
-  *{animation:none!important;transition:none!important}
-  .btn:hover{transform:none}
+.login{height:100dvh;overflow:auto;display:grid;place-items:center;padding:24px}
+.login-box{width:min(400px,100%);border:1px solid var(--line);border-radius:22px;padding:30px;background:var(--surface)}
+.login-box .brand{margin-bottom:26px}.login-box .logo{height:34px;width:34px;border-radius:11px}
+.login-box h1{margin:0;font-size:16px;font-weight:650}.login-box p{color:var(--muted);font-size:12px;margin:5px 0 0}
+.field{display:flex;flex-direction:column;gap:8px}.field label{font-size:12px;font-weight:500}.field input{height:38px}
+.login-box .btn{width:100%;height:36px;margin-top:16px}.login-box .login-note{font-size:11px;line-height:1.7;margin-top:20px}
+.login-error{color:var(--bad);font-size:12px;margin-top:12px;overflow-wrap:anywhere}
+.modal-mask{position:fixed;inset:0;background:#11111865;display:flex;align-items:center;justify-content:center;padding:20px;z-index:80;overflow:auto}
+.modal{width:min(560px,100%);max-height:calc(100dvh - 40px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:0 12px 48px #00000020}
+.modal-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}.modal-h h2{margin:0;font-size:15px;font-weight:600}
+.modal-b{padding:20px;display:flex;flex-direction:column;gap:16px}
+.modal-f{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;background:var(--subtle)}
+.steps{padding-left:18px;font-size:12px;color:var(--muted);margin:0;display:flex;flex-direction:column;gap:7px}
+.urlbox{background:var(--subtle);border:1px solid var(--line);border-radius:12px;padding:11px 12px;overflow-wrap:anywhere;font:11px/1.7 var(--font-mono);max-height:100px;overflow:auto;user-select:all}
+.modal-field{display:flex;flex-direction:column;gap:7px;min-width:0}.modal-field label,.modal-field .field-label{color:var(--muted);font-size:12px}
+.status-line{font-size:12px;min-height:20px;overflow-wrap:anywhere}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:7px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.theme-sun{display:none}:root[data-theme="dark"] .theme-sun{display:block}:root[data-theme="dark"] .theme-moon{display:none}
+@media(min-width:1600px){.page-header{padding:25px 32px 22px}.page-content{padding:0 32px 32px}}
+@media(max-width:1150px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.two-column{grid-template-columns:1fr}.settings-grid{grid-template-columns:1fr}.page-header{padding:20px 18px 16px}.page-content{padding:0 18px 20px}.header-caption{display:none}}
+@media(max-width:767px){
+  .app-header{padding:0 10px;gap:8px}.header-brand{gap:8px}.header-actions{gap:2px}.header-separator{display:none}.brand-name{font-size:13px}.header-actions .refresh-label,.logout-label,#subTitle{display:none}
+  #btnRefresh,#btnLogout{width:32px;padding:6px}.app-header .logo{width:25px;height:25px;border-radius:8px}
+  #sidebarToggle{display:inline-flex}.sidebar-mobile-head{display:flex;align-items:center;justify-content:space-between;padding:0 8px 20px;font-size:13px;font-weight:600}
+  .sidebar{position:fixed;top:0;bottom:0;left:0;z-index:65;width:min(272px,calc(100vw - 48px));padding:16px 12px;background:var(--surface);border-right:1px solid var(--line);transform:translateX(-100%);visibility:hidden;transition:transform .15s,visibility .15s}
+  .drawer-open .sidebar{transform:none;visibility:visible}.drawer-open .drawer-backdrop{display:block;position:fixed;inset:0;background:#11111865;border:0;z-index:60}
+  .nav-item{min-height:40px}.workspace{margin:6px;border-radius:18px}.page-header{padding:18px 16px 16px;align-items:flex-start}.page-header h1{font-size:16px}.page-header p{font-size:11px}.page-content{padding:0 16px 20px;scrollbar-gutter:auto}
+  .page-content>section{gap:14px}.grid{gap:10px}.stat{padding:14px;border-radius:16px}.stat .v{font-size:23px}.stat .hint{font-size:10px}.stat-icon{width:24px;height:24px}.stat-head{font-size:11px}
+  .two-column,.settings-grid{gap:14px}.card-h{padding:14px 16px}.card-b{padding:0 16px 16px}.card-foot{padding:12px 16px}.health-heading strong{font-size:18px}.health-legend{gap:5px}.legend-label{font-size:10px}
+  .toolbar{align-items:stretch;gap:10px}.toolbar-group{width:100%}.search-field{flex:1}.search-field>.input{width:100%}.toolbar-group select{max-width:130px}
+  .toolbar-group.operations{gap:6px}.toolbar-group.operations .btn{flex:1 1 auto}.input,select{font-size:16px;height:36px}.filter-field select{font-size:13px}.filter-field{flex-basis:calc(50% - 10px)}.filter-field.outcome-field{flex-basis:100%}.filter-field.status-field{flex-basis:90px}.request-filters .btn{height:36px}
+  .model-grid{grid-template-columns:1fr;gap:10px}.model-item{padding:14px}.page-header .btn{font-size:11px;padding:5px 9px}.card-h .small{font-size:11px}.modal-mask{padding:12px}.modal{max-height:calc(100dvh - 24px);border-radius:18px}.modal-b{padding:16px}.modal-f{padding:12px 16px;gap:7px}.modal-f .btn{min-height:36px}.toast{right:16px;bottom:16px}
 }
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
-
-
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" class="hidden" aria-hidden="true">
+  <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 20v-2a6 6 0 0 0-4-5.7"/></symbol>
+  <symbol id="i-requests" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM14 3v5h4M9 12h6M9 16h6"/></symbol>
+  <symbol id="i-models" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="8" cy="7" r="3" fill="var(--surface)"/><circle cx="16" cy="17" r="3" fill="var(--surface)"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 10a8 8 0 0 0-14-5L3 8m0-5v5h5M4 14a8 8 0 0 0 14 5l3-3m0 5v-5h-5"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.5 14A8.5 8.5 0 0 1 10 3.5 8.5 8.5 0 1 0 20.5 14Z"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M10 4H4v16h6M9 12h12m-4-4 4 4-4 4"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-5-5 5 5-5 5"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 14 4-4M8 16l-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 12a4 4 0 0 0 6 0l5-5a4 4 0 0 0-6-6l-1 1" transform="translate(1 0) scale(.9 1)"/></symbol>
+</svg>
+<a class="skip-link" id="skipLink" href="#mainContent">跳到主要内容</a>
+<div id="bootView" class="login"><div class="login-box" role="status"><div class="brand"><div class="logo">__LOGO__</div><div><h1>__SERVICE_TITLE__</h1><p>管理控制台</p></div></div><p><span class="spin" aria-hidden="true"></span>正在连接服务…</p></div></div>
 <div id="loginView" class="login hidden">
-  <div class="login-box">
-    <div class="brand" style="margin-bottom:14px">
-      <div class="logo">__LOGO__</div>
-      <div>
-        <h1 style="font-size:18px;margin:0">__SERVICE_TITLE__</h1>
-        <p style="margin:2px 0 0;color:var(--muted);font-size:12px">管理控制台 · 使用 API Key 登录</p>
+  <form class="login-box" id="loginForm">
+    <div class="brand"><div class="logo">__LOGO__</div><div><h1>__SERVICE_TITLE__</h1><p>管理控制台</p></div></div>
+    <div class="field"><label for="keyInput">API Key</label><input class="input" id="keyInput" type="password" placeholder="输入服务 API Key" autocomplete="off" required/></div>
+    <div id="loginError" class="login-error hidden" role="alert"></div>
+    <button class="btn primary" id="loginBtn" type="submit">进入控制台<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+    <p class="login-note">密钥保存在本机浏览器 localStorage，仅用于此服务的 Bearer 身份验证。</p>
+  </form>
+</div>
+<div id="appView" class="app hidden">
+  <header class="app-header" id="appHeader">
+    <div class="header-brand">
+      <button id="sidebarToggle" class="btn icon-btn ghost" type="button" aria-label="打开导航菜单" aria-controls="sidebar" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <a class="brand" href="#overview" data-page="overview" aria-label="CodeArts2API 总览"><span class="logo">__LOGO__</span><span class="brand-name">__SERVICE_TITLE__</span></a>
+      <span class="header-separator" aria-hidden="true"></span><span class="header-caption">管理控制台</span>
+    </div>
+    <div class="header-actions"><span id="subTitle" class="header-caption">正在连接…</span>
+      <button class="btn ghost" id="btnRefresh" type="button" aria-label="刷新控制台"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span class="refresh-label">刷新</span></button>
+      <button class="btn icon-btn ghost" id="themeToggle" type="button" aria-label="切换主题"><svg class="icon theme-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="icon theme-sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+      <button class="btn ghost" id="btnLogout" type="button" aria-label="退出登录"><svg class="icon" aria-hidden="true"><use href="#i-logout"/></svg><span class="logout-label">退出</span></button>
+    </div>
+  </header>
+  <div class="app-body">
+    <button class="drawer-backdrop" id="drawerBackdrop" type="button" aria-label="关闭导航菜单" tabindex="-1"></button>
+    <aside class="sidebar" id="sidebar" aria-label="控制台导航">
+      <div class="sidebar-mobile-head"><span>控制台导航</span><button class="btn icon-btn ghost" id="sidebarClose" type="button" aria-label="关闭导航菜单"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+      <nav aria-label="主导航">
+        <div class="nav-group"><div class="nav-label">工作空间</div>
+          <a class="nav-item" href="#overview" data-page="overview" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>总览</a>
+          <a class="nav-item" href="#accounts" data-page="accounts"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>账号管理<span class="nav-count" id="navAccountCount">—</span></a>
+          <a class="nav-item" href="#requests" data-page="requests"><svg class="icon" aria-hidden="true"><use href="#i-requests"/></svg>请求审计</a>
+          <a class="nav-item" href="#models" data-page="models"><svg class="icon" aria-hidden="true"><use href="#i-models"/></svg>模型目录<span class="nav-count" id="navModelCount">—</span></a>
+        </div>
+        <div class="nav-group"><div class="nav-label">系统</div><a class="nav-item" href="#settings" data-page="settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>运行配置</a></div>
+      </nav>
+      <div class="sidebar-footer"><strong>CodeArts2API</strong><p>OpenAI 兼容接口 · 账号池网关</p><p id="sidebarBuild">构建身份尚未加载</p></div>
+    </aside>
+    <main class="workspace" id="mainContent" tabindex="-1">
+      <div class="page-header"><div><h1 id="pageTitle" tabindex="-1">总览</h1><p id="pageDescription">查看账号池容量与服务连接信息。</p></div><button class="btn primary" id="btnAddAccount" type="button" hidden><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>授权登录</button></div>
+      <div class="page-content" id="pageContent">
+        <section data-view="overview" aria-label="总览">
+          <div class="grid">
+            <div class="stat"><div class="stat-head"><span>账号总数</span><span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg></span></div><div class="v" id="sTotal">—</div><div class="hint">已加载到当前账号池</div></div>
+            <div class="stat"><div class="stat-head"><span>可调度账号</span><span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span></div><div class="v" id="sHealthy">—</div><div class="hint">未禁用且未处于冷却期</div></div>
+            <div class="stat"><div class="stat-head"><span>并发占用 / 上限</span><span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></span></div><div class="v" id="sConcurrency">—</div><div class="hint">所有账号的当前占用与配置容量</div></div>
+            <div class="stat"><div class="stat-head"><span>模型目录</span><span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-models"/></svg></span></div><div class="v" id="sModels">—</div><div class="hint">服务返回的模型标识数量</div></div>
+          </div>
+          <div class="two-column">
+            <div class="card"><div class="card-h"><h2>账号池状态</h2><span class="small muted" id="overviewUpdated">正在加载…</span></div><div class="card-b">
+              <div class="health-heading"><strong id="poolHeadline">正在读取账号池</strong><span class="badge neutral" id="poolBadge">加载中</span></div>
+              <div class="health-meter" id="healthMeter" role="img" aria-label="账号状态分布"><span class="ready" id="healthReady"></span><span class="cooling" id="healthCooling"></span><span class="disabled" id="healthDisabled"></span></div>
+              <div class="health-legend"><div><div class="legend-label"><span class="dot" style="color:var(--ok)"></span>可调度</div><div class="legend-value" id="poolReady">—</div></div><div><div class="legend-label"><span class="dot" style="color:var(--warn)"></span>冷却中</div><div class="legend-value" id="poolCooling">—</div></div><div><div class="legend-label"><span class="dot" style="color:var(--muted)"></span>已禁用</div><div class="legend-value" id="poolDisabled">—</div></div></div>
+              <dl class="detail-list" style="margin-top:15px"><dt>可调度账号的并发容量</dt><dd id="readySlots">—</dd><dt>冷却 / 禁用</dt><dd id="sBad">—</dd><dt>默认模型</dt><dd class="mono" id="overviewDefaultModel">—</dd></dl>
+            </div><div class="card-foot"><span>当前状态与历史失败记录分别展示</span><a href="#accounts" data-page="accounts">管理账号 →</a></div></div>
+            <div class="card"><div class="card-h"><h2>连接服务</h2><svg class="icon muted" aria-hidden="true"><use href="#i-link"/></svg></div><div class="card-b"><p class="muted small" style="margin:0 0 16px">在支持 OpenAI 兼容接口的客户端中使用以下地址。</p><div class="connection-caption">API Base URL</div><div class="connection-value"><code class="mono" id="baseUrl">—</code><button class="btn icon-btn ghost" type="button" data-copy-from="baseUrl" aria-label="复制 API Base URL"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button></div><dl class="detail-list" style="margin-top:7px"><dt>对话接口</dt><dd class="mono">POST /v1/chat/completions</dd><dt>身份验证</dt><dd class="mono">Authorization: Bearer &lt;API Key&gt;</dd></dl></div><div class="card-foot"><span>使用服务 API Key 进行连接</span><a href="#settings" data-page="settings">运行配置 →</a></div></div>
+          </div>
+          <div class="card"><div class="card-h"><h2>工作台快捷入口</h2><span class="small muted">常用操作</span></div><div class="card-b shortcut-list"><a class="shortcut" href="#accounts" data-page="accounts"><span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg></span><div><strong>管理账号池</strong><p>查看并发、冷却与历史失败，执行账号操作。</p></div><svg class="icon muted" aria-hidden="true"><use href="#i-arrow"/></svg></a><a class="shortcut" href="#requests" data-page="requests"><span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-requests"/></svg></span><div><strong>调查最近请求</strong><p>按执行结果、模型和账号筛选有界审计窗口。</p></div><svg class="icon muted" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="card-foot"><span>通过 OAuth 登录添加账号到当前服务</span><button class="btn small-btn" id="btnAddAccount2" type="button"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>授权登录</button></div></div>
+        </section>
+        <section data-view="accounts" aria-label="账号管理" hidden>
+          <div class="toolbar"><div class="toolbar-group"><div class="search-field"><label class="sr-only" for="acctSearch">搜索账号名称或 UID</label><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><input class="input" type="search" id="acctSearch" placeholder="搜索账号名称或 UID"/></div><label class="sr-only" for="acctStatus">账号状态</label><select id="acctStatus"><option value="">全部状态</option><option value="ready">可调度</option><option value="cooling">冷却中</option><option value="disabled">已禁用</option></select></div></div>
+          <div class="toolbar-group operations" aria-label="账号批量操作"><button class="btn" id="btnCredits" type="button">校验账号</button><button class="btn" id="btnCheckin" type="button">全员签到</button><button class="btn" id="btnKeepalive" type="button">保活 Token</button><button class="btn" id="btnReload" type="button"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>重载 auths</button></div>
+          <div class="card table-card"><div class="card-h"><h2>账号列表</h2><span class="muted small" id="updatedAt">正在加载…</span></div><div class="table-scroll"><table class="table" id="acctTable"><caption class="sr-only">账号身份、活动状态、并发、当前状态、历史失败及操作</caption><thead><tr><th scope="col">账号</th><th scope="col">签到 / 新手福利</th><th scope="col">当前状态 / 并发</th><th scope="col">原因 / 失败历史</th><th scope="col">操作</th></tr></thead><tbody id="acctBody"><tr><td colspan="5" class="empty">加载中…</td></tr></tbody></table></div><div class="table-foot"><span id="acctMeta">正在读取账号…</span><span>历史失败不代表当前不可调度</span></div></div>
+        </section>
+        <section data-view="requests" aria-label="请求审计" hidden>
+          <form class="request-filters" id="reqFilters"><div class="filter-field outcome-field"><label for="reqOutcome">执行结果</label><select id="reqOutcome"></select></div><div class="filter-field"><label for="reqModel">模型</label><input id="reqModel" class="input mono" placeholder="模型标识"/></div><div class="filter-field"><label for="reqAccount">账号</label><input id="reqAccount" class="input mono" placeholder="账号标识"/></div><div class="filter-field status-field"><label for="reqStatus">HTTP 状态</label><input id="reqStatus" class="input" type="number" min="100" max="599" placeholder="全部"/></div><button class="btn" id="btnReqApply" type="submit">筛选</button><button class="btn ghost" id="btnReqReset" type="button">重置</button></form>
+          <div id="reqError" class="notice error" role="alert" hidden></div><div id="reqLoss" class="notice warning" hidden></div>
+          <div class="card table-card" id="requestCard"><div class="card-h"><div><h2>最近请求</h2><p id="reqMeta">进入此页后加载近期窗口</p></div><button class="btn small-btn" id="btnReqRefresh" type="button"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>刷新</button></div><div class="table-scroll"><table class="table" id="reqTable"><caption class="sr-only">请求元数据：实际 HTTP 状态与执行结果分别显示</caption><thead><tr><th scope="col">时间 / 请求 ID</th><th scope="col">模型</th><th scope="col">账号</th><th scope="col">HTTP / 执行结果</th><th scope="col">原因</th><th scope="col">尝试</th><th scope="col">排队 / 首数据 / 总耗时</th></tr></thead><tbody id="reqBody"><tr><td colspan="7" class="empty">正在加载最近请求…</td></tr></tbody></table></div><div class="table-foot"><span id="reqArchive">接口仅查询有界近期窗口。</span><button class="btn small-btn" id="btnReqMore" type="button" hidden>加载更早记录</button></div></div>
+          <div class="notice">HTTP 状态表示响应是否已经提交；流式响应即使返回 200，执行结果仍可能失败。此处仅展示元数据，不记录对话内容。</div>
+        </section>
+        <section data-view="models" aria-label="模型目录" hidden>
+          <div class="toolbar"><div class="search-field"><label class="sr-only" for="modelSearch">搜索模型标识</label><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><input class="input" id="modelSearch" type="search" placeholder="搜索模型标识"/></div><span class="small muted" id="modelCount">正在加载…</span></div><div class="notice">模型目录来自服务发现。目录中出现某个模型，不代表每个账号均有权限或当前可用。</div><div class="model-grid" id="modelChips"><div class="empty">正在读取模型目录…</div></div>
+        </section>
+        <section data-view="settings" aria-label="运行配置" hidden>
+          <div class="notice">以下为服务当前生效的配置快照。修改配置后，请按服务的配置方式重新加载或重启。</div>
+          <div class="settings-grid">
+            <div class="card"><div class="card-h"><h2>请求与调度限制</h2><svg class="icon muted" aria-hidden="true"><use href="#i-settings"/></svg></div><div class="card-b"><dl class="detail-list" id="runtimeLimits"></dl></div></div>
+            <div class="card"><div class="card-h"><h2>请求审计</h2><span class="badge neutral" id="auditBadge">加载中</span></div><div class="card-b"><dl class="detail-list" id="auditLimits"></dl><p class="settings-note">API 提供近期内存窗口；更早保留的文件仅在服务端磁盘归档中。</p></div></div>
+            <div class="card"><div class="card-h"><h2>自动任务</h2><span class="badge neutral" id="sCredits">—</span></div><div class="card-b"><dl class="detail-list" id="schedChips"></dl><p class="settings-note">自动签到 / 新手领取的开关与 Token 保活分别生效。</p></div></div>
+            <div class="card"><div class="card-h"><h2>构建信息</h2><span class="badge neutral mono" id="buildBadge">未知构建</span></div><div class="card-b"><dl class="detail-list" id="buildInfo"></dl><p class="settings-note" id="buildDetails">构建身份尚未加载。</p></div></div>
+            <div class="card"><div class="card-h"><h2>OpenAI 兼容连接</h2></div><div class="card-b"><div class="connection-caption" style="margin-top:0">API Base URL</div><div class="connection-value"><code class="mono" id="settingsBaseUrl">—</code><button class="btn icon-btn ghost" type="button" data-copy-from="settingsBaseUrl" aria-label="复制 API Base URL"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button></div><dl class="detail-list" style="margin-top:7px"><dt>对话接口</dt><dd class="mono">POST /v1/chat/completions</dd><dt>验证方式</dt><dd class="mono">Bearer API Key</dd></dl></div></div>
+          </div>
+        </section>
       </div>
-    </div>
-    <div class="field">
-      <label>API Key</label>
-      <input id="keyInput" type="password" placeholder="Bearer token / config.json api_key" autocomplete="off"/>
-    </div>
-    <button class="btn primary" style="width:100%" id="loginBtn">进入控制台</button>
-    <p class="muted" style="margin-top:12px;font-size:12px">密钥仅保存在本机浏览器 localStorage，请求以 Authorization: Bearer 发送。</p>
+    </main>
   </div>
 </div>
-
-<div id="appView" class="wrap hidden">
-  <div class="top">
-    <div class="brand">
-      <div class="logo">__LOGO__</div>
-      <div>
-        <h1>__SERVICE_TITLE__</h1>
-        <p id="subTitle">账号池 · 签到及新手福利 · 模型</p>
-      </div>
-    </div>
-    <div class="actions">
-      <button class="btn primary" id="btnAddAccount">＋ 授权登录</button>
-      <button class="btn" id="btnRefresh">刷新</button>
-      <button class="btn" id="btnCredits">校验账号</button>
-      <button class="btn" id="btnCheckin">全员签到</button>
-      <button class="btn" id="btnKeepalive">保活 Token</button>
-      <button class="btn" id="btnReload">重载 auths</button>
-      <button class="btn ghost" id="btnLogout">退出</button>
-    </div>
-  </div>
-
-  <div class="grid">
-    <div class="stat"><div class="k">账号总数</div><div class="v" id="sTotal">—</div></div>
-    <div class="stat"><div class="k">可调度账号</div><div class="v" id="sHealthy">—</div></div>
-    <div class="stat"><div class="k">冷却 / 禁用</div><div class="v" id="sBad">—</div></div>
-    <div class="stat"><div class="k">自动签到 / 新手领取</div><div class="v" id="sCredits">—</div></div>
-  </div>
-
-  <div class="card">
-    <div class="card-h"><h2>运行配置</h2><span class="badge info mono" id="buildBadge">未知构建</span></div>
-    <div class="card-b">
-      <div class="chips" id="runtimeLimits"></div>
-      <div class="muted mono" style="font-size:11px;margin-top:10px;overflow-wrap:anywhere" id="buildDetails"></div>
-      <div class="muted" style="font-size:12px;margin-top:8px" id="auditLimits"></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-h">
-      <h2>账号列表</h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span class="muted mono" id="updatedAt"></span>
-        <button class="btn primary" id="btnAddAccount2" style="padding:6px 10px">＋ 授权登录</button>
-      </div>
-    </div>
-    <div class="card-b" style="padding:0;overflow-x:auto">
-      <table class="table" id="acctTable">
-        <thead>
-          <tr>
-            <th>账号</th>
-            <th>签到 / 新手福利</th>
-            <th>状态</th>
-            <th>原因 / 冷却至</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="acctBody"><tr><td colspan="5" class="empty">加载中…</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-h"><h2>模型</h2><span class="muted" id="modelCount"></span></div>
-    <div class="card-b"><div class="chips" id="modelChips"></div></div>
-  </div>
-
-  <div class="card">
-    <div class="card-h"><h2>调度</h2></div>
-    <div class="card-b">
-      <div class="chips" id="schedChips"></div>
-      <div class="foot">
-        <span>OpenAI base: <span class="mono" id="baseUrl"></span></span>
-        <span>API: <span class="mono">/v1/chat/completions</span></span>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-h">
-      <h2>最近请求</h2>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span class="muted" id="reqMeta"></span>
-        <button class="btn" id="btnReqRefresh" style="padding:6px 10px">刷新</button>
-      </div>
-    </div>
-    <div class="card-b" style="padding:0;overflow-x:auto">
-      <div class="chips" id="reqFilters" style="padding:10px 12px 0"></div>
-      <table class="table" id="reqTable">
-        <thead>
-          <tr>
-            <th>时间 / ID</th>
-            <th>模型</th>
-            <th>账号</th>
-            <th>状态</th>
-            <th>结果</th>
-            <th>尝试</th>
-            <th>排队 / 首数据 / 总</th>
-          </tr>
-        </thead>
-        <tbody id="reqBody"><tr><td colspan="7" class="empty">加载中…</td></tr></tbody>
-      </table>
-      <div class="foot" style="padding:10px 12px">
-        <span id="reqArchive"></span>
-        <button class="btn" id="btnReqMore" style="padding:6px 10px;display:none">更早</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="oauthModal" class="modal-mask hidden">
-  <div class="modal">
-    <div class="modal-h">
-      <h3>OAuth 授权登录</h3>
-      <button class="btn ghost" id="oauthClose" type="button">关闭</button>
-    </div>
-    <div class="modal-b">
-      <div class="steps">
-        <div><b>1.</b> 点击下方按钮在浏览器打开授权页</div>
-        <div><b>2.</b> 使用目标账号完成登录 / 授权</div>
-        <div><b>3.</b> 若浏览器停在 127.0.0.1，把地址栏中的完整回调地址粘贴到下方</div>
-        <div><b>4.</b> 回到本页，等待自动检测或点「我已授权」</div>
-      </div>
-      <div>
-        <div class="muted" style="font-size:12px;margin-bottom:6px">授权链接</div>
-        <div class="urlbox" id="oauthUrl">（发起后显示）</div>
-      </div>
-      <div>
-        <div class="muted" style="font-size:12px;margin-bottom:6px">远程浏览器回调中转</div>
-        <input id="oauthCallbackUrl" type="url" placeholder="http://127.0.0.1:7866/oauth/callback?..." autocomplete="off"/>
-      </div>
-      <div class="status-line muted" id="oauthStatus">尚未开始</div>
-    </div>
-    <div class="modal-f">
-      <button class="btn" id="oauthCopy" type="button" disabled>复制链接</button>
-      <button class="btn" id="oauthOpen" type="button" disabled>打开授权页</button>
-      <button class="btn" id="oauthImport" type="button" disabled>提交回调地址</button>
-      <button class="btn" id="oauthPoll" type="button" disabled>我已授权</button>
-      <button class="btn primary" id="oauthStart" type="button">发起授权</button>
-    </div>
-  </div>
+  <section class="modal" role="dialog" aria-modal="true" aria-labelledby="oauthTitle" aria-describedby="oauthSteps">
+    <div class="modal-h"><h2 id="oauthTitle">OAuth 授权登录</h2><button class="btn icon-btn ghost" id="oauthClose" type="button" aria-label="关闭 OAuth 授权窗口"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="modal-b"><ol class="steps" id="oauthSteps"><li>发起授权，然后在浏览器打开授权页。</li><li>使用目标账号完成登录与授权。</li><li>若停在 127.0.0.1，请将完整回调地址粘贴到下方。</li><li>回到此页等待自动检测，或点击「我已授权」。</li></ol><div class="modal-field"><span class="field-label" id="oauthUrlLabel">授权链接</span><div class="urlbox" id="oauthUrl" aria-labelledby="oauthUrlLabel">（发起后显示）</div></div><div class="modal-field"><label for="oauthCallbackUrl">远程浏览器回调中转</label><input class="input" id="oauthCallbackUrl" type="url" placeholder="http://127.0.0.1:7866/oauth/callback?..." autocomplete="off"/></div><div class="status-line muted" id="oauthStatus" role="status" aria-live="polite">尚未开始</div></div>
+    <div class="modal-f"><button class="btn" id="oauthCopy" type="button" disabled>复制链接</button><button class="btn" id="oauthOpen" type="button" disabled>打开授权页</button><button class="btn" id="oauthImport" type="button" disabled>提交回调地址</button><button class="btn" id="oauthPoll" type="button" disabled>我已授权</button><button class="btn primary" id="oauthStart" type="button">发起授权</button></div>
+  </section>
 </div>
-
 <script>
 const SERVICE = "__SERVICE_NAME__";
 const KEY_STORE = SERVICE + "_panel_api_key";
-const BASE = (() => {
-  let p = location.pathname.replace(/\/+$/, "") || "";
-  if (p.endsWith("/panel")) p = p.slice(0, -"/panel".length);
-  if (p === "" || p === "/") return "";
-  return p;
-})();
-const $ = (id) => document.getElementById(id);
+const THEME_STORE = SERVICE + "_panel_theme";
+const BASE = location.pathname.replace(/\/+$/, "").replace(/\/(?:panel|admin)$/, "");
+const $ = id => document.getElementById(id);
+const viewInfo = {
+  overview:["总览","查看账号池容量与服务连接信息。"],
+  accounts:["账号管理","管理授权账号、当前可用状态与失败历史。"],
+  requests:["请求审计","在有界近期窗口中调查请求结果与耗时。"],
+  models:["模型目录","浏览服务发现的模型，复制标识用于客户端配置。"],
+  settings:["运行配置","查看当前生效的限制、自动任务与构建信息。"]
+};
+let activePage = "overview", overviewData = null, authEpoch = 0, overviewVersion = 0;
+const pendingAccounts = new Set();
+const mobileQuery = window.matchMedia("(max-width: 767px)");
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+let themePreference = "";
 
-function toast(msg, ok=true){
-  const t = $("toast");
-  t.textContent = msg;
-  t.style.borderColor = ok ? "rgba(34,197,94,.4)" : "rgba(239,68,68,.45)";
-  t.classList.add("show");
-  clearTimeout(t._tm);
-  t._tm = setTimeout(()=>t.classList.remove("show"), 3200);
+function escapeHtml(value){
+  return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 }
+function escapeAttr(value){ return escapeHtml(value).replace(/`/g, "&#96;"); }
+function icon(name){ return `<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`; }
+function numberValue(value){ return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null; }
+function numberText(value){ return numberValue(value) ?? "未知"; }
+function fmtTime(value){
+  if (!value || String(value).startsWith("0001-")) return "未知";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+}
+function shortUID(value){ const uid = String(value || ""); return uid.length > 16 ? uid.slice(0,8) + "…" + uid.slice(-6) : uid || "—"; }
+function detailRows(rows){ return rows.map(([label,value,mono]) => `<dt>${escapeHtml(label)}</dt><dd${mono ? ' class="mono"' : ""}>${escapeHtml(value ?? "未知")}</dd>`).join(""); }
+function toast(message, ok=true){
+  const element = $("toast");
+  element.textContent = message;
+  element.style.borderColor = ok ? "var(--line)" : "var(--bad)";
+  element.classList.add("show");
+  clearTimeout(element._tm);
+  element._tm = setTimeout(() => element.classList.remove("show"),3200);
+}
+function applyTheme(){
+  const theme = themePreference || (darkQuery.matches ? "dark" : "light");
+  document.documentElement.dataset.theme = theme;
+  const label = theme === "dark" ? "切换为浅色模式" : "切换为深色模式";
+  $("themeToggle").setAttribute("aria-label",label);
+  $("themeToggle").setAttribute("aria-pressed",String(theme === "dark"));
+  $("themeToggle").title = label;
+}
+try { const saved = localStorage.getItem(THEME_STORE); if (saved === "light" || saved === "dark") themePreference = saved; } catch {}
+applyTheme();
+darkQuery.addEventListener("change",() => { if (!themePreference) applyTheme(); });
+$("themeToggle").onclick = () => {
+  themePreference = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  try { localStorage.setItem(THEME_STORE,themePreference); } catch {}
+  applyTheme();
+};
+
+function focusables(container){ return [...container.querySelectorAll('a[href],button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]')].filter(element => !element.hidden && element.getClientRects().length); }
+function trapFocus(event, container){
+  const items = focusables(container);
+  if (!items.length) return;
+  const first = items[0], last = items[items.length - 1];
+  if (event.shiftKey && (document.activeElement === first || !container.contains(document.activeElement))){ event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && (document.activeElement === last || !container.contains(document.activeElement))){ event.preventDefault(); first.focus(); }
+}
+function setDrawer(open, restoreFocus=true){
+  const wasOpen = $("appView").classList.contains("drawer-open");
+  open = !!open && mobileQuery.matches;
+  $("appView").classList.toggle("drawer-open",open);
+  $("sidebarToggle").setAttribute("aria-expanded",String(open));
+  $("sidebarToggle").setAttribute("aria-label",open ? "关闭导航菜单" : "打开导航菜单");
+  $("sidebar").inert = mobileQuery.matches && !open;
+  $("mainContent").inert = open;
+  $("appHeader").inert = open;
+  if (mobileQuery.matches){
+    $("sidebar").setAttribute("aria-hidden",String(!open));
+    if (open){ $("sidebar").setAttribute("role","dialog"); $("sidebar").setAttribute("aria-modal","true"); }
+    else { $("sidebar").removeAttribute("role"); $("sidebar").removeAttribute("aria-modal"); }
+  } else { $("sidebar").removeAttribute("aria-hidden"); $("sidebar").removeAttribute("role"); $("sidebar").removeAttribute("aria-modal"); }
+  if (open) $("sidebarClose").focus();
+  else if (wasOpen && restoreFocus) $("sidebarToggle").focus();
+}
+$("sidebarToggle").onclick = () => setDrawer(!$("appView").classList.contains("drawer-open"));
+$("sidebarClose").onclick = () => setDrawer(false);
+$("drawerBackdrop").onclick = () => setDrawer(false);
+mobileQuery.addEventListener("change",() => setDrawer(false,false));
+setDrawer(false,false);
+function routePage(moveFocus=false){
+  const hash = location.hash.slice(1), page = Object.hasOwn(viewInfo,hash) ? hash : "overview";
+  if (hash !== page) history.replaceState(null,"",location.pathname + location.search + "#" + page);
+  const changed = page !== activePage;
+  activePage = page;
+  document.querySelectorAll("[data-view]").forEach(element => { element.hidden = element.dataset.view !== page; });
+  document.querySelectorAll(".nav-item[data-page]").forEach(element => {
+    if (element.dataset.page === page) element.setAttribute("aria-current","page"); else element.removeAttribute("aria-current");
+  });
+  $("pageTitle").textContent = viewInfo[page][0];
+  $("pageDescription").textContent = viewInfo[page][1];
+  $("btnAddAccount").hidden = page !== "accounts";
+  document.title = viewInfo[page][0] + " · __SERVICE_TITLE__";
+  setDrawer(false,false);
+  if (changed) $("pageContent").scrollTop = 0;
+  if (moveFocus && !$("appView").classList.contains("hidden")) $("pageTitle").focus({preventScroll:true});
+  if (page === "requests" && overviewData && !reqState.loaded && !reqState.loading) loadRequests(true).catch(() => {});
+}
+document.addEventListener("click",event => {
+  const link = event.target.closest("a[data-page]");
+  if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button > 0) return;
+  event.preventDefault();
+  const page = link.dataset.page;
+  if (!Object.hasOwn(viewInfo,page)) return;
+  if (location.hash === "#" + page) routePage(true); else location.hash = page;
+});
+window.addEventListener("hashchange",() => routePage(true));
+$("skipLink").onclick = event => { event.preventDefault(); if (!$("appView").classList.contains("hidden")) $("mainContent").focus(); else $("keyInput").focus(); };
 
 function getKey(){ return localStorage.getItem(KEY_STORE) || ""; }
-function setKey(k){ localStorage.setItem(KEY_STORE, k); }
+function setKey(key){ localStorage.setItem(KEY_STORE,key); }
 function clearKey(){ localStorage.removeItem(KEY_STORE); }
-
 async function api(path, opts={}){
-  const headers = Object.assign({"Content-Type":"application/json"}, opts.headers||{});
-  const key = getKey();
-  if (key) headers["Authorization"] = "Bearer " + key;
-  const url = (path.startsWith("http") || path.startsWith(BASE + "/") || !path.startsWith("/"))
-    ? path : (BASE + path);
-  const res = await fetch(url, Object.assign({}, opts, {headers}));
-  const text = await res.text();
+  const headers = Object.assign({"Content-Type":"application/json"},opts.headers || {}), key = getKey();
+  if (key) headers.Authorization = "Bearer " + key;
+  const url = path.startsWith("http") || path.startsWith(BASE + "/") || !path.startsWith("/") ? path : BASE + path;
+  const response = await fetch(url,Object.assign({},opts,{headers}));
+  const text = await response.text();
   let data = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = {raw:text}; }
-  if (!res.ok){
-    const msg = (data && (data.error?.message || data.message || data.error)) || (text || res.statusText);
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  if (!response.ok){
+    const message = data && (data.error?.message || data.message || data.error) || text || response.statusText;
+    const error = new Error(typeof message === "string" ? message : JSON.stringify(message));
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
-
-function statusBadge(a){
-  if (a.disabled) return '<span class="badge bad">禁用</span>';
-  if (a.cooling) return '<span class="badge warn">冷却</span>';
-  return '<span class="badge ok">可调度</span>';
+function accountState(account){ return account.disabled ? "disabled" : account.cooling ? "cooling" : "ready"; }
+function statusBadge(account){
+  const [style,label] = {disabled:["neutral","已禁用"],cooling:["warn","冷却中"],ready:["ok","可调度"]}[accountState(account)];
+  return `<span class="badge ${style}"><span class="dot"></span>${label}</span>`;
 }
-
-// currentReason shows only what is true *now*; a stale last_error is not a
-// current fault, so it moves to failureHistory instead of being printed here.
-function currentReason(a){
-  if (a.disabled) return a.reason || "已禁用";
-  if (a.cooling) return a.reason || "冷却中";
-  return "可调度";
-}
-
-// failureHistory is presentation-only history; unknown legacy timestamps are
-// labelled honestly instead of being invented.
-function failureHistory(a){
+// Availability is current state; historic errors must never imply a cooldown.
+function currentReason(account){ return account.disabled ? account.reason || "已禁用" : account.cooling ? account.reason || "冷却中" : "当前可调度"; }
+function failureHistory(account){
   const parts = [];
-  if (a.last_failure_text) parts.push(a.last_failure_text);
-  else if (a.last_error) parts.push(a.last_error);
-  if (a.err_count) parts.push("连续失败 " + a.err_count + " 次");
+  if (account.last_failure_class) parts.push(account.last_failure_class);
+  if (account.last_failure_text || account.last_error) parts.push(account.last_failure_text || account.last_error);
+  if (account.err_count) parts.push("连续失败 " + account.err_count + " 次");
   if (!parts.length) return "无失败记录";
-  const at = a.last_failure_at || a.last_error_at;
-  const when = at ? fmtTime(at) : "时间未知（旧记录）";
-  return "上次失败：" + when + " · " + parts.join(" · ");
+  const at = account.last_failure_at || account.last_error_at;
+  return "上次失败：" + (at ? fmtTime(at) : "时间未知（旧记录）") + " · " + parts.join(" · ");
 }
-
-function fmtTime(t){
-  if (!t || t.startsWith("0001-")) return "—";
-  try {
-    const d = new Date(t);
-    if (isNaN(d.getTime())) return t;
-    return d.toLocaleString();
-  } catch { return t; }
+function sumAccountField(accounts, field){
+  const values = accounts.map(account => numberValue(account[field]));
+  return values.some(value => value === null) ? null : values.reduce((sum,value) => sum + value,0);
 }
-
-function shortUID(u){
-  if (!u) return "—";
-  return u.length > 14 ? u.slice(0,8) + "…" + u.slice(-4) : u;
-}
-
-function render(data){
-  const st = data.stats || {};
-  $("sTotal").textContent = st.total ?? 0;
-  $("sHealthy").textContent = st.healthy ?? 0;
-  $("sBad").textContent = `${st.cooling??0} / ${st.disabled??0}`;
-  $("sCredits").textContent = data.schedule?.watch?.enabled && data.schedule?.watch?.credits_auto_claim ? "已开启" : "已关闭";
-  $("updatedAt").textContent = "更新于 " + new Date().toLocaleTimeString();
-  $("baseUrl").textContent = location.origin + BASE + "/v1";
-  $("subTitle").textContent = (data.service || SERVICE) + " · " + (data.region || "cn");
-
-  const build = data.build || {};
-  const knownBuild = build.known && build.commit;
-  $("buildBadge").textContent = knownBuild ? String(build.commit).slice(0,12) : "未知构建";
-  $("buildDetails").textContent = (knownBuild ? "提交 " + build.commit : "未提供构建身份") + " · 构建时间 " + (build.built_at ? fmtTime(build.built_at) : "未知");
-  const limits = data.effective || {};
-  const labels = [["startup_timeout","启动预算"],["account_wait_timeout","账号等待"],["upstream_idle_timeout","上游空闲"],["stream_write_timeout","下游写入"],["max_pending","等待上限"],["queue_max_attempts","每账号尝试"],["queue_retry_delay","重试间隔"]];
-  $("runtimeLimits").innerHTML = labels.map(([key,label]) => `<span class="chip">${label} ${escapeHtml(limits[key] ?? "未知")}</span>`).join("");
-  const audit = data.audit || {};
-  const mib = value => Math.round(Number(value || 0) / 1048576 * 10) / 10;
-  $("auditLimits").textContent = audit.enabled
-    ? `审计：保留 ${audit.retention_days} 天 · 最多 ${audit.max_files} 个文件 · 单文件 ${mib(audit.max_file_bytes)} MiB · 合计 ${mib(audit.max_total_bytes)} MiB · 近期 ${audit.recent} 条 · 队列 ${audit.max_queue}`
-    : "请求审计已关闭";
-
-  const body = $("acctBody");
-  const accounts = data.accounts || [];
+function renderAccounts(){
+  const all = overviewData?.accounts || [];
+  const search = $("acctSearch").value.trim().toLowerCase(), status = $("acctStatus").value;
+  const accounts = all.filter(account => (!status || accountState(account) === status) && (!search || [account.nickname,account.user_name,account.name,account.uid].some(value => String(value || "").toLowerCase().includes(search))));
+  $("acctMeta").textContent = `显示 ${accounts.length} / ${all.length} 个账号`;
   if (!accounts.length){
-    body.innerHTML = `<tr><td colspan="5" class="empty">暂无账号。点击右上角 <b>授权登录</b> 添加，或服务器运行 <span class="mono">./login.sh</span></td></tr>`;
-  } else {
-    body.innerHTML = accounts.map(a => {
-      const reason = a.reason || "—";
-      const until = a.cooling ? fmtTime(a.until) : "—";
-      return `<tr>
-        <td>
-          <div><strong>${escapeHtml(a.nickname || "未命名")}</strong></div>
-          <div class="mono muted" title="${escapeHtml(a.uid||"")}">${escapeHtml(shortUID(a.uid))}</div>
-        </td>
-        <td><div class="${a.checkin && !a.checkin.ok ? 'muted' : ''}">${escapeHtml(a.checkin?.message || "尚未查询")}</div><div class="muted" style="font-size:11px">${a.checkin ? escapeHtml(fmtTime(a.checkin.checked_at)) : ""}</div></td>
-        <td>${statusBadge(a)}${a.err_count?` <span class="badge info">连续失败 ${a.err_count}</span>`:""}<div class="muted mono" style="font-size:11px;margin-top:5px">并发 ${Number(a.active_concurrent)||0} / ${Number(a.max_concurrent)||0}</div></td>
-        <td>
-          <div class="muted">${escapeHtml(currentReason(a))}</div>
-          <div class="mono muted" style="font-size:11px">${escapeHtml(until)}</div>
-          <div class="muted" style="font-size:11px">${escapeHtml(failureHistory(a))}</div>
-        </td>
-        <td><div class="row-actions">
-          <button class="btn" data-act="credits" data-uid="${escapeAttr(a.uid)}">校验</button>
-          <button class="btn" data-act="checkin" data-uid="${escapeAttr(a.uid)}">签到</button>
-          ${a.disabled
-            ? `<button class="btn" data-act="enable" data-uid="${escapeAttr(a.uid)}">启用</button>`
-            : `<button class="btn danger" data-act="disable" data-uid="${escapeAttr(a.uid)}">禁用</button>`}
-          ${a.cooling && !a.disabled ? `<button class="btn" data-act="clear" data-uid="${escapeAttr(a.uid)}">清冷却</button>` : ""}
-        </div></td>
-      </tr>`;
-    }).join("");
-  }
-
-  const models = data.models || [];
-  $("modelCount").textContent = models.length + " 个";
-  $("modelChips").innerHTML = models.length
-    ? models.map(m => `<span class="chip mono">${escapeHtml(m.id || m)}</span>`).join("")
-    : `<span class="muted">暂无模型</span>`;
-
-  const sch = data.schedule || {};
-  const chips = [];
-  if (sch.watch?.enabled && sch.watch?.credits_auto_claim) chips.push(`<span class="chip">自动签到 / 新手领取 · 每 ${Number(sch.watch.poll_minutes)||30} 分钟检查</span>`);
-  if (sch.checkin_hours?.length) chips.push(`<span class="chip">签到 ${sch.checkin_hours.map(h=>String(h).padStart(2,"0")+":00").join(" / ")}</span>`);
-  if (sch.keepalive_hours?.length) chips.push(`<span class="chip">保活 ${sch.keepalive_hours.map(h=>String(h).padStart(2,"0")+":00").join(" / ")}</span>`);
-  $("schedChips").innerHTML = chips.join("") || `<span class="muted">未配置</span>`;
-}
-
-function escapeHtml(s){
-  return String(s??"").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-}
-function escapeAttr(s){ return escapeHtml(s).replace(/`/g,""); }
-
-// ---- recent request audit (bounded in-memory window; older files are archive)
-const reqState = { before: 0, outcome: "", model: "", account: "", rows: [], hasMore: false };
-
-function reqStatusCell(ev){
-  if (ev.committed) return `<span class="mono">${escapeHtml(String(ev.status||0))}</span>`;
-  return `<span class="muted">未提交</span>`;
-}
-
-function reqCause(ev){
-  const c = ev.cause || {};
-  const bits = [];
-  if (c.class && c.class !== "none") bits.push(`<span class="muted">${escapeHtml(c.class)}</span>`);
-  if (c.text) bits.push(escapeHtml(c.text));
-  // Safe provider code (token alphabet only) alongside the fixed description.
-  let out = bits.join(" · ");
-  if (c.code) out += ` <span class="mono muted" style="font-size:11px">[${escapeHtml(c.code)}]</span>`;
-  if (!out) return "—";
-  if (ev.error_code) out += `<div class="mono muted" style="font-size:11px">${escapeHtml(ev.error_code)}</div>`;
-  return out;
-}
-
-function reqMs(v){
-  if (v === null || v === undefined) return "—";
-  return Number(v) + "ms";
-}
-
-function renderRequests(page){
-  const events = page.events || [];
-  const body = $("reqBody");
-  if (page.disabled){
-    body.innerHTML = `<tr><td colspan="7" class="empty">审计已关闭</td></tr>`;
-    $("reqMeta").textContent = "已关闭";
-    $("reqArchive").textContent = "";
-    $("btnReqMore").style.display = "none";
+    $("acctBody").innerHTML = `<tr><td colspan="5" class="empty">${icon("users")}<strong>${all.length ? "没有匹配的账号" : "账号池暂无账号"}</strong>${all.length ? "调整搜索或状态筛选后重试。" : "点击「授权登录」添加账号，也可在服务端运行 ./login.sh。"}</td></tr>`;
     return;
   }
-  const rows = reqState.before ? reqState.rows.concat(events) : events;
-  reqState.rows = rows;
-  reqState.hasMore = !!page.has_more;
-  if (page.next_before) reqState.before = page.next_before;
-  const dropped = Number(page.dropped || 0), failed = Number(page.write_failures || 0);
-  $("reqMeta").textContent = `窗口 ${page.window||0} 条 · 丢弃 ${dropped} · 写入失败 ${failed}`;
-  $("reqArchive").textContent = "更早的记录保存在本地磁盘归档文件中（不在此窗口内）。";
-  $("btnReqMore").style.display = page.has_more ? "inline-block" : "none";
-  if (!rows.length){
-    body.innerHTML = `<tr><td colspan="7" class="empty">暂无请求记录</td></tr>`;
-    return;
-  }
-  body.innerHTML = rows.map(ev => `<tr>
-    <td><div class="mono" style="font-size:11px">${escapeHtml(fmtTime(ev.ts))}</div><div class="mono muted" style="font-size:11px" title="${escapeAttr(ev.id)}">${escapeHtml(String(ev.id||"").slice(0,8))}</div></td>
-    <td><div class="mono">${escapeHtml(ev.model || "—")}</div><div class="muted" style="font-size:11px">${ev.stream ? "stream" : "non-stream"}</div></td>
-    <td class="mono" style="font-size:11px">${escapeHtml(ev.account || "—")}</td>
-    <td>${reqStatusCell(ev)}<div class="muted" style="font-size:11px">${escapeHtml(ev.outcome || "")}</div></td>
-    <td style="font-size:12px">${reqCause(ev)}</td>
-    <td class="mono">${escapeHtml(String(ev.attempts||0))}</td>
-    <td class="mono" style="font-size:11px">${reqMs(ev.queue_ms)} / ${reqMs(ev.first_data_ms)} / ${reqMs(ev.total_ms)}</td>
-  </tr>`).join("");
-}
-
-async function loadRequests(reset){
-  if (reset){ reqState.before = 0; reqState.rows = []; }
-  const params = new URLSearchParams();
-  params.set("limit", "50");
-  if (reqState.before) params.set("before", String(reqState.before));
-  if (reqState.outcome) params.set("outcome", reqState.outcome);
-  if (reqState.model) params.set("model", reqState.model);
-  if (reqState.account) params.set("account", reqState.account);
-  const page = await api("/admin/api/requests?" + params.toString());
-  renderRequests(page);
-}
-
-function renderReqFilters(){
-  const opts = ["", "ok", "model_unavailable", "upstream_saturated", "queue_wait_timeout", "admission_rejected", "timeout", "request_body_timeout", "canceled", "downstream_canceled", "upstream_body_error", "upstream_stream_error", "invalid_request", "no_healthy_account"];
-  const chips = opts.map(o => {
-    const label = o || "全部";
-    const cls = reqState.outcome === o ? "chip active" : "chip";
-    return `<span class="${cls}" data-outcome="${escapeAttr(o)}" style="cursor:pointer">${escapeHtml(label)}</span>`;
+  $("acctBody").innerHTML = accounts.map(account => {
+    const pending = pendingAccounts.has(account.uid) ? " disabled" : "";
+    return `<tr>
+    <td><strong>${escapeHtml(account.nickname || account.user_name || account.name || "未命名")}</strong><span class="secondary mono" title="${escapeAttr(account.uid)}">${escapeHtml(shortUID(account.uid))}</span>${account.name && account.name !== account.uid ? `<span class="secondary mono">${escapeHtml(account.name)}</span>` : ""}${account.token_remaining ? `<span class="secondary">Token 剩余 ${escapeHtml(account.token_remaining)}</span>` : ""}</td>
+    <td><span>${escapeHtml(account.checkin?.message || "尚未查询")}</span><span class="secondary">${account.checkin ? escapeHtml(fmtTime(account.checkin.checked_at)) : ""}</span></td>
+    <td>${statusBadge(account)}<span class="secondary mono">并发 ${numberText(account.active_concurrent)} / ${numberText(account.max_concurrent)}</span></td>
+    <td><span>${escapeHtml(currentReason(account))}</span>${account.cooling ? `<span class="secondary">冷却至 ${escapeHtml(fmtTime(account.until))}</span>` : ""}<span class="secondary">${escapeHtml(failureHistory(account))}</span>${account.last_success_at ? `<span class="secondary">上次成功 ${escapeHtml(fmtTime(account.last_success_at))}</span>` : ""}</td>
+    <td><div class="row-actions"><button class="btn small-btn" type="button" data-act="credits" data-uid="${escapeAttr(account.uid)}"${pending}>校验</button><button class="btn small-btn" type="button" data-act="checkin" data-uid="${escapeAttr(account.uid)}"${pending}>签到</button>${account.disabled ? `<button class="btn small-btn" type="button" data-act="enable" data-uid="${escapeAttr(account.uid)}"${pending}>启用</button>` : `<button class="btn small-btn danger" type="button" data-act="disable" data-uid="${escapeAttr(account.uid)}"${pending}>禁用</button>`}${account.cooling && !account.disabled ? `<button class="btn small-btn" type="button" data-act="clear" data-uid="${escapeAttr(account.uid)}"${pending}>清冷却</button>` : ""}</div></td>
+  </tr>`;
   }).join("");
-  $("reqFilters").innerHTML = chips + `
-    <input id="reqModel" class="mono" placeholder="model 过滤" value="${escapeAttr(reqState.model)}" style="margin-left:8px;padding:4px 8px;border-radius:6px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;width:150px">
-    <input id="reqAccount" class="mono" placeholder="账号过滤" value="${escapeAttr(reqState.account)}" style="padding:4px 8px;border-radius:6px;border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;width:150px">`;
 }
+function renderModels(){
+  const all = overviewData?.models || [], query = $("modelSearch").value.trim().toLowerCase();
+  const models = all.map(model => String(model.id ?? model)).filter(id => id.toLowerCase().includes(query));
+  $("modelCount").textContent = query ? `显示 ${models.length} / ${all.length} 个模型` : `${all.length} 个模型`;
+  $("modelChips").innerHTML = models.length ? models.map(id => `<article class="model-item"><span class="stat-icon">${icon("models")}</span><div class="model-info"><h3>${escapeHtml(id)}</h3><p>模型标识</p></div><button class="btn icon-btn ghost" type="button" data-copy-model="${escapeAttr(id)}" aria-label="复制模型 ID ${escapeAttr(id)}">${icon("copy")}</button></article>`).join("") : `<div class="empty">${icon("models")}<strong>${all.length ? "没有匹配的模型" : "暂无模型"}</strong>${all.length ? "请尝试其他模型标识。" : "服务尚未返回模型目录。"}</div>`;
+}
+function render(data){
+  overviewData = data;
+  const stats = data.stats || {}, accounts = data.accounts || [], models = data.models || [];
+  const total = numberValue(stats.total), healthy = numberValue(stats.healthy), cooling = numberValue(stats.cooling), disabled = numberValue(stats.disabled);
+  $("sTotal").textContent = numberText(stats.total);
+  $("sHealthy").textContent = numberText(stats.healthy);
+  $("sBad").textContent = `${numberText(stats.cooling)} / ${numberText(stats.disabled)}`;
+  $("sConcurrency").textContent = `${sumAccountField(accounts,"active_concurrent") ?? "未知"} / ${sumAccountField(accounts,"max_concurrent") ?? "未知"}`;
+  $("sModels").textContent = models.length;
+  $("navAccountCount").textContent = numberText(stats.total);
+  $("navModelCount").textContent = models.length;
+  const updated = new Date().toLocaleTimeString();
+  $("updatedAt").textContent = $("overviewUpdated").textContent = "更新于 " + updated;
+  $("baseUrl").textContent = $("settingsBaseUrl").textContent = location.origin + BASE + "/v1";
+  $("subTitle").textContent = (data.service || SERVICE) + " · " + (data.region || "未知区域");
+  $("poolReady").textContent = numberText(stats.healthy);
+  $("poolCooling").textContent = numberText(stats.cooling);
+  $("poolDisabled").textContent = numberText(stats.disabled);
+  $("readySlots").textContent = sumAccountField(accounts.filter(account => accountState(account) === "ready"),"max_concurrent") ?? "未知";
+  const countsKnown = [total,healthy,cooling,disabled].every(value => value !== null);
+  $("poolHeadline").textContent = total === 0 ? "添加账号，开始使用" : healthy === null ? "账号状态未知" : healthy > 0 ? `${healthy} 个账号可参与调度` : "暂无可调度账号";
+  $("poolBadge").textContent = total === 0 ? "账号池为空" : healthy === null ? "未知" : healthy > 0 ? "可调度" : "需要检查";
+  $("poolBadge").className = "badge " + (total === 0 || healthy === null ? "neutral" : healthy > 0 ? "ok" : "warn");
+  [["healthReady",healthy],["healthCooling",cooling],["healthDisabled",disabled]].forEach(([id,value]) => { $(id).style.width = countsKnown && total > 0 ? Math.max(0,Math.min(100,value / total * 100)) + "%" : "0%"; });
+  $("healthMeter").setAttribute("aria-label",`账号状态：可调度 ${numberText(stats.healthy)}，冷却 ${numberText(stats.cooling)}，禁用 ${numberText(stats.disabled)}`);
+  const limits = data.effective || {};
+  $("overviewDefaultModel").textContent = limits.default_model || "未知";
+  $("runtimeLimits").innerHTML = detailRows([["启动总预算",limits.startup_timeout],["账号等待超时",limits.account_wait_timeout],["上游空闲超时",limits.upstream_idle_timeout],["下游写入超时",limits.stream_write_timeout],["等待请求上限",limits.max_pending],["每账号尝试次数",limits.queue_max_attempts],["重试间隔",limits.queue_retry_delay],["轮换次数限制",limits.max_rotate],["默认模型",limits.default_model,true]]);
+  const build = data.build || {}, known = !!(build.known && build.commit);
+  $("buildBadge").textContent = known ? String(build.commit).slice(0,12) : "未知构建";
+  $("sidebarBuild").textContent = known ? "构建 " + String(build.commit).slice(0,12) : "构建身份未知";
+  $("buildInfo").innerHTML = detailRows([["提交标识",known ? build.commit : "未知",true],["构建时间",build.built_at ? fmtTime(build.built_at) : "未知"],["服务",data.service || SERVICE],["区域",data.region || "未知"]]);
+  $("buildDetails").textContent = known ? "构建标识由服务运行时提供。" : "服务未提供构建身份，无法从本页确认当前提交。";
+  const audit = data.audit || {}, auditEnabled = audit.enabled === true;
+  $("auditBadge").textContent = auditEnabled ? "已开启" : audit.enabled === false ? "已关闭" : "未知";
+  $("auditBadge").className = "badge " + (auditEnabled ? "ok" : "neutral");
+  const mib = value => numberValue(value) === null ? "未知" : Math.round(Number(value) / 1048576 * 10) / 10 + " MiB";
+  $("auditLimits").innerHTML = detailRows([["状态",auditEnabled ? "记录请求元数据" : audit.enabled === false ? "请求审计已关闭" : "未知"],["保留天数",audit.retention_days],["文件数量上限",audit.max_files],["单文件上限",mib(audit.max_file_bytes)],["总存储上限",mib(audit.max_total_bytes)],["近期窗口上限",audit.recent],["写入队列上限",audit.max_queue],["当前排队",audit.queued],["丢弃记录",audit.dropped],["写入失败",audit.write_failures]]);
+  const schedule = data.schedule || {}, watch = schedule.watch || {};
+  const autoClaim = watch.enabled === true && watch.credits_auto_claim === true;
+  const claimKnown = watch.enabled === false || watch.credits_auto_claim === false || autoClaim;
+  $("sCredits").textContent = "自动领取 " + (claimKnown ? autoClaim ? "已开启" : "已关闭" : "未知");
+  const yesNo = value => value === true ? "已开启" : value === false ? "已关闭" : "未知";
+  const minutes = value => numberValue(value) === null ? "未知" : value + " 分钟";
+  const hours = values => !Array.isArray(values) ? "未知" : values.length ? values.map(value => String(value).padStart(2,"0") + ":00").join(" / ") : "未配置";
+  $("schedChips").innerHTML = detailRows([["自动任务",yesNo(watch.enabled)],["自动签到 / 新手领取",claimKnown ? yesNo(autoClaim) : "未知"],["检查间隔",minutes(watch.poll_minutes)],["Token 提前刷新",minutes(watch.refresh_skew_minutes)],["保活间隔",minutes(watch.keepalive_interval)],["定时签到",hours(schedule.checkin_hours)],["定时保活",hours(schedule.keepalive_hours)]]);
+  renderAccounts();
+  renderModels();
+}
+$("acctSearch").addEventListener("input",renderAccounts);
+$("acctStatus").addEventListener("change",renderAccounts);
+$("modelSearch").addEventListener("input",renderModels);
+
+// The API pages an exclusive cursor over a bounded recent window, not archives.
+const reqState = {before:0,outcome:"",model:"",account:"",status:"",rows:[],hasMore:false,loaded:false,loading:false,version:0,query:null};
+const outcomeLabels = [["","全部执行结果"],["ok","成功 · ok"],["model_unavailable","模型不可用 · model_unavailable"],["upstream_saturated","上游繁忙 · upstream_saturated"],["queue_wait_timeout","排队超时 · queue_wait_timeout"],["admission_rejected","准入拒绝 · admission_rejected"],["timeout","超时 · timeout"],["request_body_timeout","请求体超时 · request_body_timeout"],["canceled","已取消 · canceled"],["downstream_canceled","下游取消 · downstream_canceled"],["upstream_body_error","上游响应错误 · upstream_body_error"],["upstream_stream_error","流式错误 · upstream_stream_error"],["invalid_request","请求无效 · invalid_request"],["no_healthy_account","无可用账号 · no_healthy_account"]];
+function renderReqFilters(){
+  $("reqOutcome").innerHTML = outcomeLabels.map(([value,label]) => `<option value="${value}">${label}</option>`).join("");
+  $("reqOutcome").value = reqState.outcome; $("reqModel").value = reqState.model; $("reqAccount").value = reqState.account; $("reqStatus").value = reqState.status;
+}
+function reqStatusCell(event){ return event.committed ? `<span class="mono">${escapeHtml(event.status ?? "未知")}</span>` : '<span class="muted small">未提交</span>'; }
+function reqCause(event){
+  const cause = event.cause || {}, parts = [];
+  if (cause.class && cause.class !== "none") parts.push(`<span class="muted">${escapeHtml(cause.class)}</span>`);
+  if (cause.text) parts.push(escapeHtml(cause.text));
+  let text = parts.join(" · ") || "—";
+  if (cause.code) text += `<span class="secondary mono">[${escapeHtml(cause.code)}]</span>`;
+  if (event.error_code) text += `<span class="secondary mono">${escapeHtml(event.error_code)}</span>`;
+  return text;
+}
+function reqMs(value){ const number = numberValue(value); return number === null ? "—" : number + "ms"; }
+function renderRequests(page, append=false){
+  const rows = page.disabled ? [] : append ? reqState.rows.concat(page.events || []) : page.events || [];
+  reqState.rows = rows; reqState.before = page.disabled ? 0 : page.next_before || 0;
+  reqState.hasMore = !page.disabled && !!page.has_more && !!reqState.before; reqState.loaded = true;
+  $("btnReqMore").hidden = !reqState.hasMore;
+  $("reqMeta").textContent = page.disabled ? "请求审计已关闭" : `近期窗口 ${numberText(page.window)} 条 · 已加载 ${rows.length} 条 · 丢弃 ${numberText(page.dropped)} · 写入失败 ${numberText(page.write_failures)}`;
+  $("reqArchive").textContent = page.disabled ? "启用请求审计后，新的请求元数据将显示在此处。" : "更早保留的记录位于服务端磁盘归档，不在此查询窗口内；新请求可能淘汰窗口中较旧记录。";
+  const dropped = Number(page.dropped || 0), failed = Number(page.write_failures || 0);
+  $("reqLoss").hidden = page.disabled || !(dropped || failed);
+  $("reqLoss").textContent = `审计有损失：丢弃 ${dropped} 条，写入失败 ${failed} 次。近期窗口与磁盘归档可能不完整。`;
+  if (!rows.length){ $("reqBody").innerHTML = `<tr><td colspan="7" class="empty">${icon("requests")}<strong>${page.disabled ? "请求审计已关闭" : "暂无匹配请求"}</strong>${page.disabled ? "当前服务没有记录请求元数据。" : "可以调整筛选条件，或等待新的请求。"}</td></tr>`; return; }
+  $("reqBody").innerHTML = rows.map(event => {
+    const outcomeClass = event.outcome === "ok" ? "success" : String(event.outcome || "").includes("canceled") ? "canceled" : "";
+    const tried = Array.isArray(event.tried) ? event.tried.join(" → ") : "";
+    return `<tr><td><div class="small">${escapeHtml(fmtTime(event.ts))}</div><span class="secondary mono">${escapeHtml(event.id || "—")}</span><span class="secondary mono">序号 ${escapeHtml(event.seq ?? "未知")}</span></td>
+      <td><span class="mono">${escapeHtml(event.model || "—")}</span>${event.model_canonical && event.model_canonical !== event.model ? `<span class="secondary mono">规范名 ${escapeHtml(event.model_canonical)}</span>` : ""}<span class="secondary">${event.stream ? "流式" : "非流式"}</span></td>
+      <td><span class="mono">${escapeHtml(event.account ?? "未选择")}</span>${tried ? `<span class="secondary mono">已尝试 ${escapeHtml(tried)}</span>` : ""}</td>
+      <td>${reqStatusCell(event)}<span class="outcome-label ${outcomeClass}">${escapeHtml(event.outcome || "未知")}</span>${event.canceled ? '<span class="secondary">调用方已取消</span>' : ""}</td>
+      <td class="small">${reqCause(event)}</td><td class="mono">${escapeHtml(event.attempts ?? "未知")}</td>
+      <td class="mono small">${reqMs(event.queue_ms)} / ${reqMs(event.first_data_ms)} / ${reqMs(event.total_ms)}<span class="secondary">等待 ${reqMs(event.wait_ms)}</span>${event.retry_after_s ? `<span class="secondary">建议重试 ${escapeHtml(event.retry_after_s)}s 后</span>` : ""}</td></tr>`;
+  }).join("");
+}
+async function loadRequests(reset){
+  const version = ++reqState.version, epoch = authEpoch;
+  const params = new URLSearchParams({limit:"50"});
+  for (const key of ["outcome","model","account","status"]) if (reqState[key]) params.set(key,reqState[key]);
+  const query = params.toString(), queryChanged = query !== reqState.query;
+  if (queryChanged){
+    Object.assign(reqState,{query,before:0,rows:[],hasMore:false,loaded:false});
+    $("reqBody").innerHTML = '<tr><td colspan="7" class="empty">正在加载最近请求…</td></tr>';
+    $("reqMeta").textContent = "正在读取近期窗口…"; $("reqArchive").textContent = "接口仅查询有界近期窗口。"; $("reqLoss").hidden = true; $("btnReqMore").hidden = true;
+  }
+  const cursor = reset || queryChanged ? 0 : reqState.before;
+  if (cursor) params.set("before",String(cursor));
+  reqState.loading = true;
+  $("reqBody").classList.add("table-updating"); $("requestCard").setAttribute("aria-busy","true"); $("btnReqMore").disabled = true; $("reqError").hidden = true;
+  try {
+    const page = await api("/admin/api/requests?" + params.toString());
+    if (epoch === authEpoch && version === reqState.version) renderRequests(page,!reset && !queryChanged);
+  } catch(error){
+    if (epoch === authEpoch && version === reqState.version){
+      $("reqError").textContent = "请求记录加载失败：" + error.message; $("reqError").hidden = false;
+      if (!reqState.loaded){ $("reqMeta").textContent = "近期窗口加载失败"; $("reqBody").innerHTML = '<tr><td colspan="7" class="empty">无法读取最近请求，请点击刷新重试。</td></tr>'; }
+    }
+    throw error;
+  } finally {
+    if (epoch === authEpoch && version === reqState.version){ reqState.loading = false; $("reqBody").classList.remove("table-updating"); $("requestCard").setAttribute("aria-busy","false"); $("btnReqMore").disabled = false; }
+  }
+}
+function applyReqFilters(force=false){
+  if (!$("reqFilters").reportValidity()) return;
+  const values = {outcome:$("reqOutcome").value,model:$("reqModel").value.trim(),account:$("reqAccount").value.trim(),status:$("reqStatus").value};
+  const changed = Object.keys(values).some(key => reqState[key] !== values[key]);
+  Object.assign(reqState,values);
+  if (changed || force && !reqState.loading) loadRequests(true).catch(() => {});
+}
+$("reqFilters").addEventListener("submit",event => { event.preventDefault(); applyReqFilters(true); });
+$("reqFilters").addEventListener("change",event => { if (event.target.id === "reqOutcome" || event.target.id === "reqStatus") applyReqFilters(); });
+$("btnReqReset").onclick = () => { Object.assign(reqState,{outcome:"",model:"",account:"",status:""}); renderReqFilters(); loadRequests(true).catch(() => {}); };
+$("btnReqRefresh").onclick = async () => { if (reqState.loading) return; try { await loadRequests(true); toast("请求记录已刷新"); } catch(error){ toast(error.message,false); } };
+$("btnReqMore").onclick = () => { if (!reqState.loading && reqState.hasMore) loadRequests(false).catch(() => {}); };
 
 async function loadOverview(){
+  const version = ++overviewVersion, epoch = authEpoch;
   const data = await api("/admin/api/overview");
-  render(data);
+  if (epoch === authEpoch && version === overviewVersion) render(data);
   return data;
 }
-
 async function showApp(){
-  $("loginView").classList.add("hidden");
-  $("appView").classList.remove("hidden");
-  try {
-    await loadOverview();
-  } catch (e) {
-    toast("登录失败: " + e.message, false);
-    clearKey();
-    showLogin();
-    return;
-  }
-  renderReqFilters();
-  try { await loadRequests(true); } catch (e) { $("reqBody").innerHTML = `<tr><td colspan="7" class="empty">${escapeHtml(e.message)}</td></tr>`; }
+  const epoch = ++authEpoch;
+  $("loginBtn").disabled = true; $("loginError").classList.add("hidden");
+  try { await loadOverview(); }
+  catch(error){
+    if (epoch !== authEpoch) return;
+    clearKey(); showLogin();
+    $("loginError").textContent = error.status === 401 ? "API Key 无效，请重新输入。" : "连接服务失败：" + error.message;
+    $("loginError").classList.remove("hidden"); return;
+  } finally { if (epoch === authEpoch) $("loginBtn").disabled = false; }
+  if (epoch !== authEpoch) return;
+  $("bootView").classList.add("hidden"); $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden"); routePage();
 }
 function showLogin(){
-  $("appView").classList.add("hidden");
-  $("loginView").classList.remove("hidden");
-  $("keyInput").value = getKey();
-  $("keyInput").focus();
+  ++authEpoch; ++reqState.version; overviewData = null;
+  Object.assign(reqState,{before:0,rows:[],hasMore:false,loaded:false,loading:false,query:null});
+  $("reqBody").innerHTML = '<tr><td colspan="7" class="empty">正在加载最近请求…</td></tr>';
+  $("reqBody").classList.remove("table-updating"); $("requestCard").setAttribute("aria-busy","false"); $("btnReqMore").hidden = true; $("reqError").hidden = true; $("reqLoss").hidden = true;
+  closeOAuthModal(false); setDrawer(false,false);
+  $("bootView").classList.add("hidden"); $("appView").classList.add("hidden"); $("loginView").classList.remove("hidden"); $("loginBtn").disabled = false;
+  $("keyInput").value = getKey(); $("keyInput").focus();
 }
-
-$("loginBtn").onclick = async () => {
-  const k = $("keyInput").value.trim();
-  if (!k){ toast("请输入 API Key", false); return; }
-  setKey(k);
-  await showApp();
-};
-$("keyInput").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
+$("loginForm").addEventListener("submit",async event => { event.preventDefault(); const key = $("keyInput").value.trim(); if (!key){ toast("请输入 API Key",false); return; } setKey(key); await showApp(); });
 $("btnLogout").onclick = () => { clearKey(); showLogin(); toast("已退出"); };
 $("btnRefresh").onclick = async () => {
-  try { await loadOverview(); await loadRequests(true); toast("已刷新"); } catch(e){ toast(e.message,false); }
+  const epoch = authEpoch;
+  $("btnRefresh").disabled = true;
+  try { await loadOverview(); if (epoch !== authEpoch) return; if (reqState.loaded || activePage === "requests") await loadRequests(true); if (epoch === authEpoch) toast("控制台已刷新"); }
+  catch(error){ if (epoch === authEpoch) toast(error.message,false); }
+  finally { $("btnRefresh").disabled = false; }
 };
-$("btnReqRefresh").onclick = async () => {
-  try { await loadRequests(true); toast("已刷新"); } catch(e){ toast(e.message,false); }
-};
-$("btnReqMore").onclick = async () => {
-  try { await loadRequests(false); } catch(e){ toast(e.message,false); }
-};
-$("reqFilters").addEventListener("click", async (e) => {
-  const el = e.target.closest("[data-outcome]");
-  if (!el) return;
-  reqState.outcome = el.getAttribute("data-outcome") || "";
-  renderReqFilters();
-  try { await loadRequests(true); } catch(err){ toast(err.message,false); }
-});
-$("reqFilters").addEventListener("change", async (e) => {
-  if (e.target.id === "reqModel") reqState.model = e.target.value.trim();
-  else if (e.target.id === "reqAccount") reqState.account = e.target.value.trim();
-  else return;
-  try { await loadRequests(true); } catch(err){ toast(err.message,false); }
-});
-$("reqFilters").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && (e.target.id === "reqModel" || e.target.id === "reqAccount")) e.target.blur();
-});
-
 async function runAction(path, body){
-  try {
-    const data = await api(path, {method:"POST", body: body?JSON.stringify(body):"{}"});
-    const msg = data.message || (data.ok ? "完成" : "完成(有失败)");
-    toast(msg, !!data.ok);
-    await loadOverview();
-    return data;
-  } catch(e){
-    toast(e.message, false);
-  }
+  const epoch = authEpoch;
+  try { const data = await api(path,{method:"POST",body:JSON.stringify(body || {})}); if (epoch !== authEpoch) return; toast(data.message || (data.ok ? "操作完成" : "操作完成，部分失败"),!!data.ok); await loadOverview(); return data; }
+  catch(error){ if (epoch === authEpoch) toast(error.message,false); }
 }
-
-$("btnCredits").onclick = () => runAction("/admin/api/credits", {});
-$("btnCheckin").onclick = () => runAction("/admin/api/checkin", {});
-$("btnKeepalive").onclick = () => runAction("/admin/api/keepalive", {});
-$("btnReload").onclick = () => runAction("/admin/api/reload", {});
-
-$("acctBody").addEventListener("click", async (e) => {
-  const btn = e.target.closest("button[data-act]");
-  if (!btn) return;
-  const act = btn.dataset.act;
-  const uid = btn.dataset.uid;
-  btn.disabled = true;
-  try {
-    if (act === "credits") await runAction("/admin/api/credits", {uid});
-    else if (act === "checkin") await runAction("/admin/api/checkin", {uid});
-    else if (act === "enable") await runAction("/admin/api/accounts/enable", {uid});
-    else if (act === "disable") await runAction("/admin/api/accounts/disable", {uid, reason:"manual disable from panel"});
-    else if (act === "clear") await runAction("/admin/api/accounts/clear-cooldown", {uid});
-  } finally {
-    btn.disabled = false;
+for (const [id,path] of [["btnCredits","credits"],["btnCheckin","checkin"],["btnKeepalive","keepalive"],["btnReload","reload"]]){
+  $(id).onclick = async () => { $(id).disabled = true; try { await runAction("/admin/api/" + path,{}); } finally { $(id).disabled = false; } };
+}
+$("acctBody").addEventListener("click",async event => {
+  const button = event.target.closest("button[data-act]");
+  if (!button || button.disabled || pendingAccounts.has(button.dataset.uid)) return;
+  const {act,uid} = button.dataset;
+  const paths = {credits:"credits",checkin:"checkin",enable:"accounts/enable",disable:"accounts/disable",clear:"accounts/clear-cooldown"};
+  if (!Object.hasOwn(paths,act)) return;
+  pendingAccounts.add(uid);
+  renderAccounts();
+  try { await runAction("/admin/api/" + paths[act],act === "disable" ? {uid,reason:"manual disable from panel"} : {uid}); }
+  finally { pendingAccounts.delete(uid); if (overviewData) renderAccounts(); }
+});
+async function copyText(value, message){
+  if (!value || value === "—") return;
+  const previousFocus = document.activeElement;
+  try { await navigator.clipboard.writeText(value); }
+  catch {
+    const input = document.createElement("textarea");
+    input.value = value; input.readOnly = true; input.style.cssText = "position:fixed;opacity:0;left:0;top:0";
+    const parent = $("oauthModal").classList.contains("hidden") ? document.body : $("oauthModal").querySelector(".modal");
+    parent.appendChild(input); input.select();
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch {}
+    input.remove();
+    if (previousFocus?.isConnected) previousFocus.focus({preventScroll:true});
+    if (!copied){ toast("复制失败，请手动选择并复制。",false); return; }
   }
+  toast(message || "已复制");
+}
+document.addEventListener("click",event => {
+  const button = event.target.closest("[data-copy-from],[data-copy-model]");
+  if (!button) return;
+  const value = button.dataset.copyFrom ? $(button.dataset.copyFrom)?.textContent : button.dataset.copyModel;
+  copyText(value,button.dataset.copyFrom ? "已复制 API Base URL" : "已复制模型标识");
 });
 
-/* ---------- OAuth 授权登录 ---------- */
-let oauthSessionId = "";
-let oauthTimer = null;
-let oauthBusy = false;
-
-function setOAuthStatus(html, ok){
-  const el = $("oauthStatus");
-  el.innerHTML = html;
-  el.style.color = ok === false ? "var(--bad)" : (ok === true ? "var(--ok)" : "var(--muted)");
+// A generation token prevents dismissed OAuth requests from reopening UI/timers.
+let oauthSessionId = "", oauthTimer = null, oauthDelay = null, oauthCloseTimer = null;
+let oauthBusy = false, oauthGeneration = 0, oauthReturnFocus = null;
+function setOAuthStatus(message, ok, pending=false){
+  const element = $("oauthStatus"); element.textContent = message;
+  if (pending){ const spinner = document.createElement("span"); spinner.className = "spin"; spinner.setAttribute("aria-hidden","true"); element.prepend(spinner); }
+  element.style.color = ok === false ? "var(--bad)" : ok === true ? "var(--ok)" : "var(--muted)";
 }
-function stopOAuthPoll(){
-  if (oauthTimer){ clearInterval(oauthTimer); oauthTimer = null; }
+function stopOAuthPoll(){ clearInterval(oauthTimer); clearTimeout(oauthDelay); clearTimeout(oauthCloseTimer); oauthTimer = oauthDelay = oauthCloseTimer = null; }
+function safeOAuthUrl(value){ try { const url = new URL(value); return ["http:","https:"].includes(url.protocol) ? url.href : ""; } catch { return ""; } }
+function updateOAuthControls(){
+  $("oauthStart").disabled = oauthBusy;
+  $("oauthPoll").disabled = $("oauthImport").disabled = !oauthSessionId || oauthBusy;
+  const hasLink = !!safeOAuthUrl($("oauthUrl").textContent.trim());
+  $("oauthCopy").disabled = $("oauthOpen").disabled = !hasLink;
 }
 function openOAuthModal(){
-  $("oauthModal").classList.remove("hidden");
-  oauthSessionId = "";
-  stopOAuthPoll();
-  $("oauthUrl").textContent = "（发起后显示）";
-  $("oauthCallbackUrl").value = "";
-  $("oauthCopy").disabled = true;
-  $("oauthOpen").disabled = true;
-  $("oauthImport").disabled = true;
-  $("oauthPoll").disabled = true;
-  setOAuthStatus("点击「发起授权」开始", null);
+  oauthReturnFocus = document.activeElement; ++oauthGeneration; stopOAuthPoll(); oauthSessionId = ""; oauthBusy = false;
+  $("oauthUrl").textContent = "（发起后显示）"; $("oauthCallbackUrl").value = ""; $("oauthModal").classList.remove("hidden"); $("appView").inert = true;
+  updateOAuthControls(); setOAuthStatus("点击「发起授权」开始",null); $("oauthStart").focus();
 }
-function closeOAuthModal(){
-  stopOAuthPoll();
-  oauthSessionId = "";
-  $("oauthModal").classList.add("hidden");
+function closeOAuthModal(restoreFocus=true){
+  const wasOpen = !$("oauthModal").classList.contains("hidden");
+  ++oauthGeneration; stopOAuthPoll(); oauthSessionId = ""; oauthBusy = false;
+  $("oauthModal").classList.add("hidden"); $("appView").inert = false;
+  if (wasOpen && restoreFocus){ if (oauthReturnFocus?.isConnected && oauthReturnFocus.getClientRects().length) oauthReturnFocus.focus({preventScroll:true}); else $("pageTitle").focus({preventScroll:true}); }
 }
-
+function delayedOAuthPoll(delay, generation){ clearTimeout(oauthDelay); oauthDelay = setTimeout(() => { if (generation === oauthGeneration) pollOAuth(true); },delay); }
 async function startOAuth(){
   if (oauthBusy) return;
-  oauthBusy = true;
-  $("oauthStart").disabled = true;
-  setOAuthStatus('<span class="spin"></span>正在向服务端申请授权链接…', null);
+  const generation = oauthGeneration;
+  stopOAuthPoll(); oauthSessionId = ""; oauthBusy = true; updateOAuthControls(); setOAuthStatus("正在向服务端申请授权链接…",null,true);
   try {
-    const data = await api("/admin/api/oauth/start", {method:"POST", body:"{}"});
-    if (!data.ok || !data.auth_url) throw new Error(data.message || "发起失败");
-    oauthSessionId = data.session_id;
-    $("oauthUrl").textContent = data.auth_url;
-    $("oauthCopy").disabled = false;
-    $("oauthOpen").disabled = false;
-    $("oauthImport").disabled = false;
-    $("oauthPoll").disabled = false;
-    setOAuthStatus("已生成链接，请打开授权页完成登录。正在自动检测…", null);
-    // 自动打开
-    try { window.open(data.auth_url, "_blank", "noopener,noreferrer"); } catch {}
-    stopOAuthPoll();
-    oauthTimer = setInterval(() => pollOAuth(true), 2500);
-    // 立即 poll 一次（通常还是 pending）
-    setTimeout(() => pollOAuth(true), 800);
-  } catch (e) {
-    setOAuthStatus("发起失败: " + e.message, false);
-    toast(e.message, false);
-  } finally {
-    oauthBusy = false;
-    $("oauthStart").disabled = false;
-  }
+    const data = await api("/admin/api/oauth/start",{method:"POST",body:"{}"});
+    if (generation !== oauthGeneration) return;
+    const url = safeOAuthUrl(data.auth_url);
+    if (!data.ok || !url || !data.session_id) throw new Error(data.message || "发起失败");
+    oauthSessionId = data.session_id; $("oauthUrl").textContent = url;
+    setOAuthStatus("已生成链接，请打开授权页完成登录。正在自动检测…",null);
+    try { window.open(url,"_blank","noopener,noreferrer"); } catch {}
+    oauthTimer = setInterval(() => { if (generation === oauthGeneration) pollOAuth(true); },2500);
+    delayedOAuthPoll(800,generation);
+  } catch(error){ if (generation === oauthGeneration){ setOAuthStatus("发起失败：" + error.message,false); toast(error.message,false); } }
+  finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); } }
 }
-
 async function importOAuthCallback(){
-  const callbackUrl = $("oauthCallbackUrl").value.trim();
-  if (!oauthSessionId || !callbackUrl) {
-    setOAuthStatus("请先发起授权，再粘贴浏览器地址栏中的完整 127.0.0.1 回调地址", false);
-    return;
-  }
-  $("oauthImport").disabled = true;
-  setOAuthStatus('<span class="spin"></span>正在中转回调…', null);
+  if (oauthBusy) return;
+  const callback = $("oauthCallbackUrl").value.trim();
+  if (!oauthSessionId || !callback){ setOAuthStatus("请先发起授权，再粘贴浏览器地址栏中的完整 127.0.0.1 回调地址。",false); return; }
+  const generation = oauthGeneration, session = oauthSessionId;
+  oauthBusy = true; updateOAuthControls(); setOAuthStatus("正在中转回调…",null,true);
   try {
-    const data = await api("/admin/api/oauth/import-callback", {
-      method:"POST",
-      body: JSON.stringify({session_id: oauthSessionId, callback_url: callbackUrl})
-    });
+    const data = await api("/admin/api/oauth/import-callback",{method:"POST",body:JSON.stringify({session_id:session,callback_url:callback})});
+    if (generation !== oauthGeneration) return;
     if (!data.ok) throw new Error(data.message || "回调中转失败");
-    $("oauthCallbackUrl").value = "";
-    setOAuthStatus(data.message || "回调已接收，继续等待授权结果…", null);
-    if (data.next_url) {
-      $("oauthUrl").textContent = data.next_url;
-      try { window.open(data.next_url, "_blank", "noopener,noreferrer"); } catch {}
-    }
-    setTimeout(() => pollOAuth(true), 500);
-  } catch (e) {
-    setOAuthStatus("回调中转失败: " + e.message, false);
-    toast(e.message, false);
-  } finally {
-    $("oauthImport").disabled = false;
-  }
+    $("oauthCallbackUrl").value = ""; setOAuthStatus(data.message || "回调已接收，继续等待授权结果…",null);
+    if (data.next_url){ const url = safeOAuthUrl(data.next_url); if (url){ $("oauthUrl").textContent = url; try { window.open(url,"_blank","noopener,noreferrer"); } catch {} } }
+    delayedOAuthPoll(500,generation);
+  } catch(error){ if (generation === oauthGeneration){ setOAuthStatus("回调中转失败：" + error.message,false); toast(error.message,false); } }
+  finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); } }
 }
-
 async function pollOAuth(silent){
   if (!oauthSessionId || oauthBusy) return;
-  oauthBusy = true;
-  if (!silent) setOAuthStatus('<span class="spin"></span>正在确认授权结果…', null);
+  const generation = oauthGeneration, session = oauthSessionId;
+  oauthBusy = true; updateOAuthControls();
+  if (!silent) setOAuthStatus("正在确认授权结果…",null,true);
   try {
-    const data = await api("/admin/api/oauth/poll", {
-      method:"POST",
-      body: JSON.stringify({session_id: oauthSessionId})
-    });
-    if (data.status === "pending") {
-      setOAuthStatus('<span class="spin"></span>' + (data.message || "等待浏览器完成授权…"), null);
-      return;
-    }
-    if (data.status === "done" && data.ok) {
-      stopOAuthPoll();
-      setOAuthStatus("✓ " + (data.message || "登录成功"), true);
-      toast(data.message || "登录成功");
-      oauthSessionId = "";
-      $("oauthPoll").disabled = true;
-      await loadOverview();
-      setTimeout(closeOAuthModal, 900);
-      return;
-    }
-    // error
+    const data = await api("/admin/api/oauth/poll",{method:"POST",body:JSON.stringify({session_id:session})});
+    if (generation !== oauthGeneration) return;
+    if (data.status === "pending"){ setOAuthStatus(data.message || "等待浏览器完成授权…",null,true); return; }
     stopOAuthPoll();
-    setOAuthStatus("✗ " + (data.message || "授权失败"), false);
-    toast(data.message || "授权失败", false);
-  } catch (e) {
-    if (!silent) {
-      setOAuthStatus("查询失败: " + e.message, false);
-      toast(e.message, false);
-    }
-  } finally {
-    oauthBusy = false;
-  }
+    if (data.status === "done" && data.ok){
+      setOAuthStatus("✓ " + (data.message || "登录成功"),true); toast(data.message || "登录成功"); oauthSessionId = "";
+      try { await loadOverview(); } catch(error){ toast("账号已授权，但刷新失败：" + error.message,false); }
+      if (generation === oauthGeneration) oauthCloseTimer = setTimeout(() => { if (generation === oauthGeneration) closeOAuthModal(); },900);
+    } else { oauthSessionId = ""; setOAuthStatus("授权失败：" + (data.message || "请重新发起授权"),false); toast(data.message || "授权失败",false); }
+  } catch(error){ if (!silent && generation === oauthGeneration){ setOAuthStatus("查询失败：" + error.message,false); toast(error.message,false); } }
+  finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); } }
 }
-
-$("btnAddAccount").onclick = openOAuthModal;
-$("btnAddAccount2").onclick = openOAuthModal;
-$("oauthClose").onclick = closeOAuthModal;
-$("oauthModal").addEventListener("click", (e) => { if (e.target === $("oauthModal")) closeOAuthModal(); });
-$("oauthStart").onclick = startOAuth;
-$("oauthPoll").onclick = () => pollOAuth(false);
-$("oauthImport").onclick = importOAuthCallback;
-$("oauthOpen").onclick = () => {
-  const u = $("oauthUrl").textContent.trim();
-  if (u && u.startsWith("http")) window.open(u, "_blank", "noopener,noreferrer");
-};
-$("oauthCopy").onclick = async () => {
-  const u = $("oauthUrl").textContent.trim();
-  try {
-    await navigator.clipboard.writeText(u);
-    toast("已复制授权链接");
-  } catch {
-    // fallback
-    const ta = document.createElement("textarea");
-    ta.value = u; document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); toast("已复制授权链接"); } catch(e){ toast("复制失败", false); }
-    ta.remove();
+$("btnAddAccount").onclick = $("btnAddAccount2").onclick = openOAuthModal;
+$("oauthClose").onclick = () => closeOAuthModal();
+$("oauthModal").addEventListener("click",event => { if (event.target === $("oauthModal")) closeOAuthModal(); });
+$("oauthStart").onclick = startOAuth; $("oauthPoll").onclick = () => pollOAuth(false); $("oauthImport").onclick = importOAuthCallback;
+$("oauthOpen").onclick = () => { const url = safeOAuthUrl($("oauthUrl").textContent.trim()); if (url) window.open(url,"_blank","noopener,noreferrer"); };
+$("oauthCopy").onclick = () => copyText($("oauthUrl").textContent.trim(),"已复制授权链接");
+document.addEventListener("keydown",event => {
+  if (!$("oauthModal").classList.contains("hidden")){
+    if (event.key === "Escape"){ event.preventDefault(); closeOAuthModal(); } else if (event.key === "Tab") trapFocus(event,$("oauthModal"));
+  } else if ($("appView").classList.contains("drawer-open")){
+    if (event.key === "Escape"){ event.preventDefault(); setDrawer(false); } else if (event.key === "Tab") trapFocus(event,$("sidebar"));
   }
-};
-
-// 经由 hub 反代时 hub 会自动注入服务 api_key，直接尝试加载；
-// 失败（如直连且未带 key）再回退到登录表单。
+});
+renderReqFilters();
+routePage();
+// A reverse proxy may inject the service key; try once before showing login.
 showApp();
 </script>
 </body>

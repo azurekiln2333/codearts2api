@@ -21,6 +21,7 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
 | [Chat Request Lifecycle](./request-lifecycle.md) | Admission, fairness, ownership, streaming deadlines, SSE completion, and refresh/reload contracts | Implemented |
 | [Request Audit](./request-audit.md) | Bounded metadata, audit API/UI, storage limits, recovery state and build diagnostics | Implemented |
+| [Embedded Admin Panel](./admin-panel.md) | Workspace layout, navigation/base paths, UI data contracts and real-browser verification | Implemented |
 
 ## Pre-Development Checklist
 
@@ -28,6 +29,8 @@ For chat, pool, streaming, or related config changes, read
 [Chat Request Lifecycle](./request-lifecycle.md) and the active task's context before
 editing. For audit, account diagnostics or build identity, also read
 [Request Audit](./request-audit.md). Other guideline pages remain bootstrap placeholders.
+For embedded panel layout, navigation or controls, also read
+[Embedded Admin Panel](./admin-panel.md).
 
 ## Quality Check
 
