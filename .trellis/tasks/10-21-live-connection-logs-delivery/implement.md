@@ -56,4 +56,10 @@ Keep the task in progress for that evidence rather than claiming deployment.
 - [x] Gate legacy claim/config by a strictly validated channel state; publish authoritative disabled state and retain on uncertain state.
 - [x] Distinguish business and HTTP errors without exposing raw provider data.
 - [x] Show closed-channel/skipped-claim diagnostics and verify actual normal-route model chat.
-- [ ] Independent review, appropriate Go/browser/release checks, specs, committed follow-up and verified source artifact.
+- [x] Independent review, appropriate Go/browser/release checks, specs, committed follow-up and verified source artifact.
+
+The follow-up is committed as `709f63ede82f8f790a853a4550f9430a7e1b2cfc`.
+`codearts2api-source-709f63ede82f.zip` passed checksum verification, extraction,
+actual server compilation/start and every packaged GET-only deployment check.
+See `research/benefit-followup-verification.md`. Operational step 8 and real
+account/model evidence remain pending; this local release does not imply rollout.

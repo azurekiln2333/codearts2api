@@ -99,7 +99,36 @@ screenshots were inspected by both panel/check workers and the parent. The
 parent reviewed explicit owned text for service/private-key patterns and staged
 only task-owned files, leaving bootstrap/platform files and ZIPs untouched.
 
-The new commit-based source archive and its extracted build/start/verifier will
-be recorded after committing the reviewed product. Go checks use temporary Go
-1.27.3 and MinGW; no Go 1.22-specific or Docker runtime check is claimed. Remote
-rebuild and actual account/V4.1 results remain pending.
+Go checks use temporary Go 1.27.3 and MinGW; no Go 1.22-specific or Docker runtime
+check is claimed. Remote rebuild and actual account/V4.1 results remain pending.
+
+## Verified follow-up release
+
+- Product commit: `709f63ede82f8f790a853a4550f9430a7e1b2cfc`.
+- Artifact: `codearts2api-source-709f63ede82f.zip`.
+- SHA256: `fd0be2f5910418c7144936d5f196d2fa98ba8743ee7ffe3b5bc0f54bcef9cbb6`.
+- 107 ZIP members, including 106 hashed product/generated identity members.
+- The source export includes the actual reviewed benefit gate, panel, tests,
+  Compose, Dockerfile and configuration examples, excluding live configuration,
+  credentials/data, platform/task files and prior archives.
+
+`verify-source-release.py` verified every hashed member, extracted this final
+archive into a temporary directory, compiled the actual server with its source
+identity, started it with isolated empty credentials/data and ran the verifier
+packaged inside the ZIP. Health, console, build, requests, audit, models and
+connections all passed. It sent no chat, refresh or claim operation.
+
+Both previous archives remain unchanged:
+
+- User-owned `codearts2api.zip`: SHA256
+  `7934b2e7827f5f4a685b9f2e367385752b4eb9aec063eea75b563f87c601a84c`.
+- Prior verified `codearts2api-source-365f4828d019.zip`: SHA256
+  `eeeeeed3037704008fda0ff015f8667ecca1275a72d68bc35b9994feb040ff7e`.
+
+Rebuild/recreate from the new source in the original deployment directory,
+preserving `.env`, `config.json`, `auths/`, `data/` and the same mounted paths.
+Use the packaged `release.env` as documented in README. Then invoke Models ->
+重新拉取 and inspect the actual per-account source results. A cache-only GET or
+successful localhost fixture cannot establish the production account's switch,
+provider code, exact Flash entitlement or real completion. Keep the operational
+task open until that evidence exists; no deployment or push has been performed.
