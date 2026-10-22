@@ -426,19 +426,22 @@ func CanonicalModel(id string) string {
 	if exact, ok := lookupKnownModel(id); ok {
 		return exact
 	}
-	switch id {
-	case "snap-chat", "glm-5.2":
+	return canonicalStaticModel(id)
+}
+
+// canonicalStaticModel is deliberately independent of the union-wide catalog.
+func canonicalStaticModel(id string) string {
+	key := strings.ToLower(strings.TrimSpace(id))
+	for _, models := range [][]string{seedKnownModels, seedBenefitModels} {
+		for _, known := range models {
+			if strings.ToLower(known) == key {
+				return known
+			}
+		}
+	}
+	switch key {
+	case "snap-chat":
 		return "GLM-5.2"
-	case "glm-5.1":
-		return "GLM-5.1"
-	case "glm-4.7":
-		return "GLM-4.7"
-	case "qwen3-vl-235b":
-		return "Qwen3-VL-235B"
-	case "qwen3.5-397b-a17b-vl":
-		return "Qwen3.5-397B-A17B-VL"
-	case "qwen3.6-27b-vl":
-		return "Qwen3.6-27B-VL"
 	default:
 		return id
 	}
@@ -475,14 +478,24 @@ func (c *Client) ChatStream(ctx context.Context, chatID string, messages []ChatM
 
 // ChatStreamWithOptions 在基础聊天请求上附加推理等级与采样参数。
 func (c *Client) ChatStreamWithOptions(ctx context.Context, chatID string, messages []ChatMessage, traceID string, cred SignCredential, userName string, model string, opts ChatOptions, benefit bool) (io.ReadCloser, error) {
-	body := chatBodyV2(chatID, messages, model, opts)
+	return c.ChatStreamWithExactModel(ctx, chatID, messages, traceID, cred, userName, CanonicalModel(model), opts, benefit)
+}
+
+// ChatStreamWithExactModel sends an already account-resolved ID without applying
+// the legacy union-wide CanonicalModel lookup again.
+func (c *Client) ChatStreamWithExactModel(ctx context.Context, chatID string, messages []ChatMessage, traceID string, cred SignCredential, userName string, model string, opts ChatOptions, benefit bool) (io.ReadCloser, error) {
+	body := chatBodyV2Exact(chatID, messages, model, opts)
 	return c.sendChatV2(ctx, body, traceID, cred, cred.SecurityToken, chatID, sessionIDFor(chatID), benefit)
 }
 
 // chatBodyV2 组装 /api/v2/chat/completions 请求体（原生 OpenAI 形状）。
 func chatBodyV2(chatID string, messages []ChatMessage, model string, opts ChatOptions) map[string]any {
+	return chatBodyV2Exact(chatID, messages, CanonicalModel(model), opts)
+}
+
+func chatBodyV2Exact(chatID string, messages []ChatMessage, model string, opts ChatOptions) map[string]any {
 	body := map[string]any{
-		"model":            CanonicalModel(model),
+		"model":            model,
 		"stream":           true,
 		"messages":         chatMessagesToOpenAI(messages),
 		"prompt_cache_key": chatID,

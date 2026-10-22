@@ -112,11 +112,12 @@ func classifyUpstreamError(err error) audit.Cause {
 	if isParamInvalidError(err) {
 		return audit.Cause{Class: audit.CauseParamInvalid, Text: "param invalid", Code: providerCode(err.Error())}
 	}
+	if isConcurrentUpstreamError(err) {
+		return audit.Cause{Class: audit.CauseConcurrencyLimit, Text: "concurrency limit", Code: providerCode(err.Error())}
+	}
 	var ae *upstream.ApiError
 	if errors.As(err, &ae) {
 		switch {
-		case isConcurrentLimitError(ae.Message):
-			return audit.Cause{Class: audit.CauseConcurrencyLimit, Text: "concurrency limit", Code: providerCode(ae.Message)}
 		case ae.Status == http.StatusUnauthorized || ae.Code == http.StatusUnauthorized:
 			return audit.Cause{Class: audit.CauseAuth, Text: "authentication", Code: providerCode(ae.Message)}
 		case ae.Status == http.StatusTooManyRequests:

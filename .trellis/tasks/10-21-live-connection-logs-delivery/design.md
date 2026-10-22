@@ -6,6 +6,61 @@ The functional gaps live in model discovery/cache ownership (`upstream/models.go
 
 ## A. Account model discovery and refresh
 
+### Follow-up: account-specific model casing and repeated busy responses
+
+The user reports lowercase New API IDs, mixed-case CodeArts IDs and a log whose
+requested `glm-5.3` already shows canonical `GLM-5.3`, alongside real provider
+registration and concurrent-session rejections. The canonical label alone is not
+evidence that the chosen account received its own correct ID or has entitlement.
+The current global known-model index merges accounts and is reapplied by the
+chat body builder; this allows another account's case to overwrite a selected
+account's exact registration name.
+
+Resolve case-insensitive identity from the captured account/auth catalog at the
+outbound boundary, preserving the exact source ID and account-specific benefit
+route. Preserve established static aliases, but do not guess new aliases, infer
+IDs from display labels, change model versions or borrow an unrelated account's
+dynamic registration. With no own evidence, preserve unknown input under the
+existing seed/static-alias compatibility rules. Once selected, the resolved ID
+must reach actual chat/probe JSON without another global rewrite. Keep cache
+keys, scoped stale-negative recovery and requested/actually-sent audit metadata
+consistent; a new login cannot inherit a removed login's dynamic mapping.
+
+Expected product owners are `upstream/models.go` and client chat-body construction,
+server chat/probe emission and model identity checks only where required. Parent
+owns task/spec/docs/release. Changes to concurrent-session retry policy require
+repository evidence first; do not increase capacity, retry counts or pretend a
+provider refusal was solved by case conversion. Preserve lifecycle admission,
+lease cleanup, timeout/cancellation, claim and upstream rights boundaries.
+
+The independent `research/busy-retry-findings.md` confirms repeated same-account
+queue retries precede rotation: three selected accounts can each receive three
+attempts. It also demonstrates a classification mismatch: preflight SSE TM is
+wrapped as HTTP 429 and currently causes whole-account soft cooldown, whereas
+HTTP 400 TM is neutral. Correct explicit concurrency errors consistently for
+HTTP 400/429 and early/late SSE, preserving real authentication rejection and
+ordinary rate/TPM policies. Late-stream errors still end the existing response
+without failover or regeneration.
+
+Before a fixed same-account concurrency retry, prefer an untried eligible
+candidate only if the generic rotation budget permits the next account. Use the
+existing atomic lease acquisition to decide actual capacity; candidate membership
+does not mean a slot is immediately free. Keep single-account/no-backup retries,
+startup/cumulative slot-wait budgets and generic rotation cap. The minimal three
+account all-busy sequence becomes A/B/CCC (five attempts) rather than AAA/BBB/CCC
+(nine); this is not a new universal retry ceiling. Keep real attempt/tried audit
+counts. The mapping implementation owner also owns these adjacent chat/handler
+changes, avoiding concurrent edits to the same request loop.
+
+Use real localhost HTTP tests with two accounts requiring different casing,
+rotation, normal/benefit requests, probes, default/auto and refreshed credentials.
+Assert upstream model ID, actual audit canonical name, alias-consistent rejection
+cache and no discovery network work on the chat path. Review the independent
+busy-retry research before altering that separate policy.
+Concurrency tests must cover HTTP400, HTTP429 and first-SSE TM with a healthy
+backup, all-busy finite attempts, one account, exhausted rotation budget, ordinary
+rate/TPM behavior and late-SSE no-regeneration/neutral-health behavior.
+
 ### Follow-up: account benefit channel and ambiguous errors, 2026-10-22
 
 The user's deployed panel reports benefit source `failed`, count/retained zero

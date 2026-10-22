@@ -30,7 +30,7 @@
     "internal/audit/audit.go",
     "README.md"
   ],
-  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '到现在还没开始做', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; reviewed product committed in 709f63e and new source ZIP extracted/compiled/started with every packaged GET-only check passed. Production account evidence and deployment remain pending.",
+  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '到现在还没开始做', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; reviewed product committed in 709f63e and new source ZIP extracted/compiled/started with every packaged GET-only check passed. Production account evidence and deployment remain pending. Model identity/concurrency follow-up now passes independent review and full Go normal/race/vet/build; actual wire-ID regression fails on the prior release and passes on repaired source. New source packaging remains pending at this checkpoint; production still unverified.",
   "meta": {
     "task_creation_authorized": true,
     "production_target": "https://codearts2api.azurekiln.cn",
@@ -78,6 +78,22 @@
         "sha256": "eeeeeed3037704008fda0ff015f8667ecca1275a72d68bc35b9994feb040ff7e",
         "source_commit": "365f4828d0194fdfb7878ffc7fffb29f88a15052"
       }
-    ]
+    ],
+    "model_case_followup": {
+      "state": "local_verified_pending_release",
+      "reported": "lowercase New API models with mixed-case upstream IDs, provider model_not_registered and concurrency_limit with 9 attempts",
+      "boundary": "account/auth-scoped exact model resolution; no inferred entitlement, model substitution or increased retries",
+      "quality_gate_passed": true,
+      "independent_review": "no code blockers; no fixes required after full integrated normal/race/vet/build checks",
+      "confirmed_local_defects": [
+        "union-wide and display-source casing could rewrite selected account wire ID",
+        "static alias negative-cache identity differed from actual sending",
+        "explicit concurrency wrapped as HTTP429 or late SSE could penalize whole account",
+        "same-account retry exhausted before eligible backup selection"
+      ],
+      "old_release_regression": "709f63e actual two-account chat returns HTTP404; repaired source passes the same wire-ID regression",
+      "production_entitlement_verified": false,
+      "production_deployment_verified": false
+    }
   }
 }

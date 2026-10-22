@@ -179,11 +179,21 @@ func PruneModelCatalogs(current map[string]*auth.Auth) {
 
 func indexCatalog(ac *accountCatalog) {
 	ac.knows, ac.benefit = map[string]bool{}, map[string]bool{}
+	ac.exact = make(map[string]string, len(ac.infos))
 	for _, mi := range ac.infos {
 		key := strings.ToLower(mi.ID)
 		ac.knows[key] = true
+		ac.exact[key] = mi.ID
 		if mi.Benefit {
 			ac.benefit[key] = true
+		}
+	}
+	// Display merging may prefer a richer normal-source record with different
+	// casing. A benefit-routed request must use the benefit source's exact ID.
+	for _, mi := range ac.sources["benefit"].models {
+		key := strings.ToLower(mi.ID)
+		if ac.benefit[key] {
+			ac.exact[key] = mi.ID
 		}
 	}
 }

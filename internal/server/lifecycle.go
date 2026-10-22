@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -225,17 +224,18 @@ func isChatTimeout(err error) bool {
 // chatCandidates only reads cached capability. Discovery has its own background/
 // administrative lifecycle and must not silently extend a chat's startup budget.
 func (h *Handler) chatCandidates(tried map[string]bool, model, sticky string) []pool.AccountCandidate {
-	want := strings.ToLower(upstream.CanonicalModel(model))
 	var candidates []pool.AccountCandidate
 	for _, a := range h.cfg.Pool.Accounts() {
 		if a == nil || tried[a.Name] || !h.cfg.Pool.Healthy(a.Name) {
 			continue
 		}
+		authz := a.AuthSnapshot()
+		want, _ := upstream.ResolveModelForAuth(a.UID, model, authz)
 		state, _ := modelAvailability(a.UID, want)
 		if state == availUnusable {
 			continue
 		}
-		present, complete := upstream.AccountModelKnowledgeForAuth(a.UID, want, a.AuthSnapshot())
+		present, complete := upstream.AccountModelKnowledgeForAuth(a.UID, want, authz)
 		if state != availUsable && complete && !present {
 			continue
 		}

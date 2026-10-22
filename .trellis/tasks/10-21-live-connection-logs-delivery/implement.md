@@ -63,3 +63,10 @@ The follow-up is committed as `709f63ede82f8f790a853a4550f9430a7e1b2cfc`.
 actual server compilation/start and every packaged GET-only deployment check.
 See `research/benefit-followup-verification.md`. Operational step 8 and real
 account/model evidence remain pending; this local release does not imply rollout.
+
+## Model-casing and busy-retry follow-up
+
+- [x] Trace selected-account model resolution, actual payload, aliases/probes, negative cache and audit names.
+- [x] Implement account/auth-scoped case resolution with exact outbound IDs and meaningful real HTTP regressions.
+- [x] Confirm the reported 9-attempt busy behavior from real retry loops and correct only evidenced scheduling gaps.
+- [ ] Complete independent review, relevant normal/race/vet/build checks, spec sync, committed source release and extracted-source verification.

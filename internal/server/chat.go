@@ -203,7 +203,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	if req.Model != "" && req.Model != "auto" {
 		model = req.Model
 	}
-	canonical = upstream.CanonicalModel(model)
+	canonical, _ = upstream.ResolveModelForAuth("", model, nil)
 	tracker.SetRequest(requestedModel, canonical, streamFlag)
 	tools, err := nativeTools(req.Tools, req.ToolChoice)
 	if err != nil {
@@ -229,7 +229,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	toolsOn := toolsActive(req)
 	if req.Model != "" && req.Model != "auto" {
 		model = req.Model
-		canonical = upstream.CanonicalModel(req.Model)
+		canonical, _ = upstream.ResolveModelForAuth("", req.Model, nil)
 	}
 	outcome = "unavailable"
 
@@ -356,11 +356,14 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			token, ak, sk := authz.Credentials()
 			cred := upstream.SignCredential{AccessKeyID: ak, SecretAccessKey: sk, SecurityToken: token}
+			resolvedModel, benefit := upstream.ResolveModelForAuth(acct.UID, model, authz)
+			canonical = resolvedModel
+			tracker.SetRequest(requestedModel, canonical, streamFlag)
 			noteTraffic(acct.UID)
 			h.cfg.Pool.PingKeepalive(acct.Name)
 			attempts++
-			current.body, sendErr = acct.Client.ChatStreamWithOptions(lifetime.ctx, chatID, msgs, "", cred,
-				authz.UserName, model, chatOpts, upstream.IsBenefitModelForAuth(acct.UID, model, authz))
+			current.body, sendErr = acct.Client.ChatStreamWithExactModel(lifetime.ctx, chatID, msgs, "", cred,
+				authz.UserName, resolvedModel, chatOpts, benefit)
 			if sendErr == nil {
 				break
 			}
@@ -388,6 +391,12 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				}
 			}
 			if !errors.As(sendErr, &ae) || !isQueueLimitError(ae) || attempt+1 >= h.cfg.QueueMaxAttempts {
+				break
+			}
+			// An explicit concurrent-session refusal can be account-local. Give an
+			// untried eligible account the next attempt before sleeping on this
+			// account, but only while the existing rotation budget permits it.
+			if isConcurrentUpstreamError(sendErr) && rotations+1 < h.cfg.MaxRotate && len(h.chatCandidates(tried, model, "")) > 0 {
 				break
 			}
 			current.close()
@@ -432,7 +441,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			// Account-specific capability failures may succeed on another account
 			// and are not charged against the generic rotation budget.
-			capabilityOnly := h.handleUpstreamError(acct, model, sendErr)
+			capabilityOnly := h.handleUpstreamError(acct, canonical, sendErr)
 			if !capabilityOnly {
 				rotations++
 			}
@@ -469,11 +478,11 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			if streamErr != nil {
 				outcome = "upstream_stream_error"
 				auditErr = streamErr
-				h.handleUpstreamError(acct, model, streamErr)
+				h.handleUpstreamError(acct, canonical, streamErr)
 				return
 			}
 			storeChat()
-			markUsable(acct.UID, model)
+			markUsable(acct.UID, canonical)
 			h.cfg.Pool.PingKeepalive(acct.Name)
 			h.cfg.Pool.NoteSuccess(acct.Name)
 			outcome = "ok"
@@ -496,7 +505,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			// A first-data success ends the startup/failover phase. A late error
 			// must be surfaced rather than silently regenerating a partial reply.
-			h.handleUpstreamError(acct, model, aggregateErr)
+			h.handleUpstreamError(acct, canonical, aggregateErr)
 			outcome = "upstream_body_error"
 			status := http.StatusBadGateway
 			code := "upstream_error"
@@ -528,7 +537,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			return
 		}
 		storeChat()
-		markUsable(acct.UID, model)
+		markUsable(acct.UID, canonical)
 		h.cfg.Pool.NoteSuccess(acct.Name)
 		outcome = "ok"
 		return

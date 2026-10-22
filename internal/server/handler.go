@@ -472,7 +472,8 @@ func (h *Handler) modelKnownUnusable(model string) bool {
 		if acct == nil || !h.cfg.Pool.Healthy(acct.Name) {
 			continue
 		}
-		st, _ := modelAvailability(acct.UID, model)
+		resolved, _ := upstream.ResolveModelForAuth(acct.UID, model, acct.AuthSnapshot())
+		st, _ := modelAvailability(acct.UID, resolved)
 		if st == availUnknown {
 			return false // 还没结论，别急着下架
 		}
@@ -487,7 +488,7 @@ func (h *Handler) modelKnownUnusable(model string) bool {
 // modelEntries 把账号模型目录 + 静态兜底包装成 OpenAI /v1/models 条目。
 //
 // 上游模型 ID 区分大小写：既列精确 ID（GLM-5.2），也补一条小写别名（glm-5.2，
-// 老客户端习惯用小写），聊天时由 CanonicalModel 归一回精确 ID。
+// 老客户端习惯用小写），聊天时按选中账号的目录归一回精确 ID。
 // 静态表只在动态目录缺失该 ID 时补位，顺序固定（动态已排序，静态按表序）。
 func modelEntries(infos []upstream.ModelInfo) []map[string]any {
 	out := make([]map[string]any, 0, len(infos)+len(staticModels))
@@ -538,8 +539,7 @@ func modelEntries(infos []upstream.ModelInfo) []map[string]any {
 // 3 次，池子超过 3 个账号时可能永远轮不到有能力的那台），又会给健康账号记错误、
 // 累计到阈值就冷却 10 分钟。所以按能力优先挑号。
 func (h *Handler) pickAccount(tried map[string]bool, model string) *pool.Account {
-	want := strings.ToLower(upstream.CanonicalModel(model))
-	if acct := h.pickByCatalog(tried, want); acct != nil {
+	if acct := h.pickByCatalog(tried, model); acct != nil {
 		return acct
 	}
 	// Compatibility helper: selection never performs synchronous discovery.
@@ -548,12 +548,15 @@ func (h *Handler) pickAccount(tried map[string]bool, model string) *pool.Account
 }
 
 // pickByCatalog 在已发现目录的健康账号里挑第一个能服务该模型的。
-func (h *Handler) pickByCatalog(tried map[string]bool, wantLower string) *pool.Account {
+func (h *Handler) pickByCatalog(tried map[string]bool, model string) *pool.Account {
 	for _, acct := range h.cfg.Pool.Accounts() {
 		if acct == nil || tried[acct.Name] || !h.cfg.Pool.Healthy(acct.Name) {
 			continue
 		}
-		if models, known := upstream.AccountModelsForAuth(acct.UID, acct.AuthSnapshot()); known && catalogHas(models, wantLower) {
+		authz := acct.AuthSnapshot()
+		resolved, _ := upstream.ResolveModelForAuth(acct.UID, model, authz)
+		wantLower := strings.ToLower(resolved)
+		if models, known := upstream.AccountModelsForAuth(acct.UID, authz); known && catalogHas(models, wantLower) {
 			if st, _ := modelAvailability(acct.UID, wantLower); st == availUnusable {
 				continue // 该账号实测调不通这个模型，别选它
 			}
@@ -569,7 +572,9 @@ func (h *Handler) accountCanServe(acct *pool.Account, model string) bool {
 	if acct == nil {
 		return true
 	}
-	present, complete := upstream.AccountModelKnowledgeForAuth(acct.UID, upstream.CanonicalModel(model), acct.AuthSnapshot())
+	authz := acct.AuthSnapshot()
+	resolved, _ := upstream.ResolveModelForAuth(acct.UID, model, authz)
+	present, complete := upstream.AccountModelKnowledgeForAuth(acct.UID, resolved, authz)
 	return present || !complete
 }
 
@@ -780,17 +785,20 @@ func (h *Handler) handleUpstreamError(acct *pool.Account, model string, err erro
 		switch {
 		case ae.Status == 401 || ae.Code == 401:
 			h.cfg.Pool.Disable(acct.Name, "upstream HTTP 401: authentication rejected")
+		case isConcurrentUpstreamError(err):
+			log.Printf("upstream concurrent limit (transient) account=%s", acct.Name)
 		case ae.Status == 429:
 			h.cfg.Pool.Cooldown(acct.Name, pool.CoolSoft, h.cfg.SoftCooldown, "upstream HTTP 429: rate limited")
-		case ae.Status == 400 && isConcurrentLimitError(ae.Message):
-			// 并发会话上限（TM.00001041）是瞬时错误：上游会话槽位会被其他请求释放，
-			// 不冷却账号——池的并发锁已防止过载，冷却反而误伤后续请求。
-			log.Printf("upstream concurrent limit (transient) account=%s", acct.Name)
 		case ae.Status >= 500:
 			h.cfg.Pool.Cooldown(acct.Name, pool.CoolErr, h.cfg.ErrCooldown, fmt.Sprintf("upstream HTTP %d", ae.Status))
 		default:
 			h.cfg.Pool.NoteError(acct.Name, h.cfg.ErrThreshold, h.cfg.ErrCooldown)
 		}
+		return false
+	}
+	// Late SSE errors use UpstreamError rather than ApiError. They are still
+	// transient concurrency refusals, without enabling a retry after first data.
+	if isConcurrentUpstreamError(err) {
 		return false
 	}
 	h.cfg.Pool.NoteError(acct.Name, h.cfg.ErrThreshold, h.cfg.ErrCooldown)
@@ -822,6 +830,15 @@ func isParamInvalidError(err error) bool {
 func isConcurrentLimitError(msg string) bool {
 	low := strings.ToLower(msg)
 	return strings.Contains(low, "tm.00001041") || strings.Contains(low, "并发会话")
+}
+
+func isConcurrentUpstreamError(err error) bool {
+	var apiErr *upstream.ApiError
+	if errors.As(err, &apiErr) {
+		return apiErr.Status != http.StatusUnauthorized && apiErr.Code != http.StatusUnauthorized && isConcurrentLimitError(apiErr.Message)
+	}
+	var streamErr *upstream.UpstreamError
+	return errors.As(err, &streamErr) && isConcurrentLimitError(streamErr.Code+" "+streamErr.Msg)
 }
 
 func isQueueLimitError(err *upstream.ApiError) bool {

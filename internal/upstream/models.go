@@ -67,8 +67,9 @@ var seedBenefit = func() map[string]bool {
 // accountCatalog 一个账号的模型目录快照。
 type accountCatalog struct {
 	infos   []ModelInfo
-	benefit map[string]bool // lower(id) -> true（本轮发现确认的福利）
-	knows   map[string]bool // lower(id) -> true（该账号目录里登记过的全部模型）
+	benefit map[string]bool   // lower(id) -> true（本轮发现确认的福利）
+	knows   map[string]bool   // lower(id) -> true（该账号目录里登记过的全部模型）
+	exact   map[string]string // lower(id) -> this account's exact upstream ID
 	sources map[string]sourceSnapshot
 	claim   ClaimStatus
 	owner   *auth.Auth
@@ -216,6 +217,32 @@ func IsBenefitModelForAuth(accountID, model string, owner *auth.Auth) bool {
 	return isBenefitModel(accountID, model, owner, true)
 }
 
+// ResolveModelForAuth resolves the exact ID and route from one account/auth
+// snapshot. Other accounts' dynamic IDs must never influence an outbound call.
+// Established static aliases/seeds remain cold-start fallbacks; unknown inputs
+// are preserved, and no metadata fetch occurs on this path.
+func ResolveModelForAuth(accountID, model string, owner *auth.Auth) (exact string, benefit bool) {
+	catalog.RLock()
+	defer catalog.RUnlock()
+	ac := catalog.accounts[accountID]
+	if ac != nil && ac.owner != nil && ac.owner != owner {
+		ac = nil
+	}
+	exact = model
+	if ac != nil {
+		if id, ok := ac.exact[strings.ToLower(strings.TrimSpace(model))]; ok {
+			return id, benefitModelLocked(ac, id)
+		}
+	}
+	exact = canonicalStaticModel(model)
+	if ac != nil {
+		if id, ok := ac.exact[strings.ToLower(strings.TrimSpace(exact))]; ok {
+			exact = id
+		}
+	}
+	return exact, benefitModelLocked(ac, exact)
+}
+
 func isBenefitModel(accountID, model string, owner *auth.Auth, checkOwner bool) bool {
 	key := strings.ToLower(strings.TrimSpace(model))
 	if key == "" {
@@ -223,7 +250,16 @@ func isBenefitModel(accountID, model string, owner *auth.Auth, checkOwner bool) 
 	}
 	catalog.RLock()
 	defer catalog.RUnlock()
-	if ac, ok := catalog.accounts[accountID]; ok && (!checkOwner || ac.owner == nil || ac.owner == owner) {
+	ac := catalog.accounts[accountID]
+	if ac != nil && checkOwner && ac.owner != nil && ac.owner != owner {
+		ac = nil
+	}
+	return benefitModelLocked(ac, key)
+}
+
+func benefitModelLocked(ac *accountCatalog, model string) bool {
+	key := strings.ToLower(strings.TrimSpace(model))
+	if ac != nil {
 		if ac.benefit[key] {
 			return true
 		}

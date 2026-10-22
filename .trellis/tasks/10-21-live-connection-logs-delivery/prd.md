@@ -23,6 +23,7 @@ Make the deployed gateway's admin console useful for operating real models and d
 - R5: Reduce rounded corners using a restrained MD3-inspired scale: controls/navigation 8 px, cards 12 px and major shells/dialogs at most 16 px. Avoid oversized pills, including on mobile, while preserving functional focus, layout and theme behavior.
 - R6: Add a dedicated connection-log view displaying active request phase/age, actual upstream progress and bounded completed phase histories. Distinguish account waiting, credential waiting, upstream response headers, first SSE data and streaming/aggregation; do not label local chat-ID generation as an upstream session request or infer that a healthy long stream is stuck.
 - R7: Produce a complete source release and reproducible read-only verification instructions for the actual deployed routes/UI. Do not overwrite existing credentials, configuration, data or the user-owned ZIP. Do not claim remote deployment without access and verification.
+- R8: Accept New API model IDs regardless of case and resolve to the selected account's exact discovered upstream ID. Avoid cross-account casing contamination or a second global rewrite; keep requested versus actually sent names inspectable. Investigate repeated upstream concurrency-limit attempts separately from genuine model-registration rejection.
 
 ## Acceptance criteria
 
@@ -33,6 +34,7 @@ Make the deployed gateway's admin console useful for operating real models and d
 - [x] AC5 / R6: Stalled upstream fixtures remain visible while running and leave accurate completed traces after resource cleanup. Live tracking, phase points and polling are bounded; logs contain no message bodies, headers, keys or credentials.
 - [x] AC6 / R7: Relevant Go tests, race tests for backend changes, vet, build, browser checks and diff checks pass. Release includes Compose, Dockerfile and example configuration, excludes live auth/data/secrets, and identifies the actual source revision.
 - [x] AC7 / deployed benefit follow-up: A strictly validated per-account channel switch gates legacy benefit calls. Explicit closure removes old contributions/seed routing, skips claims/config and appears as confirmed closed; unknown/failing state retains prior evidence. HTTP-success business failures remain distinct from real HTTP errors. Actual normal-route chat, channel transitions, source retention, account isolation and safe diagnostics are verified with localhost fixtures; production account results remain pending.
+- [x] AC8 / model casing follow-up: Lowercase/mixed-case inputs, including GLM-5.3 fixtures, use the selected account's exact ID on actual chat/probe HTTP requests. Different accounts/captured auths cannot rewrite each other's IDs; aliases, default/auto, benefit flags, negative capability and audit canonical names remain consistent. Unknown names are not guessed or silently substituted. Provider concurrency rejection remains distinct, bounded and accurately counted.
 
 ## Scope and compatibility
 

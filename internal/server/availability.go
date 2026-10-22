@@ -79,7 +79,7 @@ var availability = struct {
 }{byKey: map[string]availEntry{}, probing: map[string]bool{}, lastTraffic: map[string]time.Time{}}
 
 func availKey(accountID, model string) string {
-	return accountID + "|" + strings.ToLower(model)
+	return accountID + "|" + strings.ToLower(strings.TrimSpace(model))
 }
 
 // modelAvailability 返回缓存的可用性；过期视为未知。
@@ -215,6 +215,11 @@ func (h *Handler) probeModel(acct *pool.Account, model string) {
 		// 账号已被重载/替换：本轮探测针对的对象已失效，交给下一轮。
 		return
 	}
+	authz = acct.AuthSnapshot()
+	if authz == nil {
+		return
+	}
+	model, benefit := upstream.ResolveModelForAuth(acct.UID, model, authz)
 	key := availKey(acct.UID, model)
 	availability.Lock()
 	if availability.probing[key] {
@@ -234,12 +239,12 @@ func (h *Handler) probeModel(acct *pool.Account, model string) {
 	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
 	defer cancel()
 	body := map[string]any{
-		"model":    upstream.CanonicalModel(model),
+		"model":    model,
 		"stream":   true,
 		"messages": []any{map[string]any{"role": "user", "content": "hi"}},
 	}
 	rc, err := acct.Client.SendChatV2(ctx, body, "", cred, cred.SecurityToken,
-		upstream.IsBenefitModelForAuth(acct.UID, model, authz))
+		benefit)
 	if err != nil {
 		// 并发上限是暂时的，不代表模型不可用。
 		if strings.Contains(err.Error(), "TM.00001041") {

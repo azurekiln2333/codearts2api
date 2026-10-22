@@ -9,3 +9,5 @@
 {"file": ".trellis/spec/backend/model-discovery.md", "reason": "Source retention, bounded refresh and exact account-scoped stale-negative recovery contracts."}
 {"file": ".trellis/spec/backend/source-release.md", "reason": "Complete source export and environment-key read-only deployment verification contracts."}
 {"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/benefit-http-findings.md","reason":"Follow deployed benefit failure: distinguish business versus HTTP, strictly gate per-account legacy benefit access, avoid unproven global closure or model substitutions."}
+{"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/busy-retry-findings.md","reason":"Verify bounded explicit-concurrency rotation and consistent neutral health across HTTP400/429/SSE, without changing generic rate or late-stream policy."}
+{"file": ".trellis/tasks/10-21-live-connection-logs-delivery/research/model-case-findings.md", "reason": "Verify selected-account/auth/source exact IDs through real chat/probe requests, alias negative-cache consistency, preserved unknown inputs and actual final audit canonical identity."}

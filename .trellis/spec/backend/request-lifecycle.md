@@ -60,6 +60,12 @@ write/flush error and supports `errors.As`.
   capability-refusing accounts than `MaxRotate` must not prevent reaching a later
   capable account. A global 404 requires exhausting the evaluated eligible
   capability candidates; remaining untried candidates require truthful failure.
+- Explicit upstream concurrent-session rejection can move to an untried eligible
+  account before sleeping/retrying the current account, only when the generic
+  rotation budget permits another selection. Eligibility does not establish local
+  free capacity; `AcquireAccount` still owns the atomic slot decision. Keep the
+  existing same-account retry budget when no eligible backup or rotation remains.
+  Do not apply this shortcut to ordinary rate/TPM failures.
 - Derived sticky affinity requires explicit `conversation_id`, one of the
   `X-Codearts-Chat-Id` / `X-Session-Affinity` / `X-Session-Id` headers, or actual
   assistant/tool/function history. Identical independent first-turn prompts use
@@ -128,7 +134,7 @@ first-data latency, total duration, and outcome; omit messages and credentials.
 | Provider parameter rejection | 400 `invalid_request`, or terminal SSE error | No rotation or account penalty |
 | Model unavailable on one account | Cache that account/model result; try another before response commitment | No whole-account cooldown |
 | All eligible model candidates unavailable | 404 `model_not_available` | Keep other model capabilities intact |
-| Queue retries exhausted | 429 `upstream_busy`, `Retry-After` when applicable | Preserve provider rate policy; transient concurrency-400 is neutral |
+| Queue retries exhausted | 429 `upstream_busy`, `Retry-After` when applicable | Preserve provider rate policy; explicit concurrency is neutral for HTTP400/429 and early/late SSE |
 | Provider 401 after refresh handling / 5xx | Existing auth-disable / provider cooldown policy | Apply only to genuine provider errors |
 
 ## 5. Good / Base / Bad Cases
@@ -144,6 +150,14 @@ first-data latency, total duration, and outcome; omit messages and credentials.
   unrelated conversations with that same anchor and assistant history can share
   an affinity key. Clients requiring distinct affinity should supply a unique
   explicit conversation/session ID. Independent first-turn traffic remains fair.
+- With defaults and three selected accounts always rejecting concurrency, the
+  bounded sequence is A/B/CCC (five actual calls), rather than three calls to each
+  before switching. A single account or `MaxRotate=1` retains at most three queue
+  attempts. A 401 refresh remains separately bounded; five is not a universal cap.
+- Explicit `TM.00001041` must not increment account errors or set whole-account
+  soft cooldown merely because preflight wrapped it as 429. Keep authentication
+  rejection precedence and ordinary 429/TPM penalties. A late SSE concurrency
+  error is neutral for account health but still ends the response without retry.
 - **Bad:** An endless slow body, silent HTTP-200 SSE, downstream stalled writes,
   failed retry acquisition, or canceled shared-refresh waiter cannot indefinitely
   retain a chat slot. Excess retry-sleep waves fail promptly at admission.
@@ -175,6 +189,9 @@ first-data latency, total duration, and outcome; omit messages and credentials.
 - Run the full Go tests, race detector, vet, build, and `git diff --check`. Review
   new untracked source files explicitly because plain `git diff` omits them.
   Deterministic localhost saturation proves bounds, not production throughput.
+- `concurrency_limit_test.go` exercises HTTP400/429/first-SSE backup selection,
+  single/all-busy/max-rotation sequences, unchanged ordinary rate/TPM policy,
+  late-SSE no-regeneration, audit counts and complete lease/admission reuse.
 
 ## 7. Wrong vs Correct
 

@@ -17,6 +17,9 @@ source compatibility and the request-lifecycle/account-auth contracts.
   `*auth.Auth`; server readers use them to hide a previous login's retained data.
 - `AccountModelKnowledgeForAuth(accountID, model, owner)` atomically reads
   membership and authoritative completeness from one catalog generation.
+- `ResolveModelForAuth(accountID, model, owner)` atomically resolves the selected
+  account's exact ID and benefit flag. `ChatStreamWithExactModel` sends that ID
+  without another union-wide lookup; legacy client entry points remain compatible.
 - `(*server.Handler).StartModelDiscovery(context.Context)` attaches the service
   lifecycle and begins bounded metadata discovery.
 - Authenticated `GET /admin/api/models` reads current diagnostics only.
@@ -102,6 +105,21 @@ channel without claiming success or failure of a nonexistent claim.
 
 ### Negative capability and list semantics
 
+Resolve lowercase/mixed-case requests against the selected account and captured
+auth, not the union-wide `CanonicalModel` index. The exact ID and benefit flag
+come from the same snapshot. When benefit evidence governs the route, its exact
+ID wins even if display merging prefers a richer differently-cased normal-source
+entry. After confirmed benefit closure, use the surviving normal-source ID.
+Unknown or replaced-login catalogs cannot borrow another account's dynamic ID;
+only existing static aliases/seeds are cold-start fallbacks, otherwise preserve
+the unknown input. Display names are not new aliases and versions are not interchangeable.
+
+Use the same account resolution for actual chat, background probes, candidate
+checks and capability cache reads/writes. Normalize cache keys by case and outer
+whitespace only after resolving established aliases, so `snap-chat` and GLM-5.2
+cannot bypass each other's real denial. Never run discovery on this path. The
+outbound body must preserve the chosen ID instead of recanonicalizing globally.
+
 An absent model excludes an account only when discovery is complete and current.
 Partial, failed, unknown or expired discovery leaves absence unknown; retained
 present entries still improve selection priority. Read membership and completeness
@@ -156,6 +174,10 @@ new state. Keep BASE prefixes and existing escaping/clipboard behavior.
 | Cold partial catalog omits requested model | Attempt eligible account; absence is unknown, no guessed route |
 | Complete current catalog omits requested model | Account may be excluded by authoritative absence |
 | Every advertised model excluded | OpenAI data array empty; admin explains exclusions |
+| Lowercase/mixed-case request | Send this account/route's exact discovered ID |
+| Other account or previous login has different casing | Do not rewrite the selected account's wire ID |
+| Normal display entry is richer than same-fold benefit entry | Benefit route uses benefit source's exact ID |
+| Unknown ID with no account evidence | Keep input or established static alias; no guessed dynamic registration |
 | No/wrong admin key | Existing 401 envelope; no provider call or diagnostic leak |
 
 ## 5. Good / Base / Bad Cases
@@ -179,6 +201,10 @@ disabled/re-enabled/failure transitions. Confirm false sends neither legacy clai
 nor config calls, drops old source/seed routes, and keeps other accounts isolated.
 Use a real normal-route chat for exact builtin/agent IDs with no benefit header.
 Contrast HTTP 503 and business 4000; retain malicious-code redaction coverage.
+Test real chat/probe wire IDs with two accounts requiring different casing,
+normal/benefit source conflicts, closure, auth replacement, unknown inputs,
+default/auto and static aliases. Assert the actual last-sent audit name, alias
+denial consistency, no global second rewrite and concurrent catalog publication.
 Test coalescing/worker limits/deadline/service cancellation, responsive health,
 authentication, stale-negative recovery, preservation of concurrent fresh denials,
 same-UID replacement and unrelated state. Secret sentinels must not appear in

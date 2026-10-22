@@ -36,6 +36,13 @@ cause. `committed=false` omits `status`; never fabricate HTTP 200 for a disconne
 before any response commitment. A stream failure after HTTP 200 keeps status 200
 and records its failure outcome separately.
 
+Once a real upstream attempt occurs, `model_canonical` is the exact ID actually
+sent on the last attempt, resolved from that selected account/auth and route.
+Update active tracking at the same point; a union-wide display name computed
+before selection cannot stand in for the wire ID. Keep `model` as the caller's
+literal request, including `auto`. Explicit concurrent-session failures use the
+same classifier for scheduling and audit across HTTP400/429 and early/late SSE.
+
 Cause text comes from a fixed allowlist; provider codes are bounded tokens.
 Never copy arbitrary provider errors, requests, responses, bodies, prompts,
 completions, tool arguments, headers, keys, credentials or OAuth tokens. One shared
