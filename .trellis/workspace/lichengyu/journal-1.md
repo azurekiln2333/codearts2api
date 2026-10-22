@@ -158,3 +158,39 @@ Fixed the missing account benefit gate and misleading HTTP errors; local code an
 ### Next Steps
 
 - Rebuild the actual service with unchanged mounts, inspect real per-account switch/code and V4.1 Flash source/call; no production deployment or push was performed.
+
+
+## Session 6: Account model identity and bounded busy retries
+<!-- trellis-session: v=2 fp=b4e82724927f6b68 -->
+
+**Date**: 2026-10-22
+**Task**: Account model identity and bounded busy retries
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Fixed selected-account wire casing and explicit concurrency retry/health behavior; reviewed code and verified source release complete locally, production remains pending.
+
+### Main Changes
+
+- Resolve exact IDs and benefit route from selected account/auth; align chat, probes, aliases, negative cache and actual audit canonical names.
+- Prefer eligible backups within the existing rotation budget; explicit HTTP400/429/early and late SSE concurrency stays health-neutral without late regeneration.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b9b318ccc026426f593af09cc66eaea62cd19479` | fix: resolve account model identities and bound busy retries |
+
+### Testing
+
+- [OK] Full Go normal/race/vet/build, formatting/diff checks and independent Trellis review passed; old 709f63e fails the new actual wire-ID regression while repaired source passes.
+- [OK] codearts2api-source-b9b318ccc026.zip passed hashes/private-file exclusions, extraction, actual compile/start and all packaged GET-only checks; all three prior archives preserved.
+
+### Status
+
+[OK] **Local code and source release complete; production verification pending.**
+
+### Next Steps
+
+- Rebuild the actual deployment using release.env and existing env/config/auth/data mounts, refresh model catalog and verify real account registration and concurrency results. No deployment or push performed.
