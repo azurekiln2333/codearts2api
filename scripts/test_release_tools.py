@@ -128,7 +128,7 @@ class HttpFixture:
             "/panel/": (200, current_panel_fixture()),
             "/admin/api/overview": (200, {"build": {"known": True, "commit": REVISION}}),
             "/admin/api/requests?limit=1": (200, {"events": [], "disabled": False}),
-            "/admin/api/audit?limit=1": (200, {"events": [], "disabled": False}),
+            "/admin/api/audit": (200, {"audit": {"enabled": True, "written": 0, "dropped": 0}}),
             "/admin/api/models": (200, {"models": [], "accounts": [], "exclusions": [], "refresh": {"state": "idle"}}),
             "/admin/api/connections": (200, {"active": [], "recent": [], "disabled": False}),
         }
@@ -216,6 +216,19 @@ class VerifierTests(unittest.TestCase):
         results = {result["check"]: result for result in self.verify()}
         self.assertFalse(results["models"]["ok"])
         self.assertTrue(results["connections"]["disabled"])
+
+    def test_audit_statistics_and_request_history_have_distinct_schemas(self):
+        self.fixture.responses["/admin/api/audit"] = (200, {"audit": {"enabled": False}})
+        results = {result["check"]: result for result in self.verify()}
+        self.assertTrue(results["audit"]["ok"])
+        self.assertTrue(results["audit"]["disabled"])
+        self.assertFalse(results["requests"]["disabled"])
+        for malformed in ({"events": [], "disabled": False}, {"audit": {}}, {"audit": {"enabled": "false"}}):
+            with self.subTest(malformed=malformed):
+                self.fixture.responses["/admin/api/audit"] = (200, malformed)
+                results = {result["check"]: result for result in self.verify()}
+                self.assertFalse(results["audit"]["ok"])
+                self.assertTrue(results["requests"]["ok"])
 
     def test_redirect_is_not_followed_and_no_key_reaches_the_target(self):
         self.fixture.responses["/admin/api/overview"] = (302, b"")

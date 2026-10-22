@@ -128,11 +128,19 @@ def check_build(data: bytes, expected: str):
         raise VerificationError("Running revision mismatch: expected " + expected[:12] + ", got " + actual[:12] + ".")
 
 
-def check_audit(data: bytes):
+def check_requests(data: bytes):
     value = decode_json(data)
     if not isinstance(value.get("events"), list) or not isinstance(value.get("disabled"), bool):
-        raise VerificationError("Audit route returned an incompatible metadata schema.")
+        raise VerificationError("Request history route returned an incompatible metadata schema.")
     return value["disabled"]
+
+
+def check_audit(data: bytes):
+    value = decode_json(data)
+    stats = value.get("audit")
+    if not isinstance(stats, dict) or not isinstance(stats.get("enabled"), bool):
+        raise VerificationError("Audit statistics route returned an incompatible metadata schema.")
+    return not stats["enabled"]
 
 
 def check_models(data: bytes):
@@ -164,8 +172,8 @@ def verify(url: str, expected: str, key: str, timeout: float = 5.0):
         ("health", "/healthz", False, check_health),
         ("console", "/panel/", False, check_panel),
         ("build", "/admin/api/overview", True, lambda data: check_build(data, expected)),
-        ("requests", "/admin/api/requests?limit=1", True, check_audit),
-        ("audit", "/admin/api/audit?limit=1", True, check_audit),
+        ("requests", "/admin/api/requests?limit=1", True, check_requests),
+        ("audit", "/admin/api/audit", True, check_audit),
         ("models", "/admin/api/models", True, check_models),
         ("connections", "/admin/api/connections", True, check_connections),
     ]

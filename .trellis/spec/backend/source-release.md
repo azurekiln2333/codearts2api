@@ -67,6 +67,9 @@ launch discovery, automatic claims or real model probes.
 tracked-private exclusion, required inputs, symlinks and existing output; synthetic
 HTTP verifies prefixes, all GET methods, auth/404/old UI, build identity, disabled
 state, malformed/oversized/slow responses, redirects and output redaction.
+Keep real route envelopes distinct: requests returns `events`/`disabled`, whereas
+audit statistics returns `audit.enabled`. Test disabled and malformed statistics
+against that contract; do not reuse an invented request-history fixture for it.
 Build from an extracted final source release and run the verifier against an
 isolated local server with empty temp auth/data before presenting that artifact.
 Docker image runtime validation remains distinct if no Docker engine is available.

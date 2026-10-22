@@ -50,6 +50,9 @@ write/flush error and supports `errors.As`.
   capability priority, least active/max utilization, then round-robin ties.
 - Chat candidate construction reads cached catalogs and negative availability;
   it performs no synchronous model discovery. Unknown catalogs remain eligible.
+  Missing entries in partial or stale catalogs also remain unknown. Use the atomic
+  `AccountModelKnowledgeForAuth` read to exclude by absence only for complete,
+  current discovery; actual provider denials remain authoritative independently.
   A positive availability entry alone must not raise an unknown account's
   priority and starve other unknown accounts.
 - Account-specific capability rejections do not consume the generic `MaxRotate`
