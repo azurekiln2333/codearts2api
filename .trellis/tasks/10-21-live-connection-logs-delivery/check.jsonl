@@ -1,0 +1,9 @@
+{"file":".trellis/spec/backend/index.md","reason":"Select the actual quality checks for touched server/upstream/pool/audit layers."}
+{"file":".trellis/spec/backend/request-lifecycle.md","reason":"Review actual HTTP/cancellation/health responsiveness and concurrency ownership under stalled refresh and chat work."}
+{"file":".trellis/spec/backend/request-audit.md","reason":"Review metadata safety, bounded traces/storage, actual HTTP versus execution outcome and backward compatibility."}
+{"file":".trellis/spec/backend/admin-panel.md","reason":"Verify removed UI, restrained geometry, catalog/connection polling and preserved existing behavior in a real browser."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace source evidence through model snapshots, negative-cache reset, admin API and user-facing diagnostics."}
+{"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/inspection.md","reason":"Reject guessed production claims and verify each confirmed original defect with meaningful boundary checks."}
+{"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/model-discovery-findings.md","reason":"Verify source provenance/failure/removal/return consistency, safe stale-negative recovery, races and real-route boundaries."}
+{"file": ".trellis/spec/backend/model-discovery.md", "reason": "Verify discovery fixtures, cache ownership, bounded jobs, identity and truthful API/UI results."}
+{"file": ".trellis/spec/backend/source-release.md", "reason": "Review release membership, identity, preserved mounts and honest GET-only verification."}

@@ -1,0 +1,59 @@
+{
+  "id": "live-connection-logs-delivery",
+  "name": "live-connection-logs-delivery",
+  "title": "Repair model discovery, simplify the console and add live connection logs",
+  "description": "Repair source-aware model discovery and stale capability recovery, add a real bounded catalog pull, remove redundant console chrome, apply restrained MD3-inspired shapes and deliver live connection diagnostics with a verifiable release.",
+  "status": "in_progress",
+  "dev_type": "fullstack",
+  "scope": "model-discovery-refresh-panel-cleanup-connection-diagnostics",
+  "package": null,
+  "priority": "P0",
+  "creator": "lichengyu",
+  "assignee": "lichengyu",
+  "createdAt": "2026-10-21",
+  "completedAt": null,
+  "branch": "fix/deepseek-concurrency-20261021",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": "365f4828d0194fdfb7878ffc7fffb29f88a15052",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "internal/upstream/models.go",
+    "internal/server/handler.go",
+    "internal/server/availability.go",
+    "internal/server/panel.html",
+    "internal/server/chat.go",
+    "internal/server/lifecycle.go",
+    "internal/audit/audit.go",
+    "README.md"
+  ],
+  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '到现在还没开始做', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim.",
+  "meta": {
+    "task_creation_authorized": true,
+    "production_target": "https://codearts2api.azurekiln.cn",
+    "user_reports_rebuilt_ui_present": true,
+    "remote_access_available": false,
+    "planning_summary_approved": true,
+    "approval_received_at": "2026-10-22",
+    "source_finding_status": "repository defects confirmed; exact production V4.1 source response remains unobserved",
+    "local_implementation_complete": true,
+    "quality_gate_passed": true,
+    "local_verified_at": "2026-10-22",
+    "work_commits": [
+      "3d10b4cf90005c9699f50993be87cc4066e031fd",
+      "365f4828d0194fdfb7878ffc7fffb29f88a15052"
+    ],
+    "release_artifact": "codearts2api-source-365f4828d019.zip",
+    "release_sha256": "eeeeeed3037704008fda0ff015f8667ecca1275a72d68bc35b9994feb040ff7e",
+    "extracted_release_smoke_passed": true,
+    "production_deployment_verified": false,
+    "live_v41_source_verified": false,
+    "pending": [
+      "production rebuild and read-only deployment verification",
+      "exact live V4.1 Flash source and real completion"
+    ]
+  }
+}

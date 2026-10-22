@@ -1,0 +1,37 @@
+{
+  "checked_at_local": "2026-10-21T23:19:48",
+  "target": "https://codearts2api.azurekiln.cn",
+  "method": "Unauthenticated read-only GETs; no chat or administrative mutations",
+  "observed": {
+    "/panel/": {
+      "http": 200,
+      "bytes": 28500,
+      "new_workspace_marker": false,
+      "request_audit_marker": false,
+      "sha256": "22d429041d9e024401644f1c6ee37eccd77e8e6f27d5fdad262d1a7dbeaddb81"
+    },
+    "/healthz": {
+      "http": 200,
+      "body": "ok"
+    },
+    "/admin/api/overview": {
+      "http": 401,
+      "code": "invalid_api_key"
+    },
+    "/admin/api/requests": {
+      "http": 404
+    },
+    "/admin/api/audit": {
+      "http": 404
+    }
+  },
+  "local": {
+    "ui_commit": "42fc19f",
+    "audit_commit": "3fefda8",
+    "independent_connection_log_view": false,
+    "request_summary_written_on_completion": true,
+    "zip_ui_and_audit_sources_match_workspace": true,
+    "zip_compose_missing": true
+  },
+  "limits": "Deployment host, image, reverse-proxy target and authenticated runtime build remain unverified."
+}

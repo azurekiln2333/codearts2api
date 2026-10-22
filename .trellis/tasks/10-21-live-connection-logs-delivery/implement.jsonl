@@ -1,0 +1,10 @@
+{"file":".trellis/spec/backend/index.md","reason":"Discover applicable server, lifecycle, audit and embedded-panel contracts."}
+{"file":".trellis/spec/backend/request-lifecycle.md","reason":"Preserve bounded chat admission, cached capability routing, cancellation and exact lease ownership while adding diagnostics."}
+{"file":".trellis/spec/backend/request-audit.md","reason":"Preserve bounded sanitized metadata, audit persistence, actual status/outcome classification and build identity."}
+{"file":".trellis/spec/backend/admin-panel.md","reason":"Preserve existing account/OAuth/audit operations, base paths, escaping, login epochs, accessibility and browser checks."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Keep discovery/source/cache/admin/UI contracts and live telemetry data flow consistent."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse existing API/auth/escaping and bounded metadata logic; avoid duplicate caches and polling."}
+{"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/inspection.md","reason":"Confirmed production history, cache/404/filter/UI findings and narrow connection instrumentation boundaries."}
+{"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/model-discovery-findings.md","reason":"Proven per-source retention/benefit routing defects, parser evidence limits, safe negative resets and bounded refresh/test hooks."}
+{"file": ".trellis/spec/backend/model-discovery.md", "reason": "Source retention, bounded refresh and exact account-scoped stale-negative recovery contracts."}
+{"file": ".trellis/spec/backend/source-release.md", "reason": "Complete source export and environment-key read-only deployment verification contracts."}
