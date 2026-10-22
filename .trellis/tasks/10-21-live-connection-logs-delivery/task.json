@@ -15,7 +15,7 @@
   "branch": "fix/deepseek-concurrency-20261021",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": "709f63ede82f8f790a853a4550f9430a7e1b2cfc",
+  "commit": "b9b318ccc026426f593af09cc66eaea62cd19479",
   "pr_url": null,
   "subtasks": [],
   "children": [],
@@ -30,7 +30,7 @@
     "internal/audit/audit.go",
     "README.md"
   ],
-  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '到现在还没开始做', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; reviewed product committed in 709f63e and new source ZIP extracted/compiled/started with every packaged GET-only check passed. Production account evidence and deployment remain pending. Model identity/concurrency follow-up now passes independent review and full Go normal/race/vet/build; actual wire-ID regression fails on the prior release and passes on repaired source. New source packaging remains pending at this checkpoint; production still unverified.",
+  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '到现在还没开始做', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; reviewed product committed in 709f63e and new source ZIP extracted/compiled/started with every packaged GET-only check passed. Production account evidence and deployment remain pending. Model identity/concurrency follow-up now passes independent review and full Go normal/race/vet/build; actual wire-ID regression fails on the prior release and passes on repaired source. Product committed as b9b318c; its new source ZIP passed full member checksum/exclusion checks, extraction, actual compilation/start and every packaged GET-only route/revision check. Prior archives remain unchanged. Production deployment and real account/model success remain unverified.",
   "meta": {
     "task_creation_authorized": true,
     "production_target": "https://codearts2api.azurekiln.cn",
@@ -45,10 +45,11 @@
     "work_commits": [
       "3d10b4cf90005c9699f50993be87cc4066e031fd",
       "365f4828d0194fdfb7878ffc7fffb29f88a15052",
-      "709f63ede82f8f790a853a4550f9430a7e1b2cfc"
+      "709f63ede82f8f790a853a4550f9430a7e1b2cfc",
+      "b9b318ccc026426f593af09cc66eaea62cd19479"
     ],
-    "release_artifact": "codearts2api-source-709f63ede82f.zip",
-    "release_sha256": "fd0be2f5910418c7144936d5f196d2fa98ba8743ee7ffe3b5bc0f54bcef9cbb6",
+    "release_artifact": "codearts2api-source-b9b318ccc026.zip",
+    "release_sha256": "9a9c7b0430b7ce976ef495cefb1718fdd52dfacf06518de6d848c073ff5227b7",
     "extracted_release_smoke_passed": true,
     "production_deployment_verified": false,
     "live_v41_source_verified": false,
@@ -77,10 +78,15 @@
         "artifact": "codearts2api-source-365f4828d019.zip",
         "sha256": "eeeeeed3037704008fda0ff015f8667ecca1275a72d68bc35b9994feb040ff7e",
         "source_commit": "365f4828d0194fdfb7878ffc7fffb29f88a15052"
+      },
+      {
+        "artifact": "codearts2api-source-709f63ede82f.zip",
+        "sha256": "fd0be2f5910418c7144936d5f196d2fa98ba8743ee7ffe3b5bc0f54bcef9cbb6",
+        "source_commit": "709f63ede82f8f790a853a4550f9430a7e1b2cfc"
       }
     ],
     "model_case_followup": {
-      "state": "local_verified_pending_release",
+      "state": "local_delivery_complete_pending_production",
       "reported": "lowercase New API models with mixed-case upstream IDs, provider model_not_registered and concurrency_limit with 9 attempts",
       "boundary": "account/auth-scoped exact model resolution; no inferred entitlement, model substitution or increased retries",
       "quality_gate_passed": true,
@@ -93,7 +99,12 @@
       ],
       "old_release_regression": "709f63e actual two-account chat returns HTTP404; repaired source passes the same wire-ID regression",
       "production_entitlement_verified": false,
-      "production_deployment_verified": false
+      "production_deployment_verified": false,
+      "source_commit": "b9b318ccc026426f593af09cc66eaea62cd19479",
+      "release_artifact": "codearts2api-source-b9b318ccc026.zip",
+      "release_sha256": "9a9c7b0430b7ce976ef495cefb1718fdd52dfacf06518de6d848c073ff5227b7",
+      "extracted_release_smoke_passed": true,
+      "verified_at": "2026-10-22"
     }
   }
 }

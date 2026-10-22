@@ -55,12 +55,12 @@ Tools: temporary Go 1.27.3 and MinGW GCC. Source remains Go 1.22 compatible;
 no separate Go 1.22 or Docker runtime check is claimed. The panel and release
 scripts are unchanged this round; their previously passed browser/export unit
 suites remain historical evidence. Actual final source extraction/build/routes
-will be checked again for this artifact.
+also passed for the artifact recorded below.
 
 Independent Trellis review covered all product diffs and all three new test
 files. No blocking or nonblocking defect remained, and no product edits followed
-the integrated checks. Final source release verification is pending at this
-checkpoint. The parent reviewed all explicit owned text for service/private-key
+the integrated checks. Final source release verification passed as recorded below.
+The parent reviewed all explicit owned text for service/private-key
 patterns before staging; unrelated bootstrap/platform files and archives are
 excluded from the commit.
 
@@ -81,3 +81,30 @@ Rebuild/recreate the deployment from the verified source using the existing
 `.env`, `config.json`, `auths/`, `data/` and mounted paths, then pull the catalog
 and inspect actual per-account source results. A real provider `not registered`
 can still mean the account has no authorization after casing is corrected.
+
+## Verified source release
+
+- Product commit: `b9b318ccc026426f593af09cc66eaea62cd19479`.
+- Artifact: `codearts2api-source-b9b318ccc026.zip`.
+- SHA256: `9a9c7b0430b7ce976ef495cefb1718fdd52dfacf06518de6d848c073ff5227b7`.
+- 110 ZIP members, including 109 hashed product/generated identity members.
+
+The exporter read the committed product manifest. The parent checked actual ZIP
+membership: Compose/Dockerfile/examples and all new regression files are present;
+real env/config/auth/data, platform/task files and previous ZIPs are excluded.
+`verify-source-release.py` checked member hashes, extracted the final ZIP into a
+temporary directory, compiled its server with the actual source commit, started
+with empty isolated auth/data and ran the verifier from inside that extraction.
+Health, cleaned console, build identity, requests, audit, models and connections
+all passed. No production chat, refresh, claim, deployment or push occurred.
+
+All earlier archives were verified byte-for-byte unchanged:
+
+- `codearts2api.zip`: `7934b2e7827f5f4a685b9f2e367385752b4eb9aec063eea75b563f87c601a84c`.
+- `codearts2api-source-365f4828d019.zip`: `eeeeeed3037704008fda0ff015f8667ecca1275a72d68bc35b9994feb040ff7e`.
+- `codearts2api-source-709f63ede82f.zip`: `fd0be2f5910418c7144936d5f196d2fa98ba8743ee7ffe3b5bc0f54bcef9cbb6`.
+
+Local code/release acceptance is complete. Retain the task in progress for
+operational deployment verification and real account/model evidence. Use the
+packaged `release.env` and existing mounts when rebuilding; this change requires
+no credential/configuration/data migration.

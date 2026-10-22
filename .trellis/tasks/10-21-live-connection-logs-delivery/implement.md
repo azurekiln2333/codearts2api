@@ -69,4 +69,10 @@ account/model evidence remain pending; this local release does not imply rollout
 - [x] Trace selected-account model resolution, actual payload, aliases/probes, negative cache and audit names.
 - [x] Implement account/auth-scoped case resolution with exact outbound IDs and meaningful real HTTP regressions.
 - [x] Confirm the reported 9-attempt busy behavior from real retry loops and correct only evidenced scheduling gaps.
-- [ ] Complete independent review, relevant normal/race/vet/build checks, spec sync, committed source release and extracted-source verification.
+- [x] Complete independent review, relevant normal/race/vet/build checks, spec sync, committed source release and extracted-source verification.
+
+The model identity/concurrency follow-up is committed in `b9b318ccc026426f593af09cc66eaea62cd19479`.
+`codearts2api-source-b9b318ccc026.zip` passed full member hash/exclusion checks,
+extraction, actual server compile/start and all packaged GET-only route/revision
+checks. See `research/model-retry-verification.md`. Production deployment and
+real account/model entitlement remain pending; keep operational step 8 open.
