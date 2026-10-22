@@ -85,3 +85,40 @@ Rebuilt the embedded admin panel as five workspace views with mobile navigation 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: Local model discovery and live connection delivery
+<!-- trellis-session: v=2 fp=773cbab6485bb791 -->
+
+**Date**: 2026-10-22
+**Task**: Local model discovery and live connection delivery
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Completed local model discovery, bounded pull, panel cleanup and live connection diagnostics. All local acceptance criteria and independent review passed. The verified source release targets 365f482; task stays in progress for production rebuild and exact live V4.1 evidence. No deployment or push was performed.
+
+### Main Changes
+
+- Retained source ownership and benefit routing, atomically distinguished partial/expired absence from complete absence, preserved concurrent provider denials and made overview GET cache-only.
+- Removed redundant console chrome, applied 8/12/16 px corners, added real source/exclusion pull diagnostics and bounded live phase/progress logs.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3d10b4c` | fix: repair model discovery and add live connection diagnostics |
+| `365f482` | fix: verify the actual audit statistics response |
+
+### Testing
+
+- [OK] Full Go test/race/vet/build, JavaScript syntax, real Chrome desktop/mobile checks and 15 release tests passed.
+- [OK] Final codearts2api-source-365f4828d019.zip hashes checked, extracted and compiled; actual isolated server and every packaged deployment check passed. Original user ZIP and credential/data mounts preserved.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Rebuild and recreate the actual deployment with existing mounts, verify expected revision 365f4828d0194fdfb7878ffc7fffb29f88a15052, then inspect live V4.1 source and actual call. Docker runtime and server access were unavailable locally.
