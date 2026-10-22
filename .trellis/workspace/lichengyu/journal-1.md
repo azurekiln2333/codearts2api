@@ -122,3 +122,39 @@ Completed local model discovery, bounded pull, panel cleanup and live connection
 ### Next Steps
 
 - Rebuild and recreate the actual deployment with existing mounts, verify expected revision 365f4828d0194fdfb7878ffc7fffb29f88a15052, then inspect live V4.1 source and actual call. Docker runtime and server access were unavailable locally.
+
+
+## Session 5: Local benefit channel repair and verified source release
+<!-- trellis-session: v=2 fp=cfc76285c5bd7050 -->
+
+**Date**: 2026-10-22
+**Task**: Local benefit channel repair and verified source release
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Fixed the missing account benefit gate and misleading HTTP errors; local code and reviewed source release pass. Production account/model evidence and rollout remain pending.
+
+### Main Changes
+
+- Strict HTTP 200 boolean authority; confirmed closure removes old benefit routes and skips claims/config while unknown state retains evidence.
+- Distinct safe business errors and closed-channel UI, with signed source/admin/chat/browser regression coverage.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `709f63ede82f8f790a853a4550f9430a7e1b2cfc` | fix: respect account benefit channel availability |
+
+### Testing
+
+- [OK] Final full Go test/vet/build, affected race suites, embedded JS, real Chrome and 15 release-tool tests passed; independent review has no remaining code blocker.
+- [OK] codearts2api-source-709f63ede82f.zip verified, extracted, built and started with empty auth/data; packaged GET-only checks all passed. Previous archives preserved.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Rebuild the actual service with unchanged mounts, inspect real per-account switch/code and V4.1 Flash source/call; no production deployment or push was performed.
