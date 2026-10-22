@@ -3,10 +3,10 @@
 // 上游可用模型来自三路（对齐官方客户端 ModelService）：
 //  1. agent-center：useragents 找 CodeAgent（alias 智能体 + show_in_ide）→ detail 的 gpts.models
 //  2. 内置：GET /v1/model/builtin（Agent-Type: PromptCenter）
-//  3. 限时福利（免费套餐）：GET {opengw}/api/v1/gateway/config
+//  3. 账号福利开关确认开启后：GET {opengw}/api/v1/gateway/config
 //
-// 福利模型不在 agent-center 注册，聊天必须追加请求头 maas_type: benefit，
-// 否则上游返回 InferHub.002002009.404 model is not registered。
+// 福利来源确认的模型聊天必须追加请求头 maas_type: benefit。
+// 开关关闭后的正常目录模型按 agent/builtin 证据路由，不沿用旧福利标记。
 //
 // 目录按账号隔离：福利是按账号授予的，池里 A 账号有、B 账号没有时不允许互相污染，
 // 因此 IsBenefitModel 必须带账号身份查询（见 SetAccountModels）。
@@ -43,8 +43,8 @@ type ModelInfo struct {
 	Desc    string `json:"desc,omitempty"`
 }
 
-// 冷启动种子：福利套餐轮换后新增的模型在首次发现前也要走福利路由，
-// 少带一次头就是一次 404，宁可多带。发现结果只会在此基础上增补。
+// 冷启动种子：没有账号权威福利快照时回退；成功空目录或明确关闭
+// 福利通道会覆盖该回退，后续拉取失败也不能恢复已移除的福利路由。
 var seedBenefitModels = []string{
 	"deepseek-v4-flash-0731", "deepseek-v4-pro-0813", "glm-5.3-flash",
 }
@@ -167,7 +167,7 @@ func AccountModelKnowledgeForAuth(accountID, model string, owner *auth.Auth) (pr
 	}
 	for _, name := range modelSources {
 		source, ok := ac.sources[name]
-		if !ok || source.LastSuccessAt == nil || (source.Status != "ok" && source.Status != "empty") {
+		if !ok || source.LastSuccessAt == nil || !modelSourceSucceeded(source.Status) {
 			return present, false
 		}
 	}
@@ -193,7 +193,7 @@ func accountCatalogStaleLocked(accountID string, owner *auth.Auth, checkOwner bo
 		return true
 	}
 	for _, src := range ac.sources {
-		if src.Status != "ok" && src.Status != "empty" && (src.RetryAt == nil || !time.Now().Before(*src.RetryAt)) {
+		if !modelSourceSucceeded(src.Status) && (src.RetryAt == nil || !time.Now().Before(*src.RetryAt)) {
 			return true
 		}
 	}
@@ -206,8 +206,8 @@ func accountCatalogStaleLocked(accountID string, owner *auth.Auth, checkOwner bo
 //  1. 该账号目录里标了福利 → true（发现结果优先于种子）
 //  2. 该账号目录里有但没有标福利 → false：它已经以内置/agent-center 身份注册，
 //     套餐轮换后福利模型转正就靠这条摘掉 maas_type 头
-//  3. 目录里没有这个模型（尚未发现、福利来源失败或未领取）→ 回退冷启动种子，
-//     少带一次头就是一次 InferHub.002002009.404，宁可多带
+//  3. 权威福利快照（包括保留的空快照或关闭状态）不包含该模型 → false
+//  4. 尚无该账号的权威福利快照 → 回退冷启动种子
 func IsBenefitModel(accountID, model string) bool {
 	return isBenefitModel(accountID, model, nil, false)
 }

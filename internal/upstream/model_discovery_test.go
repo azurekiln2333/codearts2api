@@ -28,12 +28,13 @@ type modelFixture struct {
 func newModelFixture(t *testing.T) (*modelFixture, *Client) {
 	t.Helper()
 	f := &modelFixture{bodies: map[string]string{
-		EpAgentList:     `{"agents":[{"agent_id":"code-agent","is_primary_agent":true}]}`,
-		EpAgentDetail:   `{"gpts":{"models":[{"model_name":"agent-model"}]}}`,
-		EpModelBuiltin:  `{"builtinModels":[{"model_id":"builtin-model"}]}`,
-		EpBenefitConfig: `{"error_code":"0000","result":{"models":[{"model_id":"deepseek-v4.1-flash"}]}}`,
-		EpBenefitClaim:  `{"error_code":"0000"}`,
-		EpChatV2:        "data: [DONE]\n\n",
+		EpBenefitGatewayConfig: `{"enabled":true}`,
+		EpAgentList:            `{"agents":[{"agent_id":"code-agent","is_primary_agent":true}]}`,
+		EpAgentDetail:          `{"gpts":{"models":[{"model_name":"agent-model"}]}}`,
+		EpModelBuiltin:         `{"builtinModels":[{"model_id":"builtin-model"}]}`,
+		EpBenefitConfig:        `{"error_code":"0000","result":{"models":[{"model_id":"deepseek-v4.1-flash"}]}}`,
+		EpBenefitClaim:         `{"error_code":"0000"}`,
+		EpChatV2:               "data: [DONE]\n\n",
 	}, statuses: map[string]int{}}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()

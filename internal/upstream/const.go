@@ -29,6 +29,8 @@ const (
 	EpAgentDetail    = "/v1/agent-center/agents/detail"
 	// 内置模型（与官方 ModelService.listBuiltinModels 一致，Agent-Type: PromptCenter）。
 	EpModelBuiltin = "/v1/model/builtin"
+	// 账号福利通道开关（snap，Agent-Type: PromptCenter）。
+	EpBenefitGatewayConfig = "/v1/benefit-gateway-config"
 
 	// 限时福利（免费套餐）网关：模型发现 + 领取（opengw.developer 域）。
 	BenefitHost     = "https://opengw.developer.huaweicloud.com"

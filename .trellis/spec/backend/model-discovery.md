@@ -35,6 +35,18 @@ collections, malformed bodies, read errors, oversized bodies/collections and
 provider failures retain the prior contribution with visible stale/failure state.
 The returned merged list must equal the list published for that account.
 
+Before legacy benefit claim/config calls, read the account's signed Snap
+`GET /v1/benefit-gateway-config` with `Agent-Type: PromptCenter` inside the same
+source budget. Require HTTP 200 and an explicitly present boolean `enabled`: false is an
+authoritative `disabled` source, with empty contribution, a real confirmation
+timestamp and no error/backoff. Skip claim/config, drop retained benefit entries
+and suppress seed benefit routing for that auth. True preserves legacy discovery.
+Other HTTP statuses, a missing/null/nonboolean/duplicate field or cancellation are unknown/failed and
+retains prior source evidence; never default a missing boolean to false. A closed
+source counts as successful/current knowledge for job totals and completeness.
+Its later failed refresh cannot resurrect the removed route. Do not infer closure
+for other accounts or from a date/business code alone.
+
 Benefit routing follows current or retained account-specific source evidence.
 An agent entry alone cannot remove a benefit flag while benefit discovery fails.
 A later partial failure cannot resurrect entries removed by an earlier successful
@@ -81,6 +93,12 @@ at 512, with loss counts. Job completion distinguishes completed/partial/failed;
 skipped or unattempted accounts cannot become successful work. Error messages use
 fixed safe kinds, optional HTTP status and allowlisted bounded provider codes.
 Do not expose raw responses, headers, URLs with queries or credential material.
+HTTP-success benefit refusals use `business`, distinct from non-2xx `http` errors.
+Keep observed code `4000` as a reviewed safe code with a fixed channel-invalid
+description; it does not itself establish a disabled channel. Unknown codes and
+arbitrary provider messages stay omitted. The claim's `enabled` remains user
+policy, while `skipped_reason:channel_disabled` explains no attempt on a closed
+channel without claiming success or failure of a nonexistent claim.
 
 ### Negative capability and list semantics
 
@@ -125,6 +143,10 @@ new state. Keep BASE prefixes and existing escaping/clipboard behavior.
 |---|---|
 | One source fails | Retain that source; show failure/staleness, merge other successes |
 | Explicit valid empty source | Remove its old contribution; do not later resurrect it |
+| Account benefit switch explicitly false | Disabled, skip legacy calls, remove old routes/seeds, no retry error |
+| Benefit switch unavailable or malformed | Unknown failure, retain same-auth evidence, no inferred closure |
+| Benefit switch HTTP 202/206 with false | Failed/incomplete response, retain routes; only HTTP 200 may revoke |
+| HTTP-success nonzero business code | Business error with reviewed safe code; no invented HTTP failure |
 | Missing/malformed/oversized collection | Fail source and retain old data; no invented empty success |
 | Benefit fails, agent lists same ID | Preserve proven benefit route until authoritative change |
 | Concurrent refresh starts | One bounded job; same job ID/progress |
@@ -151,6 +173,12 @@ Use actual localhost source/admin/chat boundaries, not only selection helpers.
 Cover all source failure combinations, validated empty/removal followed by partial
 failure, malformed/oversized/read-error bodies, identical returned/stored merges,
 per-account signed benefit routing and an exact dynamically supplied new-model ID.
+Test the signed benefit switch path/header, exact HTTP 200 authority versus
+202/206 partial/accepted responses, true/false/unknown states and all
+disabled/re-enabled/failure transitions. Confirm false sends neither legacy claim
+nor config calls, drops old source/seed routes, and keeps other accounts isolated.
+Use a real normal-route chat for exact builtin/agent IDs with no benefit header.
+Contrast HTTP 503 and business 4000; retain malicious-code redaction coverage.
 Test coalescing/worker limits/deadline/service cancellation, responsive health,
 authentication, stale-negative recovery, preservation of concurrent fresh denials,
 same-UID replacement and unrelated state. Secret sentinels must not appear in

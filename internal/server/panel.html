@@ -507,15 +507,15 @@ function renderModels(){
   }).join("") : `<div class="empty">${icon("models")}<strong>${all.length ? "没有匹配的模型" : "目录中没有模型"}</strong>${all.length ? "请尝试其他模型标识。" : "查看下方来源结果，或点击「重新拉取」。"}</div>`;
 }
 const sourceNames = {agent:"Agent 目录",builtin:"内置目录",benefit:"福利目录"};
-const sourceLabels = {ok:"已更新",empty:"返回空目录",failed:"拉取失败",backoff:"退避中",canceled:"已取消",unknown:"尚无结果"};
-const sourceErrorLabels = {timeout:"请求超时",canceled:"请求取消",auth:"身份验证失败",http:"上游 HTTP 错误",parse:"响应格式错误",empty:"无有效响应",backoff:"处于退避期",unknown:"未知错误"};
+const sourceLabels = {ok:"已更新",empty:"返回空目录",disabled:"福利通道已关闭",failed:"拉取失败",backoff:"退避中",canceled:"已取消",unknown:"尚无结果"};
+const sourceErrorLabels = {timeout:"请求超时",canceled:"请求取消",auth:"身份验证失败",http:"上游 HTTP 错误",business:"上游业务错误",parse:"响应格式错误",empty:"无有效响应",backoff:"处于退避期",unknown:"未知错误"};
 const exclusionLabels = {not_registered:"账号未注册此模型",benefit_unavailable:"福利路由不可用",unknown:"上游拒绝，原因未知"};
 function enumLabel(labels,value,fallback){ return Object.hasOwn(labels,value) ? labels[value] : fallback; }
 function sourceErrorText(error){
   if (!error) return "";
   const parts = [enumLabel(sourceErrorLabels,error.kind,"未知错误")];
   if (numberValue(error.http_status) !== null) parts.push("HTTP " + Number(error.http_status));
-  if (error.provider_code) parts.push(String(error.provider_code));
+  if (error.provider_code) parts.push(error.kind === "business" && error.provider_code === "4000" ? "4000（通道无效或分组不存在）" : String(error.provider_code));
   return parts.join(" · ");
 }
 function renderCatalogControls(){
@@ -550,14 +550,14 @@ function renderCatalog(data){
     const eligibility = eligible ? "可参与调度" : account.eligible === false ? "不参与调度" : "调度状态未知";
     const excluded = account.excluded_reason ? `<span class="secondary">${escapeHtml(enumLabel(exclusionLabels,account.excluded_reason,String(account.excluded_reason)))}</span>` : "";
     const sourceCells = sources.map(source => {
-      const fresh = ["ok","empty"].includes(source.status), retained = Number(source.retained) > 0 && !fresh;
-      const statusClass = fresh ? source.status === "empty" ? "neutral" : "ok" : source.status === "unknown" ? "neutral" : "warn";
-      const error = sourceErrorText(source.error);
-      return `<div class="source-entry"><div class="source-title">${escapeHtml(enumLabel(sourceNames,source.source,"未知来源"))}<span class="badge ${statusClass}">${escapeHtml(enumLabel(sourceLabels,source.status,"未知结果"))}</span>${retained ? '<span class="badge warn">保留旧数据</span>' : ""}</div><span class="secondary">当前 ${numberText(source.count)} 条 · 保留 ${numberText(source.retained)} 条</span>${error ? `<span class="secondary">${escapeHtml(error)}</span>` : ""}${source.retry_at ? `<span class="secondary">下次重试 ${escapeHtml(fmtTime(source.retry_at))}</span>` : ""}</div>`;
+      const disabled = source.status === "disabled", fresh = ["ok","empty","disabled"].includes(source.status), retained = Number(source.retained) > 0 && !fresh;
+      const statusClass = fresh ? source.status === "ok" ? "ok" : "neutral" : source.status === "unknown" ? "neutral" : "warn";
+      const error = disabled ? "" : sourceErrorText(source.error);
+      return `<div class="source-entry"><div class="source-title">${escapeHtml(enumLabel(sourceNames,source.source,"未知来源"))}<span class="badge ${statusClass}">${escapeHtml(enumLabel(sourceLabels,source.status,"未知结果"))}</span>${retained ? '<span class="badge warn">保留旧数据</span>' : ""}</div><span class="secondary">当前 ${numberText(source.count)} 条 · 保留 ${numberText(source.retained)} 条</span>${disabled ? '<span class="secondary">使用 Agent / 内置目录</span>' : ""}${error ? `<span class="secondary">${escapeHtml(error)}</span>` : ""}${!disabled && source.retry_at ? `<span class="secondary">下次重试 ${escapeHtml(fmtTime(source.retry_at))}</span>` : ""}</div>`;
     }).join("") || '<span class="muted">尚无来源结果</span>';
-    const timeCells = sources.map(source => `<div class="source-entry"><div class="small">${escapeHtml(enumLabel(sourceNames,source.source,"未知来源"))}</div><span class="secondary">尝试 ${source.last_attempt_at ? escapeHtml(fmtTime(source.last_attempt_at)) : "尚未尝试"}</span><span class="secondary">成功 ${source.last_success_at ? escapeHtml(fmtTime(source.last_success_at)) : "尚无成功结果"}</span></div>`).join("");
+    const timeCells = sources.map(source => `<div class="source-entry"><div class="small">${escapeHtml(enumLabel(sourceNames,source.source,"未知来源"))}</div><span class="secondary">尝试 ${source.last_attempt_at ? escapeHtml(fmtTime(source.last_attempt_at)) : "尚未尝试"}</span><span class="secondary">${source.status === "disabled" ? "确认关闭" : "成功"} ${source.last_success_at ? escapeHtml(fmtTime(source.last_success_at)) : "尚无成功结果"}</span></div>`).join("");
     const claimPolicy = claim.enabled === true ? "自动领取已开启" : claim.enabled === false ? "自动领取已关闭" : "自动领取策略未知";
-    const claimResult = claim.attempted ? claim.succeeded === true ? "本次领取成功" : claim.succeeded === false || claim.error ? "本次领取失败" : "本次领取结果未知" : "本次未尝试领取";
+    const claimResult = !claim.attempted && claim.skipped_reason === "channel_disabled" ? "福利通道已关闭，本次跳过领取" : claim.attempted ? claim.succeeded === true ? "本次领取成功" : claim.succeeded === false || claim.error ? "本次领取失败" : "本次领取结果未知" : "本次未尝试领取";
     return `<tr><td><span class="mono">${escapeHtml(account.account || "—")}</span><span class="secondary"><span class="badge ${eligible ? "ok" : "neutral"}">${eligibility}</span></span>${excluded}<span class="secondary">最近成功 ${account.last_success_at ? escapeHtml(fmtTime(account.last_success_at)) : "尚无记录"}</span></td><td>${sourceCells}</td><td>${timeCells}<div class="source-entry"><div class="small">${claimPolicy}</div><span class="secondary">${claimResult}${claim.attempted_at ? " · " + escapeHtml(fmtTime(claim.attempted_at)) : ""}</span>${claim.error ? `<span class="secondary">${escapeHtml(sourceErrorText(claim.error))}</span>` : ""}</div></td></tr>`;
   }).join("") : '<tr><td colspan="3" class="empty">暂无账号来源快照。</td></tr>';
   $("modelExclusionCount").textContent = exclusions.length + " 条";

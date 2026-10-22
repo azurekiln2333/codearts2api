@@ -6,6 +6,39 @@ The functional gaps live in model discovery/cache ownership (`upstream/models.go
 
 ## A. Account model discovery and refresh
 
+### Follow-up: account benefit channel and ambiguous errors, 2026-10-22
+
+The user's deployed panel reports benefit source `failed`, count/retained zero
+and a generic HTTP error without an HTTP status. A localhost reproduction shows
+HTTP-success/nonzero benefit business codes take exactly this path. Current
+upstream protocol evidence also reports the old benefit channel can be disabled;
+the existing documented `GET /v1/benefit-gateway-config` exposes `enabled`.
+
+Before benefit claim/config, request that signed Snap endpoint with
+`Agent-Type: PromptCenter` within the same benefit source budget. Only HTTP 200
+with a valid explicit boolean false authoritatively disables this source. Other
+2xx statuses such as accepted/partial responses do not authorize removal. Publish source
+status `disabled`, remove its prior contribution, suppress seed benefit routing
+for that auth, skip claim/config, and count the confirmed channel state as a
+successful discovery result. Explicit true preserves the existing benefit flow.
+Failure or malformed/unknown switch state remains failed/unknown with retained
+prior evidence; it must not infer channel retirement or revoke other sources.
+No static date cutoff, guessed aliases, blind retry without the benefit header,
+or inference from business code 4000 alone is allowed.
+
+Keep HTTP failures and HTTP-success business failures distinct (`kind:business`).
+Allowlist observed code 4000 with a fixed diagnostic label; continue omitting raw
+provider message/body and arbitrary code values. Surface closed-channel and
+skipped-claim state honestly in the panel. Existing exact ID discovery and account
+negative reset identity/revision rules remain in force.
+
+Change owners: implementation worker owns upstream const/discovery/models and
+their tests plus necessary server integration fixtures; panel worker owns only
+panel.html and task browser fixture. Parent owns specs/research/release and final
+integration; independent checker owns final review. Cover disabled/reenabled
+transitions, prior failure retention, no removed route resurrection, malformed and
+failed switches, actual signed requests and actual normal-route V4.1 fixture chat.
+
 Add context-aware discovery while preserving `FetchModels(*auth.Auth)` as a compatibility wrapper. Carry the same deadline through agent-list/detail, builtin, benefit claim and benefit config calls; use synchronized credential snapshots. The new explicit operation must not enter the chat path. Keep source provenance so a successful empty response is different from failure and stale retention is distinguishable from new discovery.
 
 Use per-source snapshots for agent, builtin and benefit. A failed source retains its last successful contribution, annotated stale; a successful response replaces only that source's contribution, including intentional removal through a valid empty result. A malformed/missing expected envelope is failure, not an authoritative empty response. Benefit route flags follow the current merged account/source evidence. Do not infer that an agent entry has superseded a benefit route while benefit is failing, do not resurrect models removed by a successful benefit response, and return the same effective merged list that is committed to the account catalog. Preserve exact model IDs. Compatibility parsing needs fixture or primary-source evidence; never translate V4.1 Flash to an older model.
@@ -30,7 +63,7 @@ Retained per-source snapshots cap collections at 256 entries; IDs/names at 192 b
 }
 ```
 
-Source statuses are `ok`, `empty`, `failed`, `backoff`, `canceled`, `unknown`. Error kinds are a fixed safe enum (`timeout`, `canceled`, `auth`, `http`, `parse`, `empty`, `backoff`, `unknown`), with optional numeric HTTP status and bounded provider code. Counts and timestamps must describe actual attempts. Model origin distinguishes dynamically discovered data from static fallbacks. Catalog membership is not called verified usability.
+Source statuses are `ok`, `empty`, `disabled`, `failed`, `backoff`, `canceled`, `unknown`. Error kinds are a fixed safe enum (`timeout`, `canceled`, `auth`, `http`, `business`, `parse`, `empty`, `backoff`, `unknown`), with optional numeric HTTP status and bounded provider code. Counts and timestamps must describe actual attempts. Model origin distinguishes dynamically discovered data from static fallbacks. Catalog membership is not called verified usability. Disabled benefit sources represent an explicit per-account false switch and count as authoritative successful metadata; claim `skipped_reason:channel_disabled` explains why a configured automatic claim was not attempted.
 
 `POST /admin/api/models/refresh` accepts an empty JSON object, starts one bounded server-owned discovery job and returns HTTP 202 with the current `refresh` object. While running, repeated callers receive that same job, not new background work. GET polls the job snapshot. States are `idle`, `running`, `completed`, `partial`, `failed`. A minimum 15-second interval between job starts prevents repeated upstream fanout; early requests return the existing job and a truthful retry hint. The job has a 60-second total deadline, at most two account workers and no more than 512 account snapshots. Response lists are capped at 512 accounts, 2,048 model summaries and 512 exclusion summaries, with truncation counts; per-source response bodies retain existing bounded read limits. Deadline exhaustion reports partial/failed and skipped accounts, not success. Background startup discovery shares serialization with explicit discovery so requests cannot create overlapping account pulls. The caller's disconnect only cancels that caller's wait, not another caller's shared job.
 

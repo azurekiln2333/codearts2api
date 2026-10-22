@@ -48,3 +48,12 @@ criteria pass; see `research/verification.md` for exact evidence and artifact ha
 Step 8 remains an operational follow-up: no server entry point or Docker runtime
 is available, and the exact live official V4.1 Flash response remains unobserved.
 Keep the task in progress for that evidence rather than claiming deployment.
+
+## Benefit-source follow-up
+
+- [x] Reproduce HTTP-success business failure with no HTTP code matching the user's panel.
+- [x] Find documented live benefit-channel switch and current upstream protocol evidence.
+- [x] Gate legacy claim/config by a strictly validated channel state; publish authoritative disabled state and retain on uncertain state.
+- [x] Distinguish business and HTTP errors without exposing raw provider data.
+- [x] Show closed-channel/skipped-claim diagnostics and verify actual normal-route model chat.
+- [ ] Independent review, appropriate Go/browser/release checks, specs, committed follow-up and verified source artifact.

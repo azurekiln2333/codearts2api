@@ -30,7 +30,7 @@
     "internal/audit/audit.go",
     "README.md"
   ],
-  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '到现在还没开始做', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim.",
+  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '到现在还没开始做', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; new source artifact pending creation from reviewed commit.",
   "meta": {
     "task_creation_authorized": true,
     "production_target": "https://codearts2api.azurekiln.cn",
@@ -54,6 +54,20 @@
     "pending": [
       "production rebuild and read-only deployment verification",
       "exact live V4.1 Flash source and real completion"
-    ]
+    ],
+    "benefit_followup": {
+      "state": "local_checks_passed_release_pending",
+      "reported": "benefit source failed with 0 current/retained and generic HTTP error",
+      "confirmed_local_defects": [
+        "missing per-account benefit channel gate",
+        "HTTP-success business rejection mislabeled HTTP and safe code 4000 suppressed"
+      ],
+      "production_snapshot_access": "both authenticated catalog GET and public health GET returned HTTP 403; actual account switch/code unavailable",
+      "boundary": "strict per-account enabled bool, retain unknown, no global/date-based retirement or guessed model mapping",
+      "quality_gate_passed": true,
+      "strict_switch_status": 200,
+      "independent_review": "no remaining code blocker; HTTP 201-207 authority defect fixed and regression verified",
+      "live_account_gate_verified": false
+    }
   }
 }

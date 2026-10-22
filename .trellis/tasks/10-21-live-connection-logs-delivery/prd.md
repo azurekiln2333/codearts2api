@@ -32,6 +32,7 @@ Make the deployed gateway's admin console useful for operating real models and d
 - [x] AC4 / R4-R5: Deleted content is absent after login, reload, refresh and navigation. Desktop/mobile screenshots show the reduced radius scale, no leftover blank card or JavaScript errors, and working account/OAuth/audit flows.
 - [x] AC5 / R6: Stalled upstream fixtures remain visible while running and leave accurate completed traces after resource cleanup. Live tracking, phase points and polling are bounded; logs contain no message bodies, headers, keys or credentials.
 - [x] AC6 / R7: Relevant Go tests, race tests for backend changes, vet, build, browser checks and diff checks pass. Release includes Compose, Dockerfile and example configuration, excludes live auth/data/secrets, and identifies the actual source revision.
+- [x] AC7 / deployed benefit follow-up: A strictly validated per-account channel switch gates legacy benefit calls. Explicit closure removes old contributions/seed routing, skips claims/config and appears as confirmed closed; unknown/failing state retains prior evidence. HTTP-success business failures remain distinct from real HTTP errors. Actual normal-route chat, channel transitions, source retention, account isolation and safe diagnostics are verified with localhost fixtures; production account results remain pending.
 
 ## Scope and compatibility
 

@@ -7,3 +7,4 @@
 {"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/model-discovery-findings.md","reason":"Verify source provenance/failure/removal/return consistency, safe stale-negative recovery, races and real-route boundaries."}
 {"file": ".trellis/spec/backend/model-discovery.md", "reason": "Verify discovery fixtures, cache ownership, bounded jobs, identity and truthful API/UI results."}
 {"file": ".trellis/spec/backend/source-release.md", "reason": "Review release membership, identity, preserved mounts and honest GET-only verification."}
+{"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/benefit-http-findings.md","reason":"Follow deployed benefit failure: distinguish business versus HTTP, strictly gate per-account legacy benefit access, avoid unproven global closure or model substitutions."}

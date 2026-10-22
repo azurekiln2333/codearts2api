@@ -22,6 +22,8 @@ type catalogFixture struct {
 	mu            sync.Mutex
 	gate          <-chan struct{}
 	statuses      map[string]int
+	bodies        map[string]string
+	pathCalls     map[string]int
 	model         string
 	calls         atomic.Int32
 	active        atomic.Int32
@@ -33,7 +35,7 @@ type catalogFixture struct {
 
 func newCatalogFixture(t *testing.T) (*catalogFixture, *httptest.Server) {
 	t.Helper()
-	f := &catalogFixture{statuses: map[string]int{}, model: "deepseek-v4.1-flash"}
+	f := &catalogFixture{statuses: map[string]int{}, bodies: map[string]string{}, pathCalls: map[string]int{}, model: "deepseek-v4.1-flash"}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.calls.Add(1)
 		active := f.active.Add(1)
@@ -46,6 +48,8 @@ func newCatalogFixture(t *testing.T) (*catalogFixture, *httptest.Server) {
 		}
 		f.mu.Lock()
 		gate, status, model := f.gate, f.statuses[r.URL.Path], f.model
+		body, overridden := f.bodies[r.URL.Path]
+		f.pathCalls[r.URL.Path]++
 		f.mu.Unlock()
 		if gate != nil {
 			select {
@@ -60,7 +64,13 @@ func newCatalogFixture(t *testing.T) (*catalogFixture, *httptest.Server) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
+		if overridden {
+			_, _ = io.WriteString(w, body)
+			return
+		}
 		switch r.URL.Path {
+		case upstream.EpBenefitGatewayConfig:
+			_, _ = io.WriteString(w, `{"enabled":true}`)
 		case upstream.EpAgentList:
 			_, _ = io.WriteString(w, `{"agents":[{"agent_id":"primary","is_primary_agent":true}]}`)
 		case upstream.EpAgentDetail:
@@ -275,7 +285,7 @@ func TestOpenAIModelsStillSchedulesDiscoveryAndIdleProbe(t *testing.T) {
 	if w.Code != http.StatusOK || h.modelRefreshSnapshot().ID == "" {
 		t.Fatalf("OpenAI listing did not schedule its background refresh: status=%d refresh=%+v", w.Code, h.modelRefreshSnapshot())
 	}
-	if result := waitCatalog(t, h); result.State != "completed" || f.calls.Load() != 5 {
+	if result := waitCatalog(t, h); result.State != "completed" || f.calls.Load() != 6 {
 		t.Fatalf("OpenAI listing lost metadata/claim discovery: refresh=%+v calls=%d", result, f.calls.Load())
 	}
 	acct := p.Accounts()[0]
@@ -321,6 +331,107 @@ func TestCatalogColdPartialMissDoesNotPreventRealChat(t *testing.T) {
 	}
 	if f.benefitHeader.Load() {
 		t.Fatal("missing source metadata invented a benefit route")
+	}
+}
+
+func TestCatalogDisabledBenefitKeepsExactNormalModelChat(t *testing.T) {
+	for _, source := range []string{"agent", "builtin"} {
+		t.Run(source, func(t *testing.T) {
+			f, backend := newCatalogFixture(t)
+			h, p := catalogHandler(t, 1, f, backend)
+			h.cfg.Upstream.SetBenefitAutoClaim(true)
+			acct := p.Accounts()[0]
+			refreshCatalog(t, h)
+			if waitCatalog(t, h).State != "completed" || !upstream.IsBenefitModelForAuth(acct.UID, f.model, acct.AuthSnapshot()) {
+				t.Fatal("fixture did not discover an initial benefit route")
+			}
+			markUnusable(acct.UID, f.model, "not registered")
+			f.mu.Lock()
+			claims, configs := f.pathCalls[upstream.EpBenefitClaim], f.pathCalls[upstream.EpBenefitConfig]
+			f.bodies[upstream.EpBenefitGatewayConfig] = `{"enabled":false}`
+			f.statuses[upstream.EpBenefitConfig] = http.StatusServiceUnavailable
+			if source == "agent" {
+				f.bodies[upstream.EpAgentDetail] = `{"gpts":{"models":[{"model_name":"deepseek-v4.1-flash"}]}}`
+			} else {
+				f.bodies[upstream.EpModelBuiltin] = `{"builtinModels":[{"model_id":"deepseek-v4.1-flash"}]}`
+			}
+			f.mu.Unlock()
+			h.modelCatalog.mu.Lock()
+			h.modelCatalog.refresh.RetryAt = nil
+			h.modelCatalog.mu.Unlock()
+			refreshCatalog(t, h)
+			result := waitCatalog(t, h)
+			if result.State != "completed" || result.Failed != 0 || result.NegativeResetCount != 1 {
+				t.Fatalf("closed channel was a failed refresh or lost precise normal-route recovery: %+v", result)
+			}
+			w := catalogRequest(h, http.MethodGet, "/admin/api/models", "", "fixture-key")
+			var page catalogPage
+			if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil {
+				t.Fatal(err)
+			}
+			if len(page.Accounts) != 1 || page.Accounts[0].Sources[2].Status != "disabled" || page.Accounts[0].Sources[2].Count != 0 || page.Accounts[0].Sources[2].Retained != 0 || page.Accounts[0].Sources[2].RetryAt != nil || !page.Accounts[0].Claim.Enabled || page.Accounts[0].Claim.Attempted || page.Accounts[0].Claim.SkippedReason != "channel_disabled" {
+				t.Fatalf("admin API misrepresented channel/claim state: %s", w.Body.String())
+			}
+			found := false
+			for _, m := range page.Models {
+				if m.ID == f.model {
+					found = m.Origin == "discovered" && m.CatalogAccounts == 1 && m.BenefitAccounts == 0 && m.BlockedAccounts == 0
+				}
+			}
+			if !found {
+				t.Fatal("normal source lost exact V4.1 Flash ID or retained a benefit entitlement")
+			}
+			f.mu.Lock()
+			unchanged := f.pathCalls[upstream.EpBenefitClaim] == claims && f.pathCalls[upstream.EpBenefitConfig] == configs
+			f.mu.Unlock()
+			if !unchanged {
+				t.Fatal("confirmed closed channel still called legacy benefit endpoints")
+			}
+			chat := func() *httptest.ResponseRecorder {
+				return catalogRequest(h, http.MethodPost, "/v1/chat/completions", `{"model":"deepseek-v4.1-flash","messages":[{"role":"user","content":"synthetic prompt"}]}`, "fixture-key")
+			}
+			calls := f.calls.Load()
+			if w := chat(); w.Code != 200 || f.chatCalls.Load() != 1 || f.benefitHeader.Load() || f.calls.Load() != calls+1 || p.Busy(acct.Name) {
+				t.Fatalf("normal discovered model failed or used stale benefit route: status=%d chat=%d benefit=%v body=%s", w.Code, f.chatCalls.Load(), f.benefitHeader.Load(), w.Body.String())
+			}
+			// Discovery never overrides a genuine newer provider rejection or
+			// invents a second-route retry after that rejection.
+			f.denyChat.Store(true)
+			if w := chat(); w.Code != 404 || f.chatCalls.Load() != 2 {
+				t.Fatalf("real normal-route denial was concealed or retried: status=%d chat=%d", w.Code, f.chatCalls.Load())
+			}
+			if w := chat(); w.Code != 404 || f.chatCalls.Load() != 2 {
+				t.Fatal("closed channel bypassed the genuine negative capability cache")
+			}
+		})
+	}
+}
+
+func TestCatalogBenefitBusinessErrorIsSafeAndNotChannelClosure(t *testing.T) {
+	f, backend := newCatalogFixture(t)
+	f.bodies[upstream.EpBenefitConfig] = `{"error_code":"4000","error_msg":"secret-provider-message"}`
+	f.bodies[upstream.EpBenefitClaim] = `{"error_code":"4000","error_msg":"secret-claim-message"}`
+	h, _ := catalogHandler(t, 1, f, backend)
+	h.cfg.Upstream.SetBenefitAutoClaim(true)
+	refreshCatalog(t, h)
+	if result := waitCatalog(t, h); result.State != "partial" || result.Failed != 1 {
+		t.Fatalf("business refusal was treated as authoritative channel closure: %+v", result)
+	}
+	w := catalogRequest(h, http.MethodGet, "/admin/api/models", "", "fixture-key")
+	var page catalogPage
+	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Accounts) != 1 {
+		t.Fatal("missing account diagnostics")
+	}
+	account := page.Accounts[0]
+	source := account.Sources[2]
+	if source.Status != "failed" || source.Error == nil || source.Error.Kind != "business" || source.Error.ProviderCode != "4000" || source.Error.HTTPStatus != 0 || source.LastSuccessAt != nil || source.RetryAt == nil || !account.Claim.Enabled || !account.Claim.Attempted || account.Claim.Succeeded || account.Claim.Error == nil || account.Claim.Error.Kind != "business" || account.Claim.Error.ProviderCode != "4000" || account.Claim.SkippedReason != "" {
+		t.Fatalf("business failure lost accurate transport/claim metadata: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "secret-") {
+		t.Fatal("raw provider body leaked through admin diagnostics")
 	}
 }
 

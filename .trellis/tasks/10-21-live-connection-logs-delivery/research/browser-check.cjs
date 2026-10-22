@@ -50,14 +50,19 @@ const state = { mode: 'normal', calls: [], oauthDone: false, releaseOverview: nu
 function modelSnapshot() {
   const empty = state.mode === 'empty';
   const partial = state.mode === 'models-partial';
+  const disabled = state.mode === 'models-benefit-disabled';
+  const business = ['models-business', 'models-business-unsafe'].includes(state.mode);
+  const httpError = state.mode === 'models-http-error';
+  const sourceFailed = partial || business || httpError;
+  const sourceError = partial ? { kind: 'timeout' } : business ? { kind: 'business', provider_code: state.mode === 'models-business-unsafe' ? malicious : '4000' } : httpError ? { kind: 'http', http_status: 503 } : null;
   const list = empty ? [] : [...models, ...(state.pulled ? [{ id: 'fixture-new-model-after-refresh' }] : [])];
   return {
-    models: list.map(({ id }) => ({ id, origin: 'discovered', catalog_accounts: 2, benefit_accounts: id.includes('flash') ? 1 : 0, blocked_accounts: id === 'deepseek-v4.1' ? 1 : 0 })),
+    models: list.map(({ id }) => ({ id, origin: 'discovered', catalog_accounts: 2, benefit_accounts: !disabled && id.includes('flash') ? 1 : 0, blocked_accounts: id === 'deepseek-v4.1' ? 1 : 0 })),
     accounts: empty ? [] : [{ account: 'fixture-account-01', eligible: true, last_success_at: stamp, sources: [
       { source: 'agent', status: 'ok', last_attempt_at: stamp, last_success_at: stamp, count: 8, retained: 0 },
       { source: 'builtin', status: 'ok', last_attempt_at: stamp, last_success_at: stamp, count: 7, retained: 0 },
-      { source: 'benefit', status: partial ? 'failed' : 'ok', last_attempt_at: stamp, last_success_at: stamp, retry_at: partial ? new Date(Date.now() + 300000).toISOString() : null, count: 3, retained: partial ? 3 : 0, ...(partial ? { error: { kind: 'timeout' } } : {}) },
-    ], claim: partial ? { enabled: true, attempted: true, attempted_at: stamp, error: { kind: 'timeout' } } : { enabled: true, attempted: false } }],
+      { source: 'benefit', status: disabled ? 'disabled' : sourceFailed ? 'failed' : 'ok', last_attempt_at: stamp, last_success_at: stamp, retry_at: sourceFailed ? new Date(Date.now() + 300000).toISOString() : null, count: disabled || business || httpError ? 0 : 3, retained: partial ? 3 : 0, ...(sourceError ? { error: sourceError } : {}) },
+    ], claim: disabled ? { enabled: true, attempted: false, skipped_reason: 'channel_disabled' } : partial ? { enabled: true, attempted: true, attempted_at: stamp, error: { kind: 'timeout' } } : { enabled: true, attempted: false } }],
     exclusions: empty ? [] : [{ account: 'fixture-account-02', model: 'deepseek-v4.1', reason: 'not_registered', recorded_at: stamp, expires_at: new Date(Date.now() + 1800000).toISOString() }],
     refresh: state.refresh || { id: '', state: 'idle', total: 0, completed: 0, failed: 0, skipped: 0, negative_reset_count: 0 },
     truncated: { accounts: 0, models: 0, exclusions: 0 },
@@ -236,7 +241,58 @@ async function navigate(page, view) {
     await visible(page, '#modelCatalogWarning');
     assert.match(await page.locator('#modelChips').innerText(), /deepseek-v4\.1-flash/);
     assert.match(await page.locator('#modelSourceDetails').innerText(), /本次领取失败/, 'a failed claim omits succeeded=false in the backend JSON and must remain a known failure');
+    await page.waitForFunction(() => document.getElementById('modelRefreshStatus')?.textContent.includes('拉取部分失败'));
     await screenshot(page, 'model-partial-failure');
+
+    state.mode = 'models-benefit-disabled';
+    await navigate(page, 'accounts'); await navigate(page, 'models');
+    await page.waitForFunction(() => document.getElementById('modelSourceDetails')?.textContent.includes('本次跳过领取'));
+    await page.locator('#btnModelsRefresh').click();
+    await page.waitForFunction(() => document.getElementById('modelRefreshStatus')?.textContent.includes('拉取完成'));
+    const benefitSource = page.locator('#modelSourceDetails td:nth-child(2) .source-entry').filter({ hasText: '福利目录' });
+    assert.match(await benefitSource.innerText(), /福利通道已关闭/);
+    assert.match(await benefitSource.innerText(), /使用 Agent \/ 内置目录/);
+    assert.match(await benefitSource.innerText(), /当前 0 条 · 保留 0 条/);
+    assert.doesNotMatch(await benefitSource.innerText(), /拉取失败|重试|HTTP|业务错误|保留旧数据/);
+    assert.equal(await benefitSource.locator('.badge.warn').count(), 0, 'a confirmed closed channel is not a failing source');
+    assert.equal(await page.locator('#modelCatalogWarning').isHidden(), true, 'a closed benefit channel does not warn that the pull failed');
+    assert.equal(await page.locator('#modelCatalogError').isHidden(), true);
+    const benefitTime = page.locator('#modelSourceDetails td:nth-child(3) .source-entry').filter({ hasText: '福利目录' });
+    assert.match(await benefitTime.innerText(), /确认关闭/);
+    assert.doesNotMatch(await benefitTime.innerText(), /成功/, 'a disabled source confirms closure rather than claiming a model listing succeeded');
+    const claimResult = page.locator('#modelSourceDetails td:nth-child(3) .source-entry').last();
+    assert.match(await claimResult.innerText(), /自动领取已开启/);
+    assert.match(await claimResult.innerText(), /福利通道已关闭，本次跳过领取/);
+    assert.doesNotMatch(await claimResult.innerText(), /领取失败|结果未知|领取成功/);
+    assert.match(await page.locator('#modelChips').innerText(), /deepseek-v4\.1-flash/);
+    await page.locator('#modelSourceDetails').scrollIntoViewIfNeeded();
+    await screenshot(page, 'model-benefit-disabled');
+
+    state.mode = 'models-business';
+    await navigate(page, 'accounts'); await navigate(page, 'models');
+    await page.waitForFunction(() => document.getElementById('modelSourceDetails')?.textContent.includes('通道无效或分组不存在'));
+    assert.match(await benefitSource.innerText(), /上游业务错误 · 4000（通道无效或分组不存在）/);
+    assert.doesNotMatch(await benefitSource.innerText(), /HTTP|福利通道已关闭|账号无权限/);
+    assert.match(await benefitSource.innerText(), /下次重试/);
+    await visible(page, '#modelCatalogWarning');
+    await page.locator('#modelSourceDetails').scrollIntoViewIfNeeded();
+    await screenshot(page, 'model-benefit-business-error');
+
+    state.mode = 'models-business-unsafe';
+    await navigate(page, 'accounts'); await navigate(page, 'models');
+    await page.waitForFunction(() => document.getElementById('modelSourceDetails')?.textContent.includes('<img'));
+    assert.match(await benefitSource.innerText(), /<img/);
+    assert.equal(await page.locator('#modelSourceDetails img').count(), 0, 'provider codes are rendered as escaped text');
+    assert.equal(await page.evaluate(() => window.__fixtureXSS), undefined);
+
+    state.mode = 'models-http-error';
+    await navigate(page, 'accounts'); await navigate(page, 'models');
+    await page.waitForFunction(() => document.getElementById('modelSourceDetails')?.textContent.includes('HTTP 503'));
+    assert.match(await benefitSource.innerText(), /上游 HTTP 错误 · HTTP 503/);
+    assert.doesNotMatch(await benefitSource.innerText(), /业务错误|通道无效|福利通道已关闭/);
+    await visible(page, '#modelCatalogWarning');
+    await page.locator('#modelSourceDetails').scrollIntoViewIfNeeded();
+    await screenshot(page, 'model-benefit-http-error');
     state.mode = 'normal';
     await navigate(page, 'connections'); await visible(page, '#connActiveBody tr');
     assert.match(await page.locator('#connActiveBody').innerText(), /fixture-live-headers/);
@@ -410,6 +466,13 @@ async function navigate(page, view) {
     assert.ok(modelScroll.mainScroll > 0 && modelScroll.tableScroll > 0 && modelScroll.rootScroll === 0 && modelScroll.sourceTop < 844, 'mobile source details and table remain scrollable inside the fixed viewport');
     await noOverflow(page, 'mobile source scrolled');
     await screenshot(page, 'model-source-mobile');
+    state.mode = 'models-benefit-disabled';
+    await navigate(page, 'accounts'); await navigate(page, 'models');
+    await page.waitForFunction(() => document.getElementById('modelSourceDetails')?.textContent.includes('本次跳过领取'));
+    await page.locator('#modelSourceDetails').scrollIntoViewIfNeeded();
+    await noOverflow(page, 'mobile disabled benefit source');
+    await screenshot(page, 'model-benefit-disabled-mobile');
+    state.mode = 'normal';
     await navigate(page, 'overview'); await navigate(page, 'overview');
     await page.locator('#sidebarToggle').click(); await screenshot(page, 'navigation-mobile');
     await page.keyboard.press('Escape');
@@ -470,7 +533,7 @@ async function navigate(page, view) {
     }
     assert.deepEqual(errors, [], 'no uncaught browser errors');
     assert.deepEqual(external, [], 'no external assets or requests');
-    console.log(JSON.stringify({ passed: true, checks: ['real Chrome login/logout and in-flight overview/model/connection suppression', 'six hash-routed views', 'desktop/mobile document overflow and compact corners', 'removed sidebar/header/shortcut content', 'real model-pull POST with duplicate suppression and partial/error retention', 'model source/exclusion diagnostics', 'live connection polling, phase expansion and legacy completed traces', 'off-view/hidden/logout polling stops', 'account search/status/actions and legacy history', 'model search and exact real clipboard copy', 'OAuth start/import/Escape/focus trapping and return', 'request cursor/model/account/outcome/status filters', 'failed filter resets cursor and preserves only same-query rows', 'committed 200 failure and absent status', 'HTML escaping', 'light/dark persistence', 'mobile navigation', 'empty/unknown/disabled states', 'proxy base path and admin alias', 'no external assets or uncaught errors'], screenshots: output }));
+    console.log(JSON.stringify({ passed: true, checks: ['real Chrome login/logout and in-flight overview/model/connection suppression', 'six hash-routed views', 'desktop/mobile document overflow and compact corners', 'removed sidebar/header/shortcut content', 'real model-pull POST with duplicate suppression and partial/error retention', 'model source/exclusion diagnostics', 'disabled benefit source without failure, retry or claim attempt', 'business code 4000 distinct from HTTP 503 and provider-code escaping', 'live connection polling, phase expansion and legacy completed traces', 'off-view/hidden/logout polling stops', 'account search/status/actions and legacy history', 'model search and exact real clipboard copy', 'OAuth start/import/Escape/focus trapping and return', 'request cursor/model/account/outcome/status filters', 'failed filter resets cursor and preserves only same-query rows', 'committed 200 failure and absent status', 'HTML escaping', 'light/dark persistence', 'mobile navigation', 'empty/unknown/disabled states', 'proxy base path and admin alias', 'no external assets or uncaught errors'], screenshots: output }));
   } catch (error) {
     await screenshot(page, 'failure').catch(() => {});
     console.error(JSON.stringify({ browserErrors: errors, externalRequests: external, lastCalls: state.calls.slice(-8), failureScreenshot: path.join(output, 'failure.png') }));

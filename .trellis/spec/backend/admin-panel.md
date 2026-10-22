@@ -69,6 +69,12 @@ response schema, filters and exclusive sequence cursor.
   `/admin/api/models/refresh`. Report the actual job/source results, retained stale
   entries and scoped exclusions; never report overview reloading as a new pull.
   The backend DTO/limits are owned by [Model Discovery](./model-discovery.md).
+- Benefit `disabled` means the account's upstream switch explicitly closed the
+  channel; show it as confirmed closed, without source-failure warnings or retry.
+  Explain skipped claim through `skipped_reason:channel_disabled` and point to
+  normal Agent/builtin discovery. `business` errors and HTTP errors have distinct
+  labels. Safe code 4000 may explain invalid channel/group, but cannot be presented
+  as proven channel closure, expired credentials or missing account entitlement.
 - Connections reads `GET /admin/api/connections`, showing active phase/age,
   actual upstream read progress and recent optional traces. Missing legacy
   traces stay unknown; accepted SSE data is not labeled as a generated token.

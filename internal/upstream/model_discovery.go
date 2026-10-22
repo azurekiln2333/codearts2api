@@ -56,11 +56,12 @@ type SourceStatus struct {
 }
 
 type ClaimStatus struct {
-	Enabled     bool         `json:"enabled"`
-	Attempted   bool         `json:"attempted"`
-	AttemptedAt *time.Time   `json:"attempted_at,omitempty"`
-	Succeeded   bool         `json:"succeeded,omitempty"`
-	Error       *SourceError `json:"error,omitempty"`
+	Enabled       bool         `json:"enabled"`
+	Attempted     bool         `json:"attempted"`
+	AttemptedAt   *time.Time   `json:"attempted_at,omitempty"`
+	Succeeded     bool         `json:"succeeded,omitempty"`
+	Error         *SourceError `json:"error,omitempty"`
+	SkippedReason string       `json:"skipped_reason,omitempty"`
 }
 
 type sourceSnapshot struct {
@@ -78,7 +79,7 @@ type ModelDiscovery struct {
 func (d ModelDiscovery) Successes() int {
 	n := 0
 	for _, s := range d.sources {
-		if s.Status == "ok" || s.Status == "empty" {
+		if modelSourceSucceeded(s.Status) {
 			n++
 		}
 	}
@@ -86,6 +87,12 @@ func (d ModelDiscovery) Successes() int {
 }
 
 func (d ModelDiscovery) FailedSources() int { return len(modelSources) - d.Successes() }
+
+// An explicitly disabled channel is a successful, authoritative empty source.
+// Failed/unknown switches must retain the last successful contribution instead.
+func modelSourceSucceeded(status string) bool {
+	return status == "ok" || status == "empty" || status == "disabled"
+}
 
 // ModelCatalogSnapshot owns its returned slices and timestamp/error pointers.
 type ModelCatalogSnapshot struct {
@@ -240,7 +247,7 @@ func PublishModelDiscovery(accountID string, owner *auth.Auth, d ModelDiscovery)
 	for _, name := range modelSources {
 		s := d.sources[name]
 		s.SourceStatus = cloneSource(s.SourceStatus)
-		if s.Status != "ok" && s.Status != "empty" && prev != nil {
+		if !modelSourceSucceeded(s.Status) && prev != nil {
 			if old, ok := prev.sources[name]; ok {
 				s.models = append([]ModelInfo(nil), old.models...)
 				s.LastSuccessAt = cloneTime(old.LastSuccessAt)
@@ -265,7 +272,7 @@ func PublishModelDiscovery(accountID string, owner *auth.Auth, d ModelDiscovery)
 				continue
 			}
 			s := ac.sources[name]
-			if s.Status != "ok" && s.Status != "empty" {
+			if !modelSourceSucceeded(s.Status) {
 				continue
 			}
 			found := false
@@ -313,14 +320,26 @@ func (c *Client) DiscoverModels(ctx context.Context, acct *auth.Auth, force bool
 		s.LastAttemptAt = &attempt
 		sourceCtx, cancelSource := context.WithTimeout(ctx, modelSourceTimeout)
 		var err error
+		channelDisabled := false
 		switch name {
 		case "agent":
 			s.models, err = c.fetchAgentModelsContext(sourceCtx, cred)
 		case "builtin":
 			s.models, err = c.fetchBuiltinModelsContext(sourceCtx, cred)
 		case "benefit":
+			var enabled bool
+			enabled, err = c.fetchBenefitGatewayEnabled(sourceCtx, cred)
+			if err != nil {
+				break
+			}
+			if !enabled {
+				channelDisabled = true
+				d.Claim.SkippedReason = "channel_disabled"
+				break
+			}
 			if d.Claim.Enabled {
-				d.Claim.Attempted, d.Claim.AttemptedAt = true, &attempt
+				claimAttempt := time.Now().UTC()
+				d.Claim.Attempted, d.Claim.AttemptedAt = true, &claimAttempt
 				claimCtx, cancelClaim := context.WithTimeout(sourceCtx, 5*time.Second)
 				claimErr := c.ClaimBenefitContext(claimCtx, cred)
 				cancelClaim()
@@ -334,7 +353,9 @@ func (c *Client) DiscoverModels(ctx context.Context, acct *auth.Auth, force bool
 		cancelSource()
 		if err == nil {
 			s.Status = "ok"
-			if len(s.models) == 0 {
+			if channelDisabled {
+				s.Status = "disabled"
+			} else if len(s.models) == 0 {
 				s.Status = "empty"
 			}
 			success := time.Now().UTC()
@@ -375,6 +396,12 @@ func discoveryError(err error) *SourceError {
 
 // Every metadata request checks read errors and overflow before accepting JSON.
 func (c *Client) modelRequest(ctx context.Context, method, endpoint, agentType string, cred SignCredential, maxBytes int64) ([]byte, error) {
+	return c.modelRequestWithStatus(ctx, method, endpoint, agentType, cred, maxBytes, 0)
+}
+
+// requiredStatus optionally narrows a source's success contract. In particular,
+// a pending or partial switch response must never revoke confirmed routes.
+func (c *Client) modelRequestWithStatus(ctx context.Context, method, endpoint, agentType string, cred SignCredential, maxBytes int64, requiredStatus int) ([]byte, error) {
 	var payload []byte
 	if method == http.MethodPost {
 		payload = []byte("{}")
@@ -397,19 +424,19 @@ func (c *Client) modelRequest(ctx context.Context, method, endpoint, agentType s
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 || (requiredStatus != 0 && resp.StatusCode != requiredStatus) {
+		kind := "http"
+		if resp.StatusCode == 401 || resp.StatusCode == 403 {
+			kind = "auth"
+		}
+		return nil, &SourceError{Kind: kind, HTTPStatus: resp.StatusCode}
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
 	if err != nil {
 		return nil, err
 	}
 	if int64(len(raw)) > maxBytes || !utf8.Valid(raw) {
 		return nil, &SourceError{Kind: "parse"}
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		kind := "http"
-		if resp.StatusCode == 401 || resp.StatusCode == 403 {
-			kind = "auth"
-		}
-		return nil, &SourceError{Kind: kind, HTTPStatus: resp.StatusCode}
 	}
 	return raw, nil
 }
@@ -569,6 +596,42 @@ func (c *Client) fetchBuiltinModelsContext(ctx context.Context, cred SignCredent
 	return parseModelEntries(entries, "builtin")
 }
 
+func (c *Client) fetchBenefitGatewayEnabled(ctx context.Context, cred SignCredential) (bool, error) {
+	raw, err := c.modelRequestWithStatus(ctx, http.MethodGet, c.snapURL(EpBenefitGatewayConfig), "PromptCenter", cred, 1<<20, http.StatusOK)
+	if err != nil {
+		return false, err
+	}
+	// A missing/null/ambiguous switch cannot authoritatively revoke a route.
+	// Read the exact key once; unrelated future metadata fields remain allowed.
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('{') {
+		return false, &SourceError{Kind: "parse"}
+	}
+	found, enabled := false, false
+	for decoder.More() {
+		key, keyErr := decoder.Token()
+		var value json.RawMessage
+		if keyErr != nil || decoder.Decode(&value) != nil {
+			return false, &SourceError{Kind: "parse"}
+		}
+		if key != "enabled" {
+			continue
+		}
+		value = bytes.TrimSpace(value)
+		if found || (!bytes.Equal(value, []byte("true")) && !bytes.Equal(value, []byte("false"))) {
+			return false, &SourceError{Kind: "parse"}
+		}
+		found, enabled = true, bytes.Equal(value, []byte("true"))
+	}
+	end, err := decoder.Token()
+	var extra any
+	if err != nil || end != json.Delim('}') || !found || decoder.Decode(&extra) != io.EOF {
+		return false, &SourceError{Kind: "parse"}
+	}
+	return enabled, nil
+}
+
 func benefitEnvelope(raw []byte) error {
 	var envelope struct {
 		Code string `json:"error_code"`
@@ -582,10 +645,10 @@ func benefitEnvelope(raw []byte) error {
 	// Codes are allowlisted rather than arbitrary provider strings.
 	code := ""
 	switch envelope.Code {
-	case "4004.200", "InferHub.4004.200", "401", "403":
+	case "4000", "4004.200", "InferHub.4004.200", "401", "403":
 		code = envelope.Code
 	}
-	kind := "http"
+	kind := "business"
 	if envelope.Code == "401" || envelope.Code == "403" {
 		kind = "auth"
 	}

@@ -191,6 +191,8 @@ func TestFetchModelsMergesSourcesAndGatesClaim(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
+		case EpBenefitGatewayConfig:
+			_, _ = io.WriteString(w, `{"enabled":true}`)
 		case "/v1/agent-center/agents/useragents":
 			_, _ = io.WriteString(w, `{"agents":[{"agent_id":"a1","agent_name":"Other","is_primary_agent":true},`+
 				`{"agent_id":"a2","agent_name":"CodeAgent","show_in_ide":true,"alias":{"alias_zh_cn":"智能体"}}]}`)
