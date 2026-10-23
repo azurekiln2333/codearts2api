@@ -15,7 +15,7 @@
   "branch": "fix/deepseek-concurrency-20261021",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": "72e83fbed57d862d85e4d20b8b96f7a44e41019d",
+  "commit": "4622f3ef2f4b02ed311ca5cffb617e148c1bb4eb",
   "pr_url": null,
   "subtasks": [],
   "children": [],
@@ -30,7 +30,7 @@
     "internal/audit/audit.go",
     "README.md"
   ],
-  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '鍒扮幇鍦ㄨ繕娌″紑濮嬪仛', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; reviewed product committed in 709f63e and new source ZIP extracted/compiled/started with every packaged GET-only check passed. Production account evidence and deployment remain pending. Model identity/concurrency follow-up now passes independent review and full Go normal/race/vet/build; actual wire-ID regression fails on the prior release and passes on repaired source. Product committed as b9b318c; its new source ZIP passed full member checksum/exclusion checks, extraction, actual compilation/start and every packaged GET-only route/revision check. Prior archives remain unchanged. Production deployment and real account/model success remain unverified. Real-credential follow-up now passes independent full normal/race/vet/build and finite full-gateway cold/repeated/streamed/long/concurrent measurements. Limit-3 first wave retained nine bounded local queue rejections; synchronized rerun passed 18/18 plus four reuse calls. Historical health timeouts remain unattributed. Source release pending; production not deployed. Consolidated repair committed as 72e83fb; its 127-member source ZIP passed hashes/private exclusion, extraction, actual compile/start and every packaged GET-only revision/route check. Current-round original credential hashes and pre-release user ZIP hash matched after packaging. Remote deployment and attribution of historical intermittent health stalls remain open. User rejected closure while stalls remained unexplained; reopen stability acceptance R13/AC13, preserve effective limits and investigate with aligned independent-process controls. No further process permission needed. Reopened validation recorded 474 actual requests, 473 useful answers and one retained earlier reasoning-only answer. Ordinary product six-wave/cold/66-second-long/reuse acceptance passed; two structural runs matched all 216 parser/output streams. Six independent Go/control intervals passed 8640 health observations. No new product source change or performance fix is claimed. Historical preparation/health and empty-answer causes remain unassigned; whole-incident AC13 stays open, bounded_regression_passed is recorded separately, and no task archive or production deployment is performed.",
+  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '鍒扮幇鍦ㄨ繕娌″紑濮嬪仛', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; reviewed product committed in 709f63e and new source ZIP extracted/compiled/started with every packaged GET-only check passed. Production account evidence and deployment remain pending. Model identity/concurrency follow-up now passes independent review and full Go normal/race/vet/build; actual wire-ID regression fails on the prior release and passes on repaired source. Product committed as b9b318c; its new source ZIP passed full member checksum/exclusion checks, extraction, actual compilation/start and every packaged GET-only route/revision check. Prior archives remain unchanged. Production deployment and real account/model success remain unverified. Real-credential follow-up now passes independent full normal/race/vet/build and finite full-gateway cold/repeated/streamed/long/concurrent measurements. Limit-3 first wave retained nine bounded local queue rejections; synchronized rerun passed 18/18 plus four reuse calls. Historical health timeouts remain unattributed. Source release pending; production not deployed. Consolidated repair committed as 72e83fb; its 127-member source ZIP passed hashes/private exclusion, extraction, actual compile/start and every packaged GET-only revision/route check. Current-round original credential hashes and pre-release user ZIP hash matched after packaging. Remote deployment and attribution of historical intermittent health stalls remain open. User rejected closure while stalls remained unexplained; reopen stability acceptance R13/AC13, preserve effective limits and investigate with aligned independent-process controls. No further process permission needed. Reopened validation recorded 474 actual requests, 473 useful answers and one retained earlier reasoning-only answer. Ordinary product six-wave/cold/66-second-long/reuse acceptance passed; two structural runs matched all 216 parser/output streams. Six independent Go/control intervals passed 8640 health observations. No new product source change or performance fix is claimed. Historical preparation/health and empty-answer causes remain unassigned; whole-incident AC13 stays open, bounded_regression_passed is recorded separately, and no task archive or production deployment is performed. R14 authoritative catalog-exclusion classification repaired and independently reviewed in 4622f3e. Current production GET-only snapshots show old709f63e, three eligible accounts and zero discovered support for failing distinct glm-5.3-flash; zero-attempt503 matches the confirmed fallback defect. New128-member source ZIP passed hashes/private-value exclusion, extraction, actual compile/start and seven GET-only revision/route checks. Original credentials, userZIPs and previous release preserved. No production inference, deployment or push occurred; AC13 stays open.",
   "meta": {
     "task_creation_authorized": true,
     "production_target": "https://codearts2api.azurekiln.cn",
@@ -47,10 +47,11 @@
       "365f4828d0194fdfb7878ffc7fffb29f88a15052",
       "709f63ede82f8f790a853a4550f9430a7e1b2cfc",
       "b9b318ccc026426f593af09cc66eaea62cd19479",
-      "72e83fbed57d862d85e4d20b8b96f7a44e41019d"
+      "72e83fbed57d862d85e4d20b8b96f7a44e41019d",
+      "4622f3ef2f4b02ed311ca5cffb617e148c1bb4eb"
     ],
-    "release_artifact": "codearts2api-source-72e83fbed57d.zip",
-    "release_sha256": "2825880698989ece2683fb3d6a02df4638839dcd2af04ad1c30e91d40ff42a65",
+    "release_artifact": "codearts2api-source-4622f3ef2f4b.zip",
+    "release_sha256": "7cc1050dc6313c9138efddd129b34a3c9c98affac0b58fde76a558dad3b21d17",
     "extracted_release_smoke_passed": true,
     "production_deployment_verified": false,
     "live_v41_source_verified": true,
@@ -90,6 +91,11 @@
         "artifact": "codearts2api-source-b9b318ccc026.zip",
         "sha256": "9a9c7b0430b7ce976ef495cefb1718fdd52dfacf06518de6d848c073ff5227b7",
         "source_commit": "b9b318ccc026426f593af09cc66eaea62cd19479"
+      },
+      {
+        "artifact": "codearts2api-source-72e83fbed57d.zip",
+        "sha256": "2825880698989ece2683fb3d6a02df4638839dcd2af04ad1c30e91d40ff42a65",
+        "source_commit": "72e83fbed57d862d85e4d20b8b96f7a44e41019d"
       }
     ],
     "model_case_followup": {
@@ -205,7 +211,7 @@
       "independent_report": "research/reopened-stability-independent-review.md"
     },
     "eligibility_followup": {
-      "state": "local_review_complete_release_pending_production",
+      "state": "local_source_delivery_complete_pending_production",
       "verified_at": "2026-10-23",
       "reported": "503 no_healthy_account despite three otherwise eligible accounts",
       "observed_request_model": "glm-5.3-flash",
@@ -222,7 +228,13 @@
       "source_report": "research/production-eligibility-findings.md",
       "independent_report": "research/eligibility-quality-review.md",
       "production_deployment_verified": false,
-      "historical_r13_closed": false
+      "historical_r13_closed": false,
+      "source_commit": "4622f3ef2f4b02ed311ca5cffb617e148c1bb4eb",
+      "release_artifact": "codearts2api-source-4622f3ef2f4b.zip",
+      "release_sha256": "7cc1050dc6313c9138efddd129b34a3c9c98affac0b58fde76a558dad3b21d17",
+      "extracted_release_smoke_passed": true,
+      "original_credentials_preserved": true,
+      "release_report": "research/eligibility-source-release.md"
     }
   }
 }
