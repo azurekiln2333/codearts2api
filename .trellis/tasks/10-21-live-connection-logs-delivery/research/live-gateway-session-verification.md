@@ -239,3 +239,27 @@ parent session's final delivery verification. The initial binary hash above is
 historical, not the final release identity. Local results do not claim a
 production deployment, unlimited upstream capacity or successful real
 benefit-model inference.
+
+## Verified source delivery
+
+The work was committed as `72e83fbed57d862d85e4d20b8b96f7a44e41019d` and
+exported to `codearts2api-source-72e83fbed57d.zip`, SHA256
+`2825880698989ece2683fb3d6a02df4638839dcd2af04ad1c30e91d40ff42a65`.
+The 127 archive members passed their source manifest hashes and private-path /
+actual-credential-value exclusion checks. The final archive was extracted,
+compiled and started using empty isolated auth/data; its packaged GET-only
+verifier passed health, console, exact source revision, requests, audit, models
+and connections. This is extracted-source validation, not a Docker-engine or
+production deployment test.
+
+All four root credential files still matched this round's captured snapshot.
+The currently present user-owned `codearts2api.zip` was unchanged across release
+generation against its immediate pre-release SHA256 baseline
+`4498d256aa943d4b15afbf168ae9e03b9e66bc89a4314440d0ede670d01cb7a8`.
+Earlier reports record a different historical ZIP hash; the current file's
+timestamp predates this final verification stage. No attribution or
+whole-long-session immutability claim follows from this bounded check. The new
+release uses a distinct filename, and refreshed private credential copies remain
+excluded and preserved. The owned real-test gateway and control services have
+been stopped. Production verification and historical intermittent health-stall
+attribution remain open.

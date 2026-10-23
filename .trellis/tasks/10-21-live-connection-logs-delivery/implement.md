@@ -88,7 +88,7 @@ real account/model entitlement remain pending; keep operational step 8 open.
 - [x] Repeat actual gateway calls and progressive bounded concurrency with health,
   actual content/DONE, audit attempts and zero retained local requests.
 - [x] Independent full-scope review, full tests/race/vet/build and spec updates.
-- [ ] Commit only owned files, produce and verify the actual source artifact.
+- [x] Commit only owned files, produce and verify the actual source artifact.
 
 Do not represent provider busy as model absence or promise that local admission
 can remove an external account quota. Preserve supplied originals and refreshed
@@ -99,7 +99,7 @@ test copies. Production deployment remains unverified.
   each initial busy and final idle HTTP200, on the same supplied account.
 - [x] Integrate official lifecycle at shared upstream HTTP/body ownership boundary.
 - [x] Verify cancellation/error/long-stream cleanup using actual local HTTP fixtures.
-- [ ] Repeat real full-gateway success, progressive concurrency and release checks.
+- [x] Repeat real full-gateway success, progressive concurrency and release checks.
 
 ## Cold-start boundary discovered during real gateway verification
 
@@ -130,3 +130,12 @@ See `research/live-gateway-session-verification.md` and
 `research/health-stall-investigation.md`. The owned gateway and all control
 processes were stopped. Final source-release verification follows the work
 commit; operational deployment step 8 stays open.
+
+Work commit `72e83fbed57d862d85e4d20b8b96f7a44e41019d` was exported as
+`codearts2api-source-72e83fbed57d.zip` (SHA256
+`2825880698989ece2683fb3d6a02df4638839dcd2af04ad1c30e91d40ff42a65`).
+The actual archive passed member hashes/private-file and credential-value
+exclusion checks, extraction, compilation, startup and all packaged read-only
+health/console/build/requests/audit/models/connections checks. Current-round
+original credential hashes matched, and the current user ZIP matched the
+pre-release baseline after generation. No production deployment or push occurred.

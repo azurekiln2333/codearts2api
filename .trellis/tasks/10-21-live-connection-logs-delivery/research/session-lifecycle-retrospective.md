@@ -127,6 +127,6 @@ renewal interval, full project gate completion or deployment.
 - [x] Parent: complete fresh full-gateway real sequential/streamed/long-generation
   and progressive concurrent measurements, integrated review and required full
   normal/race/vet/build checks; update acceptance using those actual results.
-- [ ] Parent: explicitly stage/review owned sources, tests/spec/reports, commit the
+- [x] Parent: explicitly stage/review owned sources, tests/spec/reports, commit the
   consolidated repair and verify its extracted source release. Credentials and
   diagnostic private files remain excluded; no production deployment claim.
