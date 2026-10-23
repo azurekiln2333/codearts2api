@@ -229,3 +229,43 @@ Committed and packaged verified model identity, managed remote sessions, credent
 ### Next Steps
 
 - Rebuild production from the new source release with existing env/config/auth/data mounts, verify actual revision and runtime limits; retain unexplained historical health misses and first cap3 local queue timeouts as measurement limits. No push or deployment performed.
+
+
+## Session 8: Reopened stability verification with historical causes open
+<!-- trellis-session: v=2 fp=a608c42a37ea6f83 -->
+
+**Date**: 2026-10-23
+**Task**: Reopened stability verification with historical causes open
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Bounded current regression passed: 474 actual calls, 473 useful answers and one retained reasoning-only failure. Whole incident remains in progress; historical stall and empty-answer causes are unresolved.
+
+### Main Changes
+
+- Recorded bounded HTTP/runtime and structural evidence without changing product source 72e83fb; no new performance fix or ZIP is claimed.
+- Retained whole-task quality false and AC13 historical closure open; added bounded_regression_passed separately.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `835181b4617f5bfaf1c28055940da5b1d3a5735b` | chore(task): record bounded live stability regression and open causes |
+
+### Testing
+
+- [OK] Ordinary build: 108/108 mixed concurrent replies, two cold replies, 66.307-second useful stream and 18/18 post-long replies; audits correct and active zero.
+- [OK] Independent Go/control health: 8640/8640; complete structural streams: 216 with zero observed whitelist-shape conversion mismatch or drop.
+- [OK] Original credentials and both archives matched current-round hashes; owned gateways and controls stopped. Explicit nine-file secret/diff checks passed.
+
+### Status
+
+**In progress.** Bounded current regression passed. Historical stall and the
+earlier reasoning-only answer remain unresolved; AC13 and the whole-incident
+quality gate stay open. The task was not archived.
+
+### Next Steps
+
+- Capture new discriminating evidence for the historical preparation/health timeout or reasoning-only answer; retain existing failures and avoid claiming historical cause from later success.
+- Verify actual production revision and account behavior when deployment evidence is available; no push or remote deployment performed.
