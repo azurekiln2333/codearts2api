@@ -187,8 +187,16 @@ provider entitlement, concurrency limits, refresh policy or model mapping.
   summary in existing requests/audit APIs and verify real-route audit responses.
 - [x] Add per-request counts/source and honest filtered summary/group tables to
   the Requests view; clarify credential expiry wording and test real browsers.
-- [ ] Independent integrated review, full normal/race/vet/build, JS/diff checks;
+- [x] Independent integrated review, full normal/race/vet/build, JS/diff checks;
   update executable specs and commit/package the verified source.
 
 Work remains in the authorized active task. R15 adds generation metadata, not a
 billable all-time ledger or historical backfill, and does not close R13 causes.
+
+R15 product commit `4f0ceff298243db75b88d340a7efa1f86a281593` was exported as
+`codearts2api-source-4f0ceff29824.zip`. Its 131-member actual archive passed all
+member/private-value checks, extraction, compile/start, packaged routes, seeded
+usage replay/API checks and real embedded-panel desktop/mobile verification.
+Original credentials/config and prior archives were preserved. See
+`research/token-usage-delivery.md`, `research/token-usage-quality-review.md` and
+`research/token-usage-source-release.md`. Production deployment remains pending.
