@@ -269,3 +269,40 @@ quality gate stay open. The task was not archived.
 
 - Capture new discriminating evidence for the historical preparation/health timeout or reasoning-only answer; retain existing failures and avoid claiming historical cause from later success.
 - Verify actual production revision and account behavior when deployment evidence is available; no push or remote deployment performed.
+
+
+## Session 9: Eligibility 503 classification and verified source delivery
+<!-- trellis-session: v=2 fp=890920e13ef2d2f1 -->
+
+**Date**: 2026-10-23
+**Task**: Eligibility 503 classification and verified source delivery
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+R14 locally repaired and source-packaged; production remains old709f63e. Whole task remains in progress because historical AC13 causes and deployment are still open.
+
+### Main Changes
+
+- Shared account/auth cached eligibility now distinguishes model404 from unhealthy503 and filters unsupported public fallback entries without model substitution.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4622f3ef2f4b02ed311ca5cffb617e148c1bb4eb` | fix: classify authoritative model exclusions consistently |
+| `86b228a` | chore(task): record verified eligibility repair source release |
+
+### Testing
+
+- [OK] Twelve actual-HTTP subcases, independent review, full Go normal/race/vet/build and diff checks passed.
+- [OK] New4622f3e source ZIP passed member/private-value checks, extraction, actual compilation/start and all seven packaged GET-only checks. Original credentials and existing archives preserved.
+
+### Status
+
+**In progress.** R14 is locally repaired, reviewed and source-packaged. Historical
+R13 causes and production deployment remain open; the task was not archived.
+
+### Next Steps
+
+- Update production source before rebuild/recreate with existing mounts; verify actual deployed revision. Historical R13 causes remain open; no push or deployment performed.
