@@ -187,3 +187,27 @@ remain open. See `research/production-eligibility-findings.md` and
 No historical backfill or all-time billing metric is claimed: old events do not
 contain generation counts and the existing API exposes a bounded recent window.
 R13 historical incident attribution and production rollout remain separate.
+
+## OAuth flow clarity and Compose simplification, 2026-10-24
+
+- R16: Use one primary OAuth action: 发起授权 before a session exists and 提交授权
+  afterward. Remove the separate 提交回调地址 and 我已授权 controls, label copying
+  explicitly as 复制授权链接, and explain exactly where the failed full loopback
+  callback URL goes. Preserve automatic completion when the callback reaches the
+  server, explain the remote-browser loopback boundary, and handle imported done
+  responses immediately. Keep authorization URL/session/exchange ports consistent.
+- [x] AC16: Real browser checks verify initial/pending/continue/done/error/retry
+  states, one primary action, manual callback submission, automatic direct-server
+  completion, account refresh and timer cleanup. Import done cannot trigger a
+  poll of the deleted session. Background polling does not disable callback entry
+  or lose a submit click. Close/logout version out obsolete responses. HTTP tests
+  verify configured callback port consistency without real credentials.
+- R17: Read application variables in Compose directly from the project's .env
+  file instead of enumerating every optional application setting. One CA2A_PORT
+  controls published/container/listener ports; users need not also set LISTEN.
+- [x] AC17: Compose uses env_file and retains only API-key validation, derived
+  listener and timezone defaults as explicit environment exceptions. Build,
+  mounts, restart/name and published ports preserve interpolation. Documentation
+  explains file-versus-shell behavior, native LISTEN compatibility, and unchanged
+  credential mounts. Validate with synthetic config and existing release tests;
+  never print or modify the user's real .env/config/auths.

@@ -30,6 +30,15 @@ build, never guessed from the source commit date. Building a ZIP without `.git`
 uses `release.env`; rebuilding/recreating preserves the original auth/data/config
 mounts and environment. A container restart alone does not rebuild an image.
 
+Compose reads optional application settings with `env_file: .env`. Preserve the
+explicit API-key guard, timezone fallback and listener derived from `CA2A_PORT`;
+users do not set a second deployment LISTEN. Build/port/name/restart/mount values
+remain Compose interpolations. Explicit environment entries override env_file.
+Optional application variables only in the invoking shell are not automatically
+forwarded; put them in service .env or an explicit runtime override. CLI
+`--env-file` controls interpolation input, not the service env_file path. Native
+`CA2A_LISTEN` stays supported. Verify synthetic config without printing secrets.
+
 The verifier reads the service key from the named environment variable, sends
 only bounded GETs, refuses redirects and prints no bodies/headers/key. Its base
 URL may have a reverse-proxy prefix but no credentials, query or fragment. Check

@@ -210,15 +210,13 @@ func (h *Handler) adminOAuthStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	port := h.listenPort()
+	// Portal 和换证请求都使用固定的 loopback 回调。覆盖端口时必须让
+	// 授权链接、当前会话、回调校验和 redirect_uri 共享同一个有效端口。
+	if p := portOfCallbackHost(h.cfg.OAuthCallbackHost); p != 0 {
+		port = p
+	}
 	cfg := h.cfg.LoginConfig
 	authURL := h.cfg.OAuthClient.BuildAuthorizeURL(cfg, ticketID, challenge, "SHA-256", port)
-	// 可选：把回调端口改写为公网反代地址的端口，让浏览器回调尽量命中 hub；
-	// 远端若仍无法回调则回退到 ticket 轮询通道，不影响登录完成。
-	if h.cfg.OAuthCallbackHost != "" {
-		if p := portOfCallbackHost(h.cfg.OAuthCallbackHost); p != 0 {
-			authURL = rewriteAuthURLPort(authURL, p)
-		}
-	}
 
 	id := newSessionID()
 	h.oauth.put(&oauthSession{
@@ -235,7 +233,7 @@ func (h *Handler) adminOAuthStart(w http.ResponseWriter, r *http.Request) {
 		"session_id": id,
 		"auth_url":   authURL,
 		"expires_in": int(oauthSessionTTL.Seconds()),
-		"message":    "请在浏览器打开授权链接，完成后点「我已授权」或等待自动检测",
+		"message":    "请打开授权链接完成登录；若停在 127.0.0.1，请粘贴完整回调地址后点击「提交授权」",
 	})
 }
 
@@ -407,7 +405,7 @@ func shortID(u string) string {
 // 只认显式端口、不按 scheme 推断 443/80：portal 的回调目标是 127.0.0.1:{port}，
 // 若在没写端口时擅自改成 443，本机浏览器的回调用例反而会失败（这是本仓库
 // 之前的实际行为：带路径的写法一律解析失败，配置静默失效）。
-// 需要走反代请在配置里写全端口，例如 https://example.com:443/codearts。
+// 此配置只覆盖端口，不能把固定的 loopback 回调改成公网 host。
 func portOfCallbackHost(host string) int {
 	trimmed := strings.TrimSpace(host)
 	if trimmed == "" {
@@ -429,16 +427,4 @@ func portOfCallbackHost(host string) int {
 		}
 	}
 	return 0
-}
-
-// rewriteAuthURLPort 改写授权链接的 port 参数（华为 portal 据此拼回调地址）。
-func rewriteAuthURLPort(authURL string, port int) string {
-	u, err := url.Parse(authURL)
-	if err != nil {
-		return authURL
-	}
-	q := u.Query()
-	q.Set("port", fmt.Sprint(port))
-	u.RawQuery = q.Encode()
-	return u.String()
 }

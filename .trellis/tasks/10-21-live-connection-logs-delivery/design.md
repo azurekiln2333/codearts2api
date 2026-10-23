@@ -374,3 +374,47 @@ summary/tests; chat implementer owns server chat capture/admin envelope/tests;
 panel implementer owns embedded HTML and UI fixtures/checks. Parent owns shared
 contracts, specs, integrated tests, independent review and source delivery. No
 credentials, production mutations, model substitution or scheduler changes.
+
+## K. OAuth primary action and callback correctness
+
+The remote browser's loopback address is its own host, while the gateway listens
+on the deployment host. Native CodeArts authorization uses a fixed loopback
+redirect URI; do not claim polling can obtain an unreachable authorization code
+or infer a supported public redirect host. Explain this in the dialog. Preserve
+the authenticated existing import endpoint as the remote bridge and direct
+callback/poll completion for same-host deployments.
+
+Use one primary button: start when idle, submit the pasted callback when pending.
+No separate import/poll buttons remain. Copy explicitly means authorization URL;
+opening that URL stays available. Native/legacy continuation URLs may require a
+second browser round, with exact instructions and no assumed success. Process
+import status done with the same completion owner as poll done: stop timers,
+clear sensitive/session fields, refresh accounts, show success and close. Never
+poll a session deleted by a successful import. Separate background-poll in-flight
+state from primary mutation state; serialize or queue submission against a poll
+so an entered callback is not silently dropped. Terminal status, expiry, malformed
+input and retry remain visible. Dialog generation/login ownership gates every
+late result and follow-up.
+
+When an explicit OAuth callback-port override exists, decide the effective port
+before building the authorize URL and storing either session. Use that same port
+for imported callback validation and code exchange. Do not change PKCE/DPoP,
+credential persistence, upstream entitlement or the fixed loopback host contract.
+
+## L. Compose .env delivery
+
+Use env_file: .env for optional application settings. Keep explicit environment
+overrides only for required CA2A_API_KEY, TZ default and CA2A_LISTEN derived from
+CA2A_PORT. Thus the .env deployment contract has one port setting; native
+CA2A_LISTEN remains supported without changing application config precedence.
+Retain Compose-level interpolations for port mapping/build/mounts/name/restart.
+Document that arbitrary shell-only optional application values are no longer
+automatically forwarded by a removed YAML list; place them in the service .env
+or use an explicit runtime override. Do not load local dotenv into native code.
+Keep source exports free of actual .env/config/auth/data and existing ZIPs.
+
+Ownership: OAuth UI implementer owns panel and browser fixtures; callback
+implementer owns server OAuth port selection/tests; Compose implementer owns
+Compose/.env.example and only the relevant deployment README paragraphs. Parent
+owns shared specs/task docs and final verification/export. Workers do not touch
+real credentials/config/env or historical screenshots.

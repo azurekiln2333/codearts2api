@@ -169,6 +169,7 @@ svg{display:block}
 .steps{padding-left:18px;font-size:12px;color:var(--muted);margin:0;display:flex;flex-direction:column;gap:7px}
 .urlbox{background:var(--subtle);border:1px solid var(--line);border-radius:8px;padding:11px 12px;overflow-wrap:anywhere;font:11px/1.7 var(--font-mono);max-height:100px;overflow:auto;user-select:all}
 .modal-field{display:flex;flex-direction:column;gap:7px;min-width:0}.modal-field label,.modal-field .field-label{color:var(--muted);font-size:12px}
+.modal-help{margin:0;font-size:12px;line-height:1.65;color:var(--muted)}
 .status-line{font-size:12px;min-height:20px;overflow-wrap:anywhere}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-2px;margin-right:7px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -318,8 +319,8 @@ svg{display:block}
 <div id="oauthModal" class="modal-mask hidden">
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="oauthTitle" aria-describedby="oauthSteps">
     <div class="modal-h"><h2 id="oauthTitle">OAuth 授权登录</h2><button class="btn icon-btn ghost" id="oauthClose" type="button" aria-label="关闭 OAuth 授权窗口"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
-    <div class="modal-b"><ol class="steps" id="oauthSteps"><li>发起授权，然后在浏览器打开授权页。</li><li>使用目标账号完成登录与授权。</li><li>若停在 127.0.0.1，请将完整回调地址粘贴到下方。</li><li>回到此页等待自动检测，或点击「我已授权」。</li></ol><div class="modal-field"><span class="field-label" id="oauthUrlLabel">授权链接</span><div class="urlbox" id="oauthUrl" aria-labelledby="oauthUrlLabel">（发起后显示）</div></div><div class="modal-field"><label for="oauthCallbackUrl">远程浏览器回调中转</label><input class="input" id="oauthCallbackUrl" type="url" placeholder="http://127.0.0.1:7866/oauth/callback?..." autocomplete="off"/></div><div class="status-line muted" id="oauthStatus" role="status" aria-live="polite">尚未开始</div></div>
-    <div class="modal-f"><button class="btn" id="oauthCopy" type="button" disabled>复制链接</button><button class="btn" id="oauthOpen" type="button" disabled>打开授权页</button><button class="btn" id="oauthImport" type="button" disabled>提交回调地址</button><button class="btn" id="oauthPoll" type="button" disabled>我已授权</button><button class="btn primary" id="oauthStart" type="button">发起授权</button></div>
+    <div class="modal-b"><ol class="steps" id="oauthSteps"><li>点击「发起授权」→「打开授权页」，使用目标账号登录。</li><li>若停在 127.0.0.1 或显示无法访问，将地址栏的完整地址粘贴到下方，再点击「提交授权」。</li></ol><p class="modal-help">远程部署通常需手动粘贴，127.0.0.1 指向当前电脑；服务器收到回调时会自动完成。</p><div class="modal-field"><span class="field-label" id="oauthUrlLabel">授权链接</span><div class="urlbox" id="oauthUrl" aria-labelledby="oauthUrlLabel">（发起后显示授权链接）</div></div><div class="modal-field"><label for="oauthCallbackUrl">授权回调地址</label><input class="input" id="oauthCallbackUrl" type="url" placeholder="http://127.0.0.1:端口/oauth/callback?..." autocomplete="off" spellcheck="false" aria-describedby="oauthCallbackHelp" disabled/><span class="modal-help" id="oauthCallbackHelp">包含问号后的全部参数；请粘贴回调地址，不是上方的授权链接。</span></div><div class="status-line muted" id="oauthStatus" role="status" aria-live="polite">尚未开始</div></div>
+    <div class="modal-f"><button class="btn" id="oauthCopy" type="button" disabled>复制授权链接</button><button class="btn" id="oauthOpen" type="button" disabled>打开授权页</button><button class="btn primary" id="oauthStart" type="button">发起授权</button></div>
   </section>
 </div>
 <script>
@@ -969,90 +970,140 @@ document.addEventListener("click",event => {
 });
 
 // A generation token prevents dismissed OAuth requests from reopening UI/timers.
-let oauthSessionId = "", oauthTimer = null, oauthDelay = null, oauthCloseTimer = null;
-let oauthBusy = false, oauthGeneration = 0, oauthReturnFocus = null;
+// Background detection never disables submission; a submit waits for its poll.
+let oauthSessionId = "", oauthTimer = null, oauthCloseTimer = null, oauthPollPromise = null;
+let oauthBusy = false, oauthComplete = false, oauthContinuation = false, oauthGeneration = 0, oauthReturnFocus = null;
+let oauthNotice = {message:"",ok:null,kind:""}, oauthDetectionFailed = false;
 function setOAuthStatus(message, ok, pending=false){
   const element = $("oauthStatus"); element.textContent = message;
   if (pending){ const spinner = document.createElement("span"); spinner.className = "spin"; spinner.setAttribute("aria-hidden","true"); element.prepend(spinner); }
   element.style.color = ok === false ? "var(--bad)" : ok === true ? "var(--ok)" : "var(--muted)";
 }
-function stopOAuthPoll(){ clearInterval(oauthTimer); clearTimeout(oauthDelay); clearTimeout(oauthCloseTimer); oauthTimer = oauthDelay = oauthCloseTimer = null; }
+function setOAuthNotice(message, ok=null, pending=false, kind=""){ oauthNotice = {message,ok,kind}; setOAuthStatus(message,ok,pending); }
+function stopOAuthPoll(){ clearTimeout(oauthTimer); clearTimeout(oauthCloseTimer); oauthTimer = oauthCloseTimer = null; }
 function safeOAuthUrl(value){ try { const url = new URL(value); return ["http:","https:"].includes(url.protocol) ? url.href : ""; } catch { return ""; } }
 function updateOAuthControls(){
-  $("oauthStart").disabled = oauthBusy;
-  $("oauthPoll").disabled = $("oauthImport").disabled = !oauthSessionId || oauthBusy;
+  $("oauthStart").disabled = oauthBusy || oauthComplete;
+  $("oauthStart").textContent = oauthComplete ? "授权完成" : oauthBusy ? (oauthSessionId ? "正在提交…" : "正在发起…") : oauthSessionId ? "提交授权" : "发起授权";
+  $("oauthCallbackUrl").disabled = !oauthSessionId || oauthBusy || oauthComplete;
+  $("oauthCopy").textContent = oauthContinuation ? "复制继续授权链接" : "复制授权链接";
+  $("oauthOpen").textContent = oauthContinuation ? "打开继续授权页" : "打开授权页";
+  $("oauthUrlLabel").textContent = oauthContinuation ? "继续授权链接" : "授权链接";
   const hasLink = !!safeOAuthUrl($("oauthUrl").textContent.trim());
   $("oauthCopy").disabled = $("oauthOpen").disabled = !hasLink;
 }
+function clearOAuthSession(){
+  stopOAuthPoll(); oauthSessionId = ""; oauthContinuation = false; oauthDetectionFailed = false;
+  $("oauthUrl").textContent = "（发起后显示授权链接）"; $("oauthCallbackUrl").value = "";
+}
 function openOAuthModal(){
-  oauthReturnFocus = document.activeElement; ++oauthGeneration; stopOAuthPoll(); oauthSessionId = ""; oauthBusy = false;
-  $("oauthUrl").textContent = "（发起后显示）"; $("oauthCallbackUrl").value = ""; $("oauthModal").classList.remove("hidden"); $("appView").inert = true;
-  updateOAuthControls(); setOAuthStatus("点击「发起授权」开始",null); $("oauthStart").focus();
+  oauthReturnFocus = document.activeElement; ++oauthGeneration; clearOAuthSession(); oauthBusy = oauthComplete = false; oauthPollPromise = null;
+  $("oauthModal").classList.remove("hidden"); $("appView").inert = true;
+  updateOAuthControls(); setOAuthNotice("点击「发起授权」开始。"); $("oauthStart").focus();
 }
 function closeOAuthModal(restoreFocus=true){
   const wasOpen = !$("oauthModal").classList.contains("hidden");
-  ++oauthGeneration; stopOAuthPoll(); oauthSessionId = ""; oauthBusy = false;
+  ++oauthGeneration; clearOAuthSession(); oauthBusy = oauthComplete = false; oauthPollPromise = null; updateOAuthControls();
   $("oauthModal").classList.add("hidden"); $("appView").inert = false;
   if (wasOpen && restoreFocus){ if (oauthReturnFocus?.isConnected && oauthReturnFocus.getClientRects().length) oauthReturnFocus.focus({preventScroll:true}); else $("pageTitle").focus({preventScroll:true}); }
 }
-function delayedOAuthPoll(delay, generation){ clearTimeout(oauthDelay); oauthDelay = setTimeout(() => { if (generation === oauthGeneration) pollOAuth(true); },delay); }
+function scheduleOAuthPoll(delay, generation){
+  clearTimeout(oauthTimer);
+  if (!oauthSessionId || oauthBusy || generation !== oauthGeneration) return;
+  oauthTimer = setTimeout(() => { oauthTimer = null; if (generation === oauthGeneration) pollOAuth(); },delay);
+}
+function failOAuth(message){ clearOAuthSession(); oauthBusy = oauthComplete = false; updateOAuthControls(); setOAuthNotice(message,false); }
+async function finishOAuth(data, generation, session){
+  if (generation !== oauthGeneration || session !== oauthSessionId) return;
+  clearOAuthSession(); oauthComplete = true; oauthBusy = false; updateOAuthControls();
+  setOAuthNotice("✓ " + (data.message || "授权成功，账号已保存。"),true); toast(data.message || "授权成功，账号已保存。");
+  try { await loadOverview(); }
+  catch(error){ if (generation === oauthGeneration) toast("账号已授权，但刷新失败：" + error.message,false); }
+  if (generation === oauthGeneration) oauthCloseTimer = setTimeout(() => { if (generation === oauthGeneration) closeOAuthModal(); },900);
+}
 async function startOAuth(){
-  if (oauthBusy) return;
+  if (oauthBusy || oauthSessionId || oauthComplete) return;
   const generation = oauthGeneration;
-  stopOAuthPoll(); oauthSessionId = ""; oauthBusy = true; updateOAuthControls(); setOAuthStatus("正在向服务端申请授权链接…",null,true);
+  clearOAuthSession(); oauthBusy = true; updateOAuthControls(); setOAuthNotice("正在生成授权链接…",null,true);
   try {
     const data = await api("/admin/api/oauth/start",{method:"POST",body:"{}"});
     if (generation !== oauthGeneration) return;
     const url = safeOAuthUrl(data.auth_url);
     if (!data.ok || !url || !data.session_id) throw new Error(data.message || "发起失败");
     oauthSessionId = data.session_id; $("oauthUrl").textContent = url;
-    setOAuthStatus("已生成链接，请打开授权页完成登录。正在自动检测…",null);
-    try { window.open(url,"_blank","noopener,noreferrer"); } catch {}
-    oauthTimer = setInterval(() => { if (generation === oauthGeneration) pollOAuth(true); },2500);
-    delayedOAuthPoll(800,generation);
-  } catch(error){ if (generation === oauthGeneration){ setOAuthStatus("发起失败：" + error.message,false); toast(error.message,false); } }
-  finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); } }
+    setOAuthNotice("等待浏览器完成授权。");
+  } catch(error){ if (generation === oauthGeneration){ failOAuth("发起失败：" + error.message); toast("发起授权失败",false); } }
+  finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); scheduleOAuthPoll(800,generation); } }
 }
 async function importOAuthCallback(){
-  if (oauthBusy) return;
+  if (oauthBusy || !oauthSessionId || oauthComplete) return;
   const callback = $("oauthCallbackUrl").value.trim();
-  if (!oauthSessionId || !callback){ setOAuthStatus("请先发起授权，再粘贴浏览器地址栏中的完整 127.0.0.1 回调地址。",false); return; }
+  if (!callback){ setOAuthNotice("请先粘贴完整回调地址，再点击「提交授权」。",false,false,"input"); $("oauthCallbackUrl").focus(); return; }
   const generation = oauthGeneration, session = oauthSessionId;
-  oauthBusy = true; updateOAuthControls(); setOAuthStatus("正在中转回调…",null,true);
+  oauthBusy = true; stopOAuthPoll(); updateOAuthControls(); setOAuthNotice(oauthPollPromise ? "正在等待当前检测结束，随后提交授权…" : "正在提交授权…",null,true);
   try {
+    // Polling can exchange a legacy ticket. Finish it before a manual exchange.
+    if (oauthPollPromise) await oauthPollPromise;
+    if (generation !== oauthGeneration || session !== oauthSessionId) return;
+    setOAuthNotice("正在提交授权…",null,true);
     const data = await api("/admin/api/oauth/import-callback",{method:"POST",body:JSON.stringify({session_id:session,callback_url:callback})});
     if (generation !== oauthGeneration) return;
-    if (!data.ok) throw new Error(data.message || "回调中转失败");
-    $("oauthCallbackUrl").value = ""; setOAuthStatus(data.message || "回调已接收，继续等待授权结果…",null);
-    if (data.next_url){ const url = safeOAuthUrl(data.next_url); if (url){ $("oauthUrl").textContent = url; try { window.open(url,"_blank","noopener,noreferrer"); } catch {} } }
-    delayedOAuthPoll(500,generation);
-  } catch(error){ if (generation === oauthGeneration){ setOAuthStatus("回调中转失败：" + error.message,false); toast(error.message,false); } }
-  finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); } }
+    if (!data.ok) throw new Error(data.message || "提交失败");
+    if (data.status === "done"){ await finishOAuth(data,generation,session); return; }
+    const next = safeOAuthUrl(data.next_url);
+    if (data.status !== "continue" || !next) throw new Error("服务端未返回有效的授权结果，请重试。");
+    $("oauthCallbackUrl").value = ""; $("oauthUrl").textContent = next; oauthContinuation = true;
+    setOAuthNotice("回调已接收。请点击「打开继续授权页」完成下一步；若再次停在 127.0.0.1，粘贴新的完整回调地址后点击「提交授权」。");
+  } catch(error){
+    if (generation === oauthGeneration){
+      if (error.status === 404 || error.status === 410) failOAuth("授权会话已过期，请重新发起授权。");
+      else if (error.status === 401 || error.status === 403) failOAuth("授权接口鉴权失败，请重新登录控制台。");
+      else setOAuthNotice(error.status === 400 ? "回调地址无效或与本次授权不匹配。请复制授权页最新的完整地址，再点击「提交授权」。" : "提交授权失败，请检查网络或稍后再次点击「提交授权」。回调地址已保留。",false,false,error.status === 400 ? "validation" : "");
+    }
+  } finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); scheduleOAuthPoll(2500,generation); } }
 }
-async function pollOAuth(silent){
-  if (!oauthSessionId || oauthBusy) return;
+function pollOAuth(){
+  if (!oauthSessionId || oauthBusy || oauthPollPromise) return oauthPollPromise;
   const generation = oauthGeneration, session = oauthSessionId;
-  oauthBusy = true; updateOAuthControls();
-  if (!silent) setOAuthStatus("正在确认授权结果…",null,true);
-  try {
-    const data = await api("/admin/api/oauth/poll",{method:"POST",body:JSON.stringify({session_id:session})});
-    if (generation !== oauthGeneration) return;
-    if (data.status === "pending"){ setOAuthStatus(data.message || "等待浏览器完成授权…",null,true); return; }
-    stopOAuthPoll();
-    if (data.status === "done" && data.ok){
-      setOAuthStatus("✓ " + (data.message || "登录成功"),true); toast(data.message || "登录成功"); oauthSessionId = "";
-      try { await loadOverview(); } catch(error){ toast("账号已授权，但刷新失败：" + error.message,false); }
-      if (generation === oauthGeneration) oauthCloseTimer = setTimeout(() => { if (generation === oauthGeneration) closeOAuthModal(); },900);
-    } else { oauthSessionId = ""; setOAuthStatus("授权失败：" + (data.message || "请重新发起授权"),false); toast(data.message || "授权失败",false); }
-  } catch(error){ if (!silent && generation === oauthGeneration){ setOAuthStatus("查询失败：" + error.message,false); toast(error.message,false); } }
-  finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); } }
+  let operation;
+  operation = (async () => {
+    try {
+      const data = await api("/admin/api/oauth/poll",{method:"POST",body:JSON.stringify({session_id:session})});
+      if (generation !== oauthGeneration || session !== oauthSessionId) return;
+      if (data.status === "done" && data.ok){ await finishOAuth(data,generation,session); return; }
+      if (data.status !== "pending"){ failOAuth("授权失败：" + (data.message || "请重新发起授权。")); return; }
+      if (!oauthBusy && oauthDetectionFailed){ setOAuthStatus(oauthNotice.message,oauthNotice.ok); oauthDetectionFailed = false; }
+    } catch(error){
+      if (generation !== oauthGeneration || session !== oauthSessionId) return;
+      if (error.status === 404 || error.status === 410) failOAuth("授权会话已过期，请重新发起授权。");
+      else if (error.status === 401 || error.status === 403) failOAuth("授权接口鉴权失败，请重新登录控制台。");
+      else if (!oauthBusy){ oauthDetectionFailed = true; setOAuthStatus(oauthNotice.message + " 自动检测暂时失败，将稍后重试。",false); }
+    } finally {
+      if (generation === oauthGeneration){
+        if (oauthPollPromise === operation) oauthPollPromise = null;
+        if (session === oauthSessionId && !oauthBusy) scheduleOAuthPoll(2500,generation);
+      }
+    }
+  })();
+  oauthPollPromise = operation;
+  return operation;
 }
 $("btnAddAccount").onclick = openOAuthModal;
 $("oauthClose").onclick = () => closeOAuthModal();
 $("oauthModal").addEventListener("click",event => { if (event.target === $("oauthModal")) closeOAuthModal(); });
-$("oauthStart").onclick = startOAuth; $("oauthPoll").onclick = () => pollOAuth(false); $("oauthImport").onclick = importOAuthCallback;
-$("oauthOpen").onclick = () => { const url = safeOAuthUrl($("oauthUrl").textContent.trim()); if (url) window.open(url,"_blank","noopener,noreferrer"); };
-$("oauthCopy").onclick = () => copyText($("oauthUrl").textContent.trim(),"已复制授权链接");
+$("oauthStart").onclick = () => oauthSessionId ? importOAuthCallback() : startOAuth();
+$("oauthCallbackUrl").addEventListener("input",() => {
+  if (!oauthSessionId || oauthBusy || oauthComplete || !["input","validation"].includes(oauthNotice.kind)) return;
+  setOAuthNotice($("oauthCallbackUrl").value.trim() ? "已填写回调地址，点击「提交授权」。" : "请粘贴完整回调地址，再点击「提交授权」。",null,false,"input");
+});
+$("oauthCallbackUrl").addEventListener("keydown",event => { if (event.key === "Enter"){ event.preventDefault(); importOAuthCallback(); } });
+$("oauthOpen").onclick = () => {
+  const url = safeOAuthUrl($("oauthUrl").textContent.trim());
+  if (!url) return;
+  try { window.open(url,"_blank","noopener,noreferrer"); }
+  catch { setOAuthNotice("无法打开新页面，请复制授权链接后在浏览器中打开。",false); }
+};
+$("oauthCopy").onclick = () => copyText($("oauthUrl").textContent.trim(),oauthContinuation ? "已复制继续授权链接" : "已复制授权链接");
 document.addEventListener("keydown",event => {
   if (!$("oauthModal").classList.contains("hidden")){
     if (event.key === "Escape"){ event.preventDefault(); closeOAuthModal(); } else if (event.key === "Tab") trapFocus(event,$("oauthModal"));

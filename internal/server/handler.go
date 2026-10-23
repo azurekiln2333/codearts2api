@@ -56,7 +56,8 @@ type Config struct {
 	OAuthClient *upstream.Client
 	// LoginConfig WebUI 登录配置（client_id 以官方客户端为准）。
 	LoginConfig upstream.LoginConfig
-	// OAuthCallbackHost 可选：覆盖授权链接回调 host（如 https://oneapi.example.com/codearts）。
+	// OAuthCallbackHost 可选：只读取显式端口覆盖本地回调端口，host/path 不替换
+	// 上游固定的 127.0.0.1 回调地址；远程浏览器仍需手动提交回调地址。
 	OAuthCallbackHost string
 	// Audit 可选的元数据审计接收端。为 nil 时不记录（进程级日志仍保留）。
 	Audit *audit.Sink

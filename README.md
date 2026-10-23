@@ -197,9 +197,11 @@ docker compose config --quiet
 docker compose up -d --build
 ```
 
-Compose 支持通过同目录 `.env` 或 shell 环境变量配置端口、时区、容器名、重启策略、构建目录与宿主机挂载路径，完整示例见 `.env.example`。`CA2A_PORT` 默认 `7866`，同时控制宿主机端口、容器端口与容器内服务监听，覆盖 `config.json` 中的 `listen`；原生运行仍使用 `CA2A_LISTEN`。
+Compose 通过 `env_file: .env` 批量读取同目录的 `.env`，可选应用变量无需逐项声明在 YAML。端口只填 `CA2A_PORT`（默认 `7866`），它同时控制宿主机端口、容器端口与服务监听；Compose 自动生成 `CA2A_LISTEN`，无需在 `.env` 重复设置，且会覆盖 `config.json` 中的 `listen`。原生运行仍支持 `CA2A_LISTEN`，不自动读取项目 `.env`。
 
-应用支持的其他环境变量也已全部接入 Compose，非空值覆盖 `config.json`，未设置或留空则沿用配置文件及内置默认值。宿主机挂载路径使用 `CA2A_AUTHS_PATH`、`CA2A_DATA_PATH`、`CA2A_CONFIG_PATH`；`CA2A_AUTH_DIR` 和 `CA2A_STATE_FILE` 则是容器内应用使用的路径。升级时保持原有挂载路径即可继续使用已添加的凭证。
+YAML 中只保留 API Key 必填校验、时区默认值和派生监听地址这三个 `environment` 例外，其余应用项直接写入 `.env`；非空值覆盖 `config.json`，未设置或留空则沿用配置文件及内置默认值。可选应用变量仅在 shell 中 `export` 不会自动透传到容器。`.env` 文件必须存在；CLI 的 `--env-file` 只更换 Compose 插值来源，不会更换 YAML 中固定的 `env_file: .env`。
+
+端口映射、构建参数、容器名、重启策略和挂载路径仍由 Compose 在对应字段引用 `.env` 或 shell 变量。宿主机挂载路径使用 `CA2A_AUTHS_PATH`、`CA2A_DATA_PATH`、`CA2A_CONFIG_PATH`；`CA2A_AUTH_DIR` 和 `CA2A_STATE_FILE` 则是容器内应用使用的路径。升级时保持原有挂载路径即可继续使用已添加的凭证，完整变量示例见 `.env.example`。
 
 升级前备份现有 `.env`、`config.json`、`auths/` 和 `data/`，记录正在使用的镜像 ID；保留原目录和挂载路径。升级只重建容器，不要求重新导入凭证。若此前在 `config.json` 显式配置过并发 `5`，该值仍然生效；初次验证上游额度时可在 `.env` 明确设置 `CA2A_MAX_CONCURRENT=1`。
 
@@ -272,7 +274,7 @@ unset CA2A_API_KEY
 | `CA2A_AUTH_DIR` | 凭证目录 | `./auths` |
 | `CA2A_STATE_FILE` | 状态文件 | `./data/state.json` |
 | `CA2A_DEFAULT_MODEL` | 默认模型 | `glm-5.2` |
-| `CA2A_OAUTH_CALLBACK_HOST` | OAuth 回调主机 | - |
+| `CA2A_OAUTH_CALLBACK_HOST` | OAuth 回调端口覆盖（旧变量名；仅显式端口生效，回调主机仍为浏览器自身的 `127.0.0.1`） | 跟随服务端口 |
 | `CA2A_WATCH_ENABLED` | 调度器开关 | `true` |
 | `CA2A_WATCH_POLL_MINUTES` | 轮询间隔（分钟） | `30` |
 | `CA2A_WATCH_REFRESH_SKEW` | 提前刷新时间（分钟） | `30` |

@@ -18,7 +18,7 @@ const original = baseline
   ? execFileSync('git', ['show', '3fefda8:internal/server/panel.html'], { cwd: root, encoding: 'utf8' })
   : fs.readFileSync(path.join(root, 'internal/server/panel.html'), 'utf8');
 const html = original.replaceAll('__SERVICE_NAME__', 'codearts2api').replaceAll('__SERVICE_TITLE__', 'CodeArts2API').replaceAll('__LOGO__', 'CA').replaceAll('__ACCENT__', '#0284c7');
-const output = path.join(__dirname, 'screenshots');
+const output = process.env.UI_OUTPUT_DIR || path.join(root, '.local-test', 'oauth-full-ui-' + Date.now());
 fs.mkdirSync(output, { recursive: true });
 const stamp = new Date().toISOString();
 const malicious = '<img src=x onerror="window.__fixtureXSS=1">';
@@ -46,7 +46,7 @@ const events = [
   { seq: 2, id: 'fixture-request-0002', model: 'qwen3-32b', account: null, committed: false, outcome: 'canceled', attempts: 0, queue_ms: 0, first_data_ms: null, total_ms: 23, cause: { class: 'client_canceled', text: 'client canceled request' } },
   { seq: 1, id: 'fixture-request-0001', model: malicious, account: 'fixture-account-01', committed: true, status: 404, outcome: 'model_unavailable', attempts: 4, queue_ms: 0, first_data_ms: null, total_ms: 1054, cause: { class: 'capability', code: 'InferHub.002002009.404', text: 'model not registered' } },
 ].map((event, index) => ({ ...event, requested_model: event.model, ts: new Date(Date.now() - index * 45000).toISOString() }));
-const state = { mode: 'normal', calls: [], oauthDone: false, releaseOverview: null, overviewStarted: null, refresh: null, refreshReads: 0, refreshStarts: 0, pulled: false, holdRoute: null, holdMethod: null, releaseSnapshot: null, snapshotStarted: null };
+const state = { mode: 'normal', calls: [], oauthDone: false, oauthSessionValid: false, releaseOverview: null, overviewStarted: null, refresh: null, refreshReads: 0, refreshStarts: 0, pulled: false, holdRoute: null, holdMethod: null, releaseSnapshot: null, snapshotStarted: null };
 function modelSnapshot() {
   const empty = state.mode === 'empty';
   const partial = state.mode === 'models-partial';
@@ -136,9 +136,9 @@ const server = http.createServer(async (req, res) => {
     const page = filtered.slice(0, 2);
     json(200, { events: page, has_more: filtered.length > page.length, next_before: page.at(-1)?.seq, window: 512, dropped: 0, write_failures: 0 }); return;
   }
-  if (route === '/admin/api/oauth/start') { json(200, { ok: true, session_id: 'fixture-oauth-session', auth_url: origin + '/fixture-authorize' }); return; }
-  if (route === '/admin/api/oauth/poll') { json(200, state.oauthDone ? { ok: true, status: 'done', message: 'Fixture authorization complete' } : { ok: true, status: 'pending', message: 'Fixture authorization pending' }); return; }
-  if (route === '/admin/api/oauth/import-callback') { state.oauthDone = true; json(200, { ok: true, message: 'Fixture callback received' }); return; }
+  if (route === '/admin/api/oauth/start') { state.oauthSessionValid = true; state.oauthDone = false; json(200, { ok: true, session_id: 'fixture-oauth-session', auth_url: origin + '/fixture-authorize' }); return; }
+  if (route === '/admin/api/oauth/poll') { json(state.oauthSessionValid ? 200 : 404, state.oauthSessionValid ? (state.oauthDone ? { ok: true, status: 'done', message: 'Fixture authorization complete' } : { ok: true, status: 'pending', message: 'Fixture authorization pending' }) : { ok: false, message: 'Fixture session no longer exists' }); return; }
+  if (route === '/admin/api/oauth/import-callback') { state.oauthSessionValid = false; json(200, { ok: true, status: 'done', message: 'Fixture callback complete' }); return; }
   json(200, { ok: true, message: 'Fixture operation complete' });
 });
 
@@ -364,13 +364,15 @@ async function navigate(page, view) {
     await page.locator('#oauthModal').waitFor({ state: 'hidden' });
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'btnAddAccount');
     await add.click();
-    context.once('page', popup => popup.close());
     await page.locator('#oauthStart').click();
+    await page.waitForFunction(() => document.getElementById('oauthStart')?.textContent === '提交授权');
+    assert.equal(await page.locator('#oauthCopy').innerText(), '复制授权链接');
+    assert.equal(await page.locator('#oauthImport,#oauthPoll').count(), 0);
     await page.locator('#oauthCallbackUrl').fill('http://127.0.0.1:7866/oauth/callback?code=fixture-code&state=fixture-state');
-    await page.locator('#oauthImport').click();
+    await page.locator('#oauthStart').click();
     await page.waitForFunction(() => document.getElementById('oauthStatus')?.textContent.includes('Fixture callback') || document.getElementById('oauthStatus')?.textContent.includes('Fixture authorization complete'));
     assert.ok(state.calls.some(call => call.path.endsWith('/oauth/import-callback') && call.body.session_id === 'fixture-oauth-session'));
-    await page.locator('#oauthClose').click();
+    await page.locator('#oauthModal').waitFor({ state: 'hidden' });
 
     await navigate(page, 'requests');
     await visible(page, '#reqBody tr');

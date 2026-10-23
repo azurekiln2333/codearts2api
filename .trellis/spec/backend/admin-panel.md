@@ -46,8 +46,10 @@ labeled as credential time, not generation tokens.
   preserve its existing rows, with explicit error feedback.
 - Theme preference is independent of service authentication. No external fonts,
   icon CDN or runtime asset dependency is required to render any view.
-- Keep all existing account actions and OAuth start/copy/open/import/poll flows
-  reachable. Sign-in and keepalive labels must describe their actual endpoints;
+- Keep all existing account actions and OAuth capabilities reachable. Use one
+  start/submit primary, explicit authorization-link copy/open and automatic
+  polling under [OAuth Console](./oauth-console.md).
+  Sign-in and keepalive labels must describe their actual endpoints;
   server string substitution must not silently rename them.
 - Hidden views have no tabbable descendants. Mobile navigation and OAuth dialogs
   support Escape and focus return. Dialog polling stops on close. Labels and

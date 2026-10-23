@@ -200,3 +200,19 @@ usage replay/API checks and real embedded-panel desktop/mobile verification.
 Original credentials/config and prior archives were preserved. See
 `research/token-usage-delivery.md`, `research/token-usage-quality-review.md` and
 `research/token-usage-source-release.md`. Production deployment remains pending.
+
+## R16/R17: OAuth flow and direct .env configuration
+
+- [x] Confirm dialog/backend callback and deployment env contracts; preserve
+  evidence of the imported-done bug and port mismatch in research.
+- [x] Unify primary start/submit controls, clear guidance and completion/poll
+  ownership; cover real Chrome start/import/direct/continue/race/error/mobile.
+- [x] Align effective OAuth callback port across authorize/session/import/exchange
+  and add bounded actual-route HTTP regressions.
+- [x] Replace optional Compose environment enumeration with env_file; preserve
+  required key/listener/timezone exceptions, update example/deployment docs and
+  validate synthetic configuration without reading live secrets.
+- [ ] Independent integrated review, appropriate normal/race/vet/build/browser
+  and release-tool checks; sync executable specs, commit/export/test actual ZIP.
+
+Keep the parent task active for historical R13 and production rollout.

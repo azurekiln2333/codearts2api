@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -14,6 +15,137 @@ import (
 	"codearts2api/internal/pool"
 	"codearts2api/internal/upstream"
 )
+
+func TestOAuthCallbackPortMatchesAuthorizeSessionAndCodeExchange(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		listen       string
+		callbackHost string
+		wantPort     int
+	}{
+		{name: "explicit override", listen: ":7866", callbackHost: "https://example.com:8443/codearts", wantPort: 8443},
+		{name: "listener without override", listen: ":21508", wantPort: 21508},
+		{name: "no implicit HTTPS port", listen: ":7866", callbackHost: "https://example.com/codearts", wantPort: 7866},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			forms := make(chan url.Values, 1)
+			sts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if err := r.ParseForm(); err != nil {
+					t.Error(err)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				forms <- r.Form
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"user_id":"port-fixture-user","user_name":"tester","domain_id":"domain","refresh_token":"refresh-token","credentials":{"access_key_id":"ak","secret_access_key":"sk","security_token":"st","expiration":"2026-09-03T00:00:00Z"}}`)
+			}))
+			defer sts.Close()
+			loginCfg := upstream.DefaultLoginConfig()
+			loginCfg.STSHost = sts.URL
+			p, err := pool.New(nil, pool.Config{LoginConfig: loginCfg}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			authDir := t.TempDir()
+			h := NewHandler(Config{
+				APIKey: "panel-key", AuthDir: authDir, Listen: tc.listen, OAuthCallbackHost: tc.callbackHost,
+				Pool: p, OAuthClient: upstream.New(5 * time.Second), LoginConfig: loginCfg,
+			})
+			startReq := httptest.NewRequest(http.MethodPost, "/admin/api/oauth/start", bytes.NewBufferString("{}"))
+			startReq.Header.Set("Authorization", "Bearer panel-key")
+			startRec := httptest.NewRecorder()
+			h.ServeHTTP(startRec, startReq)
+			if startRec.Code != http.StatusOK {
+				t.Fatalf("start status=%d", startRec.Code)
+			}
+			var start struct {
+				SessionID string `json:"session_id"`
+				AuthURL   string `json:"auth_url"`
+			}
+			if err := json.Unmarshal(startRec.Body.Bytes(), &start); err != nil {
+				t.Fatal(err)
+			}
+			authorize, err := url.Parse(start.AuthURL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := authorize.Query().Get("port"); got != strconv.Itoa(tc.wantPort) {
+				t.Fatalf("authorize port=%q, want %d", got, tc.wantPort)
+			}
+			sess := h.oauth.get(start.SessionID)
+			if sess == nil || sess.Port != tc.wantPort {
+				t.Fatalf("session port does not match authorize port %d", tc.wantPort)
+			}
+			h.loginMu.Lock()
+			pending := h.logins[sess.TicketID]
+			pendingMatches := pending != nil && pending.Port == tc.wantPort
+			h.loginMu.Unlock()
+			if !pendingMatches {
+				t.Fatalf("legacy pending login port does not match %d", tc.wantPort)
+			}
+			importCallback := func(callback string) *httptest.ResponseRecorder {
+				body, err := json.Marshal(map[string]string{"session_id": start.SessionID, "callback_url": callback})
+				if err != nil {
+					t.Fatal(err)
+				}
+				req := httptest.NewRequest(http.MethodPost, "/admin/api/oauth/import-callback", bytes.NewReader(body))
+				req.Header.Set("Authorization", "Bearer panel-key")
+				rec := httptest.NewRecorder()
+				h.ServeHTTP(rec, req)
+				return rec
+			}
+			if wrong := importCallback("http://127.0.0.1:" + strconv.Itoa(tc.wantPort+1) + "/oauth/callback?code=WRONG_PORT"); wrong.Code != http.StatusBadRequest {
+				t.Fatalf("wrong-port callback status=%d, want 400", wrong.Code)
+			}
+			select {
+			case <-forms:
+				t.Fatal("wrong-port callback reached code exchange")
+			default:
+			}
+			callbackBase := "http://127.0.0.1:" + strconv.Itoa(tc.wantPort) + "/oauth/callback"
+			nextURL := loginCfg.PortalHost + "/portal/callback?ticket_id=" + url.QueryEscape(sess.TicketID)
+			continued := importCallback(callbackBase + "?secret=portal-secret&redirect=" + url.QueryEscape(nextURL))
+			var continuation struct {
+				Status  string `json:"status"`
+				NextURL string `json:"next_url"`
+			}
+			if err := json.Unmarshal(continued.Body.Bytes(), &continuation); err != nil {
+				t.Fatal(err)
+			}
+			if continued.Code != http.StatusOK || continuation.Status != "continue" || continuation.NextURL != nextURL {
+				t.Fatalf("valid continuation rejected: status=%d continuation=%q", continued.Code, continuation.Status)
+			}
+			imported := importCallback(callbackBase + "?code=AUTH_CODE")
+			var result struct {
+				Status string `json:"status"`
+			}
+			if err := json.Unmarshal(imported.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if imported.Code != http.StatusOK || result.Status != "done" {
+				t.Fatalf("valid code callback rejected: status=%d result=%q", imported.Code, result.Status)
+			}
+			select {
+			case form := <-forms:
+				if got := form.Get("redirect_uri"); got != callbackBase {
+					t.Fatalf("exchange redirect_uri=%q, want %q", got, callbackBase)
+				}
+				if form.Get("code") != "AUTH_CODE" || form.Get("code_verifier") != sess.Verifier {
+					t.Fatal("exchange did not retain the session's code and PKCE verifier")
+				}
+			default:
+				t.Fatal("valid callback did not reach code exchange")
+			}
+			if h.oauth.get(start.SessionID) != nil {
+				t.Fatal("imported done response did not delete the completed session")
+			}
+			accounts, err := auth.LoadDir(authDir)
+			if err != nil || len(accounts) != 1 || accounts[0].Refresh() != "refresh-token" {
+				t.Fatalf("credential was not saved after valid callback: accounts=%d err=%v", len(accounts), err)
+			}
+		})
+	}
+}
 
 func TestOAuthImportedCodeStoresRefreshableCredential(t *testing.T) {
 	dpopSeen := make(chan string, 1)
