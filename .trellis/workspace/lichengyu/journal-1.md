@@ -344,3 +344,41 @@ was not archived and its overall quality gate remains false.
 ### Next Steps
 
 - Update production source and rebuild with existing mounts; verify deployed revision. Historical R13 causes remain open; no push or production deployment performed.
+
+
+## Session 11: OAuth primary action and Compose env source delivery
+<!-- trellis-session: v=2 fp=c35c6a475d7c929c -->
+
+**Date**: 2026-10-24
+**Task**: OAuth primary action and Compose env source delivery
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+R16/R17 locally implemented, independently reviewed and source-packaged. Historical R13 and production rollout remain open; parent task stays in progress.
+
+### Main Changes
+
+- Unify OAuth start/submit, handle import done immediately, serialize poll/submit, align callback port; load optional application settings through service env_file with one deployment port.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7a9bc5b` | fix: simplify OAuth authorization and Compose env delivery |
+| `b7c6f7e` | chore(task): record verified OAuth and Compose source release |
+
+### Testing
+
+- [OK] Full Go normal/race/vet/build, final HTML build and independent final OAuth Chrome passed; official synthetic Compose matrix and 15 release tests passed.
+- [OK] Verified the 131-member final source ZIP by hashes/private exclusions, extraction, compile/start, seven routes, usage replay/embedded tokens and extracted OAuth Chrome; original credentials and prior archives preserved.
+
+### Status
+
+**In progress.** R16/R17 are locally delivered. Historical R13 causes and actual
+production rollout remain open; the parent task was not archived and its overall
+quality gate remains false.
+
+### Next Steps
+
+- Update deployment source and rebuild using existing .env/config/auth/data mounts, then verify actual revision. No real OAuth, push or deployment performed; historical R13 causes remain open.

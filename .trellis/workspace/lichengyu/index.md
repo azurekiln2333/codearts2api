@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
+- **Total Sessions**: 11
 - **Last Active**: 2026-10-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~344 | Active |
+| `journal-1.md` | ~382 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-10-24 | OAuth primary action and Compose env source delivery | `7a9bc5b`, `b7c6f7e` | `fix/deepseek-concurrency-20261021` |
 | 10 | 2026-10-24 | Token usage audit and console source delivery | `4f0ceff`, `c6e8593` | `fix/deepseek-concurrency-20261021` |
 | 9 | 2026-10-23 | Eligibility 503 classification and verified source delivery | `4622f3ef2f4b02ed311ca5cffb617e148c1bb4eb`, `86b228a` | `fix/deepseek-concurrency-20261021` |
 | 8 | 2026-10-23 | Reopened stability verification with historical causes open | `835181b4617f5bfaf1c28055940da5b1d3a5735b` | `fix/deepseek-concurrency-20261021` |
