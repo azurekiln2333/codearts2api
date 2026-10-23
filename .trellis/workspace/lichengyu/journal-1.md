@@ -306,3 +306,41 @@ R13 causes and production deployment remain open; the task was not archived.
 ### Next Steps
 
 - Update production source before rebuild/recreate with existing mounts; verify actual deployed revision. Historical R13 causes remain open; no push or deployment performed.
+
+
+## Session 10: Token usage audit and console source delivery
+<!-- trellis-session: v=2 fp=f7f31d232e014cd5 -->
+
+**Date**: 2026-10-24
+**Task**: Token usage audit and console source delivery
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+R15 locally implemented, independently reviewed and source-packaged. Production rollout and historical R13 causes remain open; parent task remains in progress.
+
+### Main Changes
+
+- Persist safe nullable generation usage independently of stream include_usage and display per-request source/counts plus filtered retained account/model summaries.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4f0ceff` | feat: persist generation token usage and display audit summaries |
+| `c6e8593` | chore(task): record verified token usage source release |
+
+### Testing
+
+- [OK] Full Go normal/race/vet/build, independent review, full and token Chrome suites passed; final source ZIP extracted/compiled/started with seeded replay/API and actual embedded desktop/mobile checks.
+- [OK] All 131 member hashes and private credential exclusion checks passed; original credentials/config and prior archives preserved; owned servers stopped.
+
+### Status
+
+**In progress.** R15 is locally implemented, reviewed and source-packaged.
+Historical R13 causes and production deployment remain open; the parent task
+was not archived and its overall quality gate remains false.
+
+### Next Steps
+
+- Update production source and rebuild with existing mounts; verify deployed revision. Historical R13 causes remain open; no push or production deployment performed.
