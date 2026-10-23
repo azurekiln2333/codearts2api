@@ -98,8 +98,10 @@ func (h *Handler) auditStats() any {
 // the on-disk archive and are intentionally not served here.
 func (h *Handler) adminRequests(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.Audit == nil {
+		page := h.cfg.Audit.Snapshot(audit.Query{})
 		writeJSON(w, http.StatusOK, map[string]any{
 			"events": []any{}, "disabled": true, "window": 0, "archive": "disabled",
+			"usage": page.Usage,
 		})
 		return
 	}
@@ -131,12 +133,15 @@ func (h *Handler) adminRequests(w http.ResponseWriter, r *http.Request) {
 		"window":         page.Window,
 		"disabled":       page.Disabled,
 		"archive":        "older retained files are on-disk only",
+		"usage":          page.Usage,
 	})
 }
 
-// adminAudit exposes sink counters and effective retention limits.
+// adminAudit exposes sink counters, effective retention limits and observed usage
+// over the bounded recent window, without scanning the on-disk archive.
 func (h *Handler) adminAudit(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"audit": h.auditStats()})
+	page := h.cfg.Audit.Snapshot(audit.Query{Limit: 1})
+	writeJSON(w, http.StatusOK, map[string]any{"audit": h.auditStats(), "usage": page.Usage})
 }
 
 func atoiDefault(s string, fallback int) int {

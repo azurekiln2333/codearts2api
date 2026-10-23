@@ -178,3 +178,17 @@ subcases, independent full-scope affected-contract review, full Go normal/race,
 vet/build and whitespace checks pass. Commit/release verification is recorded
 after the work commit. This does not close historical R13 causes or change
 provider entitlement, concurrency limits, refresh policy or model mapping.
+
+## R15: generation token usage delivery
+
+- [x] Implement typed nullable usage, safe normalization/copy/replay and bounded
+  query-consistent recent-window/account/model summaries in the audit layer.
+- [x] Capture successful chat usage independently of stream include_usage; expose
+  summary in existing requests/audit APIs and verify real-route audit responses.
+- [x] Add per-request counts/source and honest filtered summary/group tables to
+  the Requests view; clarify credential expiry wording and test real browsers.
+- [ ] Independent integrated review, full normal/race/vet/build, JS/diff checks;
+  update executable specs and commit/package the verified source.
+
+Work remains in the authorized active task. R15 adds generation metadata, not a
+billable all-time ledger or historical backfill, and does not close R13 causes.

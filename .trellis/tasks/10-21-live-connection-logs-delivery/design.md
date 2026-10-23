@@ -320,3 +320,57 @@ Actual HTTP regressions must preserve unknown/partial/stale/replaced-auth eviden
 as nonauthoritative and assert status, error code and audit outcome. The parent
 owns deployment evidence and sanitized reports; the implementer owns the narrow
 server eligibility helper and route regressions, followed by independent review.
+
+## J. Generation token usage across audit and console
+
+The public response already exposes native usage or a text-length estimate, but
+the request event drops it. Preserve the existing response serializer and stream
+include_usage opt-in while observing a successfully completed generation for
+audit independently. Never collect prompts/completions into audit metadata.
+
+Audit owns `TokenUsage` with nullable int64 `prompt_tokens`, `completion_tokens`,
+`total_tokens` and allowlisted `source` (`upstream` or `estimated`). Unknown is
+absent usage/null counters; known zero is zero. Decode finite integral nonnegative
+JSON-safe numbers only. Derive an absent total only when both components are
+known and their sum is safe. Preserve incomplete native evidence rather than
+labeling missing components exact or silently replacing it with estimates.
+Sanitize/clone this metadata at record, snapshot and replay boundaries.
+
+`Page.Usage` serializes as `usage` on requests. `UsageSummary` contains `scope`
+(`recent_window`), `window`, `disabled`, `from`, `to`, totals, `by_account` and
+`by_model`. Each group uses `key` and the same totals: `requests`, `with_usage`,
+`upstream_requests`, `estimated_requests`, `unknown_requests`, `prompt_tokens`,
+`completion_tokens`, `total_tokens`, `prompt_known`, `completion_known`,
+`total_known`, `overflowed`. Known counters aggregate without fabricating unknown
+zeros; known-count fields explain partial coverage. Group by final canonical
+model (fallback requested model) and final selected account (empty key unassigned).
+At most 100 account and 100 model groups are returned deterministically, with
+`accounts_truncated` / `models_truncated` counts. Overall totals still cover all
+matches. Saturate sums to JSON-safe integer bounds with visible overflow flag.
+
+Keep existing top-level `page.window` as configured capacity. `usage.window`
+counts actual valid, nonexpired retained events before query filters;
+`usage.requests` counts filter matches. Capacity 512 with three retained events
+and one match must serialize 512/3/1 respectively, including empty later pages.
+
+Summarize the same immutable copied ring and retention/filter rules as request
+paging, before applying `before`/`limit`. Thus loading older pages does not
+multiply totals. No new all-time accumulator, disk scan, lock-held I/O, unbounded
+maps, separate endpoint or additional poller is introduced. Add `usage` to the
+existing request and audit API responses; nil/disabled sinks return honest empty
+disabled summaries. Partial/failed generations remain unknown in this scope;
+these counters are successful-generation observations, not provider billing.
+
+The Requests view adds per-event input/output/total and source; its summary and
+account/model tables consume the server's `usage` object, not loaded-page sums.
+Label the filtered recent-window range and coverage. Legacy records/old servers,
+disabled audit, invalid values, losses and grouping truncation stay visible.
+Clear summaries with query/auth changes, preserve same-query error feedback,
+escape all keys and keep tables locally scrollable. Rename credential expiry
+wording to distinguish it from generation tokens. Follow existing MD3 geometry.
+
+Ownership: audit implementer owns `internal/audit` schema/sanitization/replay/
+summary/tests; chat implementer owns server chat capture/admin envelope/tests;
+panel implementer owns embedded HTML and UI fixtures/checks. Parent owns shared
+contracts, specs, integrated tests, independent review and source delivery. No
+credentials, production mutations, model substitution or scheduler changes.

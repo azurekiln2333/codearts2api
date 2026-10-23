@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"codearts2api/internal/audit"
 	"codearts2api/internal/pool"
 	"codearts2api/internal/upstream"
 )
@@ -339,6 +340,9 @@ func TestRemoteSessionLifecycleDisconnectAfterDoneRemainsSuccessful(t *testing.T
 	ev := waitForRecord(t, sink, resp.Header.Get("X-Request-Id"))
 	if ev.Outcome != "ok" || ev.Canceled || ev.Attempts != 1 || ev.Status != http.StatusOK {
 		t.Fatalf("delivered response was misclassified during cleanup: %+v", ev)
+	}
+	if ev.Usage == nil || ev.Usage.Source != audit.UsageSourceEstimated || ev.Usage.TotalTokens == nil {
+		t.Fatalf("disconnect after delivered DONE dropped completed generation usage: %+v", ev.Usage)
 	}
 	assertLifecycleHealthy(t, p)
 	assertRemoteSessionAdmissionReusable(t, p)

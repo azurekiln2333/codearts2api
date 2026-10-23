@@ -24,6 +24,12 @@ Authenticated APIs: `GET /admin/api/requests`, `GET /admin/api/audit` and
 (exclusive uint64 sequence cursor), `outcome`, `account`, `model` (requested or
 canonical, case insensitive), `status` and RFC3339 `since`.
 
+Requests and audit-statistics responses additionally contain `usage`, the filtered
+bounded recent-window generation summary. Events may contain nullable typed
+`usage` counters/source. Follow [Generation Token Usage](./token-usage.md) for
+normalization, persistence ownership, success-only observation and UI contracts;
+this is distinct from OAuth credential lifetime and from provider billing.
+
 ## 3. Contracts
 
 ### Metadata and transport

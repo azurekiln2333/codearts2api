@@ -21,6 +21,12 @@ operational element IDs or update their renderer, listener and verification
 together. `/admin/api/overview` and `/admin/api/requests` keep their existing
 response schema, filters and exclusive sequence cursor.
 
+The Requests view consumes per-event `usage` and the response's bounded `usage`
+summary under [Generation Token Usage](./token-usage.md). Preserve its
+unknown/estimated/upstream distinctions and query/auth ownership; loaded rows
+must never become an invented historical total. Account credential expiry is
+labeled as credential time, not generation tokens.
+
 ## 3. Contracts
 
 - Keep shell/header/sidebar distinct from the active page. Use neutral surfaces,
@@ -97,6 +103,8 @@ response schema, filters and exclusive sequence cursor.
 | Audit disabled/unavailable | Honest disabled/error state with no stale success claim |
 | Filter change fails | Old query rows/cursor cleared; no mixed-query pagination |
 | Same-query refresh fails | Existing rows may remain with visible error feedback |
+| Token usage absent/partial/estimated | Honest unknown components/source/coverage; no invented zero or exact cost |
+| Request pagination | Server filtered-window usage summary unchanged by loading more rows |
 | 200 plus stream error | HTTP 200 retained alongside failed result/cause |
 | Uncommitted disconnect | No fabricated status code |
 | Malicious display text | Text escaped; no element/event handler executes |

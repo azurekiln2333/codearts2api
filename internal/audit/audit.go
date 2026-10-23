@@ -95,8 +95,9 @@ type Event struct {
 	RetryAfterS int  `json:"retry_after_s,omitempty"`
 	Canceled    bool `json:"canceled"`
 
-	Cause Cause  `json:"cause"`
-	Trace *Trace `json:"trace,omitempty"`
+	Cause Cause       `json:"cause"`
+	Trace *Trace      `json:"trace,omitempty"`
+	Usage *TokenUsage `json:"usage,omitempty"`
 }
 
 // Options configure the sink. Zero values mean "use the default".
@@ -224,13 +225,14 @@ type Query struct {
 
 // Page is a stable slice of the recent window.
 type Page struct {
-	Events      []Event `json:"events"`
-	NextBefore  uint64  `json:"next_before"`
-	HasMore     bool    `json:"has_more"`
-	Dropped     uint64  `json:"dropped"`
-	WriteFailed uint64  `json:"write_failures"`
-	Window      int     `json:"window"`
-	Disabled    bool    `json:"disabled"`
+	Events      []Event      `json:"events"`
+	NextBefore  uint64       `json:"next_before"`
+	HasMore     bool         `json:"has_more"`
+	Dropped     uint64       `json:"dropped"`
+	WriteFailed uint64       `json:"write_failures"`
+	Window      int          `json:"window"`
+	Disabled    bool         `json:"disabled"`
+	Usage       UsageSummary `json:"usage"`
 }
 
 // Sink is a bounded, non-blocking audit recorder.
@@ -395,6 +397,12 @@ func (s *Sink) prepare(ev Event) Event {
 	if ev.Attempts < 0 {
 		ev.Attempts = 0
 	}
+	if ev.Outcome == "ok" {
+		ev.Usage = sanitizeTokenUsage(ev.Usage)
+	} else {
+		// A failed/partial delivery is not a successful generation observation.
+		ev.Usage = nil
+	}
 	ev.Trace = sanitizeTrace(ev.Trace, ev.TotalMS)
 	return fitTrace(ev)
 }
@@ -412,7 +420,7 @@ func (s *Sink) appendRing(ev Event) {
 
 // Snapshot returns a stable page of the recent window, newest first.
 func (s *Sink) Snapshot(q Query) Page {
-	page := Page{Disabled: !s.Enabled(), Events: []Event{}}
+	page := Page{Disabled: !s.Enabled(), Events: []Event{}, Usage: emptyUsageSummary(0, !s.Enabled())}
 	if s == nil {
 		return page
 	}
@@ -432,30 +440,16 @@ func (s *Sink) Snapshot(q Query) Page {
 
 	matched := make([]Event, 0, len(events))
 	cutoff := s.cutoff()
+	retained := 0
 	for i := len(events) - 1; i >= 0; i-- { // newest first
 		ev := events[i]
-		if ts, err := time.Parse(time.RFC3339Nano, ev.TS); err != nil || ts.Before(cutoff) {
+		ts, err := time.Parse(time.RFC3339Nano, ev.TS)
+		if err != nil || ts.Before(cutoff) {
 			continue
 		}
-		if q.Before != 0 && ev.Seq >= q.Before {
+		retained++
+		if !matchesQuery(ev, q, ts) {
 			continue
-		}
-		if q.Outcome != "" && ev.Outcome != q.Outcome {
-			continue
-		}
-		if q.Status != 0 && ev.Status != q.Status {
-			continue
-		}
-		if q.Account != "" && (ev.Account == nil || *ev.Account != q.Account) {
-			continue
-		}
-		if q.Model != "" && !strings.EqualFold(ev.Model, q.Model) && !strings.EqualFold(ev.ModelCanonical, q.Model) {
-			continue
-		}
-		if !q.Since.IsZero() {
-			if ts, err := time.Parse(time.RFC3339Nano, ev.TS); err == nil && ts.Before(q.Since) {
-				continue
-			}
 		}
 		// The returned page owns its slices/pointers, just like queued events.
 		ev.Tried = append([]string(nil), ev.Tried...)
@@ -468,17 +462,37 @@ func (s *Sink) Snapshot(q Query) Page {
 			ev.FirstDataMS = &first
 		}
 		ev.Trace = cloneTrace(ev.Trace)
+		ev.Usage = sanitizeTokenUsage(ev.Usage)
 		matched = append(matched, ev)
 	}
-	if len(matched) > q.Limit {
-		matched = matched[:q.Limit]
+	page.Usage = summarizeUsage(matched, retained, page.Disabled)
+	paged := matched[:0]
+	for _, ev := range matched {
+		if q.Before == 0 || ev.Seq < q.Before {
+			paged = append(paged, ev)
+		}
+	}
+	if len(paged) > q.Limit {
+		paged = paged[:q.Limit]
 		page.HasMore = true
 	}
-	page.Events = matched
-	if n := len(matched); n > 0 {
-		page.NextBefore = matched[n-1].Seq
+	page.Events = paged
+	if n := len(paged); n > 0 {
+		page.NextBefore = paged[n-1].Seq
 	}
 	return page
+}
+
+// matchesQuery is shared by paging and usage aggregation. Pagination belongs
+// only to the returned event slice, not to a filtered window's usage totals.
+func matchesQuery(ev Event, q Query, ts time.Time) bool {
+	if !q.Since.IsZero() && ts.Before(q.Since) {
+		return false
+	}
+	return (q.Outcome == "" || ev.Outcome == q.Outcome) &&
+		(q.Status == 0 || ev.Status == q.Status) &&
+		(q.Account == "" || (ev.Account != nil && *ev.Account == q.Account)) &&
+		(q.Model == "" || strings.EqualFold(ev.Model, q.Model) || strings.EqualFold(ev.ModelCanonical, q.Model))
 }
 
 // Stats returns the visible counters and effective limits.

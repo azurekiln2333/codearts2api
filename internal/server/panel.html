@@ -125,8 +125,13 @@ svg{display:block}
 .filter-field{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1 1 140px}
 .filter-field label{font-size:11px;color:var(--muted)}.filter-field select,.filter-field input{width:100%}
 .filter-field.outcome-field{flex:1.4 1 190px}.filter-field.status-field{flex:.55 1 90px}
-#reqTable{min-width:1180px}
-#reqTable th:nth-child(1){width:18%}#reqTable th:nth-child(2){width:16%}#reqTable th:nth-child(3){width:13%}#reqTable th:nth-child(4){width:13%}#reqTable th:nth-child(5){width:20%}#reqTable th:nth-child(6){width:5%}#reqTable th:nth-child(7){width:15%}
+#reqTable{min-width:1360px}
+#reqTable th:nth-child(1){width:16%}#reqTable th:nth-child(2){width:14%}#reqTable th:nth-child(3){width:12%}#reqTable th:nth-child(4){width:12%}#reqTable th:nth-child(5){width:16%}#reqTable th:nth-child(6){width:5%}#reqTable th:nth-child(7){width:12%}#reqTable th:nth-child(8){width:13%}
+.usage-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.usage-stats .stat{padding:14px 16px}.usage-stats .v{font-size:23px}
+.usage-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;min-width:0}.usage-table{min-width:620px}.usage-table th:first-child{width:30%}.usage-table th:last-child{width:25%}.usage-table td{padding:12px}
+.usage-caption{margin:12px 0 0;color:var(--muted);font-size:11px;overflow-wrap:anywhere}.usage-badge{margin-top:7px}
+@media(max-width:1150px){.usage-groups{grid-template-columns:1fr}}
+@media(max-width:767px){.usage-stats{grid-template-columns:1fr}.usage-stats .stat{padding:12px 14px}.usage-stats .v{margin:6px 0;font-size:22px}.usage-groups{gap:14px}}
 .outcome-label{font-size:11px;display:block;margin-top:6px;overflow-wrap:anywhere;color:var(--bad)}
 .outcome-label.success{color:var(--ok)}.outcome-label.canceled{color:var(--warn)}
 .notice{padding:11px 14px;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--muted);background:var(--subtle);overflow-wrap:anywhere}
@@ -274,7 +279,9 @@ svg{display:block}
         <section data-view="requests" aria-label="请求审计" hidden>
           <form class="request-filters" id="reqFilters"><div class="filter-field outcome-field"><label for="reqOutcome">执行结果</label><select id="reqOutcome"></select></div><div class="filter-field"><label for="reqModel">模型</label><input id="reqModel" class="input mono" placeholder="模型标识"/></div><div class="filter-field"><label for="reqAccount">账号</label><input id="reqAccount" class="input mono" placeholder="账号标识"/></div><div class="filter-field status-field"><label for="reqStatus">HTTP 状态</label><input id="reqStatus" class="input" type="number" min="100" max="599" placeholder="全部"/></div><button class="btn" id="btnReqApply" type="submit">筛选</button><button class="btn ghost" id="btnReqReset" type="button">重置</button></form>
           <div id="reqError" class="notice error" role="alert" hidden></div><div id="reqLoss" class="notice warning" hidden></div>
-          <div class="card table-card" id="requestCard"><div class="card-h"><div><h2>最近请求</h2><p id="reqMeta">进入此页后加载近期窗口</p></div><button class="btn small-btn" id="btnReqRefresh" type="button"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>刷新</button></div><div class="table-scroll"><table class="table" id="reqTable"><caption class="sr-only">请求元数据：实际 HTTP 状态与执行结果分别显示</caption><thead><tr><th scope="col">时间 / 请求 ID</th><th scope="col">模型</th><th scope="col">账号</th><th scope="col">HTTP / 执行结果</th><th scope="col">原因</th><th scope="col">尝试</th><th scope="col">排队 / 首数据 / 总耗时</th></tr></thead><tbody id="reqBody"><tr><td colspan="7" class="empty">正在加载最近请求…</td></tr></tbody></table></div><div class="table-foot"><span id="reqArchive">接口仅查询有界近期窗口。</span><button class="btn small-btn" id="btnReqMore" type="button" hidden>加载更早记录</button></div></div>
+          <div class="card" id="reqUsageCard"><div class="card-h"><div><h2>Token 用量</h2><p id="reqUsageScope">进入此页后读取筛选范围内的近期用量。</p></div><span class="badge neutral">近期窗口</span></div><div class="card-b"><div class="usage-stats"><div class="stat"><div class="stat-head">输入 tokens</div><div class="v" id="reqUsagePrompt">—</div><div class="hint" id="reqUsagePromptKnown">尚未读取</div></div><div class="stat"><div class="stat-head">输出 tokens</div><div class="v" id="reqUsageCompletion">—</div><div class="hint" id="reqUsageCompletionKnown">尚未读取</div></div><div class="stat"><div class="stat-head">总 tokens</div><div class="v" id="reqUsageTotal">—</div><div class="hint" id="reqUsageTotalKnown">尚未读取</div></div></div><p class="usage-caption" id="reqUsageCoverage">上游值与估算值分别标识；旧记录或失败请求的未知用量不按零计算。</p><div class="notice warning" id="reqUsageWarning" hidden></div><p class="usage-caption">仅汇总当前筛选条件下已保留的近期记录，包含明确标识的估算值；不是全时段用量或上游账单。加载更多记录不会重复累计。</p></div></div>
+          <div class="card table-card" id="requestCard"><div class="card-h"><div><h2>最近请求</h2><p id="reqMeta">进入此页后加载近期窗口</p></div><button class="btn small-btn" id="btnReqRefresh" type="button"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>刷新</button></div><div class="table-scroll"><table class="table" id="reqTable"><caption class="sr-only">请求元数据：实际 HTTP 状态、执行结果与输入输出 token 用量分别显示</caption><thead><tr><th scope="col">时间 / 请求 ID</th><th scope="col">模型</th><th scope="col">账号</th><th scope="col">HTTP / 执行结果</th><th scope="col">原因</th><th scope="col">尝试</th><th scope="col">输入 / 输出 / 总 tokens</th><th scope="col">排队 / 首数据 / 总耗时</th></tr></thead><tbody id="reqBody"><tr><td colspan="8" class="empty">正在加载最近请求…</td></tr></tbody></table></div><div class="table-foot"><span id="reqArchive">接口仅查询有界近期窗口。</span><button class="btn small-btn" id="btnReqMore" type="button" hidden>加载更早记录</button></div></div>
+          <div class="usage-groups" id="reqUsageGroups" hidden><div class="card table-card"><div class="card-h"><h2>按账号汇总</h2><span class="small muted">筛选后的近期窗口</span></div><div class="table-scroll"><table class="table usage-table"><caption class="sr-only">近期窗口内按最终选中账号汇总的 token 用量</caption><thead><tr><th scope="col">账号</th><th scope="col">输入</th><th scope="col">输出</th><th scope="col">总 tokens</th><th scope="col">来源 / 覆盖</th></tr></thead><tbody id="reqUsageAccounts"><tr><td colspan="5" class="empty">尚未读取账号用量。</td></tr></tbody></table></div></div><div class="card table-card"><div class="card-h"><h2>按模型汇总</h2><span class="small muted">按实际规范名分组</span></div><div class="table-scroll"><table class="table usage-table"><caption class="sr-only">近期窗口内按实际规范模型名汇总的 token 用量</caption><thead><tr><th scope="col">模型</th><th scope="col">输入</th><th scope="col">输出</th><th scope="col">总 tokens</th><th scope="col">来源 / 覆盖</th></tr></thead><tbody id="reqUsageModels"><tr><td colspan="5" class="empty">尚未读取模型用量。</td></tr></tbody></table></div></div></div>
           <div class="notice">HTTP 状态表示响应是否已经提交；流式响应即使返回 200，执行结果仍可能失败。此处仅展示元数据，不记录对话内容。</div>
         </section>
         <section data-view="connections" aria-label="连接日志" hidden>
@@ -487,7 +494,7 @@ function renderAccounts(){
   $("acctBody").innerHTML = accounts.map(account => {
     const pending = pendingAccounts.has(account.uid) ? " disabled" : "";
     return `<tr>
-    <td><strong>${escapeHtml(account.nickname || account.user_name || account.name || "未命名")}</strong><span class="secondary mono" title="${escapeAttr(account.uid)}">${escapeHtml(shortUID(account.uid))}</span>${account.name && account.name !== account.uid ? `<span class="secondary mono">${escapeHtml(account.name)}</span>` : ""}${account.token_remaining ? `<span class="secondary">Token 剩余 ${escapeHtml(account.token_remaining)}</span>` : ""}</td>
+    <td><strong>${escapeHtml(account.nickname || account.user_name || account.name || "未命名")}</strong><span class="secondary mono" title="${escapeAttr(account.uid)}">${escapeHtml(shortUID(account.uid))}</span>${account.name && account.name !== account.uid ? `<span class="secondary mono">${escapeHtml(account.name)}</span>` : ""}${account.token_remaining ? `<span class="secondary">凭证剩余 ${escapeHtml(account.token_remaining)}</span>` : ""}</td>
     <td><span>${escapeHtml(account.checkin?.message || "尚未查询")}</span><span class="secondary">${account.checkin ? escapeHtml(fmtTime(account.checkin.checked_at)) : ""}</span></td>
     <td>${statusBadge(account)}<span class="secondary mono">并发 ${numberText(account.active_concurrent)} / ${numberText(account.max_concurrent)}</span></td>
     <td><span>${escapeHtml(currentReason(account))}</span>${account.cooling ? `<span class="secondary">冷却至 ${escapeHtml(fmtTime(account.until))}</span>` : ""}<span class="secondary">${escapeHtml(failureHistory(account))}</span>${account.last_success_at ? `<span class="secondary">上次成功 ${escapeHtml(fmtTime(account.last_success_at))}</span>` : ""}</td>
@@ -751,6 +758,53 @@ function reqCause(event){
   return text;
 }
 function reqMs(value){ const number = numberValue(value); return number === null ? "—" : number + "ms"; }
+// Usage numbers are typed nonnegative safe integers; a missing value is not zero.
+function tokenNumber(value){ return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null; }
+function tokenText(value){ const number = tokenNumber(value); return number === null ? "未知" : number.toLocaleString("zh-CN"); }
+function usageTotalText(usage,field,known){
+  return tokenNumber(usage?.[known]) > 0 || tokenNumber(usage?.requests) === 0 ? tokenText(usage?.[field]) : "未知";
+}
+function requestUsageCell(usage){
+  const source = usage?.source;
+  if (source !== "upstream" && source !== "estimated") return '<span class="muted small">用量未知</span>';
+  const label = source === "upstream" ? "上游值" : "估算值", tone = source === "upstream" ? "info" : "warn";
+  return `<span class="mono">输入 ${tokenText(usage.prompt_tokens)}</span><span class="secondary mono">输出 ${tokenText(usage.completion_tokens)}</span><span class="secondary mono">总计 ${tokenText(usage.total_tokens)}</span><span class="badge ${tone} usage-badge">${label}</span>`;
+}
+function resetUsageSummary(message){
+  $("reqUsageScope").textContent = message;
+  for (const field of ["Prompt","Completion","Total"]){ $("reqUsage" + field).textContent = "—"; $("reqUsage" + field + "Known").textContent = "用量未知"; }
+  $("reqUsageCoverage").textContent = "上游值与估算值分别标识；旧记录或失败请求的未知用量不按零计算。";
+  $("reqUsageWarning").hidden = true; $("reqUsageWarning").textContent = ""; $("reqUsageGroups").hidden = true;
+  $("reqUsageAccounts").innerHTML = '<tr><td colspan="5" class="empty">尚无账号用量统计。</td></tr>';
+  $("reqUsageModels").innerHTML = '<tr><td colspan="5" class="empty">尚无模型用量统计。</td></tr>';
+}
+function usageGroupRows(groups,kind){
+  if (!Array.isArray(groups) || !groups.length) return '<tr><td colspan="5" class="empty">当前筛选范围没有分组记录。</td></tr>';
+  return groups.slice(0,100).filter(group => group && typeof group === "object").map(group => {
+    const key = typeof group.key === "string" && group.key ? group.key : kind === "account" ? "未选择账号" : "未知模型";
+    return `<tr><td><span class="mono">${escapeHtml(key)}</span><span class="secondary">${tokenText(group.requests)} 条请求</span></td><td class="mono">${usageTotalText(group,"prompt_tokens","prompt_known")}<span class="secondary">${tokenText(group.prompt_known)} 条已知</span></td><td class="mono">${usageTotalText(group,"completion_tokens","completion_known")}<span class="secondary">${tokenText(group.completion_known)} 条已知</span></td><td class="mono">${usageTotalText(group,"total_tokens","total_known")}<span class="secondary">${tokenText(group.total_known)} 条已知</span></td><td class="small">上游 ${tokenText(group.upstream_requests)} · 估算 ${tokenText(group.estimated_requests)}<span class="secondary">未知 ${tokenText(group.unknown_requests)} · 有用量 ${tokenText(group.with_usage)}</span>${group.overflowed === true ? '<span class="secondary">计数已达安全上限</span>' : ""}</td></tr>`;
+  }).join("");
+}
+function renderUsageSummary(usage,disabled){
+  if (disabled || usage?.disabled === true){ resetUsageSummary("请求审计已关闭，未记录新的 token 用量。"); return; }
+  if (!usage || usage.scope !== "recent_window" || tokenNumber(usage.requests) === null){ resetUsageSummary("服务未提供近期用量统计；旧记录的用量保持未知。"); return; }
+  const range = usage.from && usage.to ? ` · ${fmtTime(usage.from)} 至 ${fmtTime(usage.to)}` : "";
+  $("reqUsageScope").textContent = `近期窗口 · 已保留 ${tokenText(usage.window)} 条 · 筛选匹配 ${tokenText(usage.requests)} 条${range}`;
+  for (const [name,field,known] of [["Prompt","prompt_tokens","prompt_known"],["Completion","completion_tokens","completion_known"],["Total","total_tokens","total_known"]]){
+    $("reqUsage" + name).textContent = usageTotalText(usage,field,known);
+    $("reqUsage" + name + "Known").textContent = `已知 ${tokenText(usage[known])} / 匹配 ${tokenText(usage.requests)} 条`;
+  }
+  $("reqUsageCoverage").textContent = `有用量 ${tokenText(usage.with_usage)} 条 · 上游值 ${tokenText(usage.upstream_requests)} 条 · 估算值 ${tokenText(usage.estimated_requests)} 条 · 未知 ${tokenText(usage.unknown_requests)} 条。部分上游记录可能缺少输入、输出或总量字段。`;
+  const warnings = [];
+  if (usage.overflowed === true) warnings.push("部分计数超出安全范围，显示值已达上限");
+  if (tokenNumber(usage.accounts_truncated) > 0) warnings.push(`账号分组省略 ${tokenText(usage.accounts_truncated)} 项`);
+  if (tokenNumber(usage.models_truncated) > 0) warnings.push(`模型分组省略 ${tokenText(usage.models_truncated)} 项`);
+  $("reqUsageWarning").hidden = !warnings.length;
+  $("reqUsageWarning").textContent = warnings.length ? warnings.join("；") + "。总览仍覆盖全部匹配记录。" : "";
+  $("reqUsageGroups").hidden = false;
+  $("reqUsageAccounts").innerHTML = usageGroupRows(usage.by_account,"account");
+  $("reqUsageModels").innerHTML = usageGroupRows(usage.by_model,"model");
+}
 function renderRequests(page, append=false){
   const rows = page.disabled ? [] : append ? reqState.rows.concat(page.events || []) : page.events || [];
   reqState.rows = rows; reqState.before = page.disabled ? 0 : page.next_before || 0;
@@ -761,7 +815,8 @@ function renderRequests(page, append=false){
   const dropped = Number(page.dropped || 0), failed = Number(page.write_failures || 0);
   $("reqLoss").hidden = page.disabled || !(dropped || failed);
   $("reqLoss").textContent = `审计有损失：丢弃 ${dropped} 条，写入失败 ${failed} 次。近期窗口与磁盘归档可能不完整。`;
-  if (!rows.length){ $("reqBody").innerHTML = `<tr><td colspan="7" class="empty">${icon("requests")}<strong>${page.disabled ? "请求审计已关闭" : "暂无匹配请求"}</strong>${page.disabled ? "当前服务没有记录请求元数据。" : "可以调整筛选条件，或等待新的请求。"}</td></tr>`; return; }
+  renderUsageSummary(page.usage,page.disabled);
+  if (!rows.length){ $("reqBody").innerHTML = `<tr><td colspan="8" class="empty">${icon("requests")}<strong>${page.disabled ? "请求审计已关闭" : "暂无匹配请求"}</strong>${page.disabled ? "当前服务没有记录请求元数据。" : "可以调整筛选条件，或等待新的请求。"}</td></tr>`; return; }
   $("reqBody").innerHTML = rows.map(event => {
     const outcomeClass = event.outcome === "ok" ? "success" : String(event.outcome || "").includes("canceled") ? "canceled" : "";
     const tried = Array.isArray(event.tried) ? event.tried.join(" → ") : "";
@@ -770,6 +825,7 @@ function renderRequests(page, append=false){
       <td><span class="mono">${escapeHtml(event.account ?? "未选择")}</span>${tried ? `<span class="secondary mono">已尝试 ${escapeHtml(tried)}</span>` : ""}</td>
       <td>${reqStatusCell(event)}<span class="outcome-label ${outcomeClass}">${escapeHtml(event.outcome || "未知")}</span>${event.canceled ? '<span class="secondary">调用方已取消</span>' : ""}</td>
       <td class="small">${reqCause(event)}</td><td class="mono">${escapeHtml(event.attempts ?? "未知")}</td>
+      <td>${requestUsageCell(event.usage)}</td>
       <td class="mono small">${reqMs(event.queue_ms)} / ${reqMs(event.first_data_ms)} / ${reqMs(event.total_ms)}<span class="secondary">等待 ${reqMs(event.wait_ms)}</span>${event.retry_after_s ? `<span class="secondary">建议重试 ${escapeHtml(event.retry_after_s)}s 后</span>` : ""}</td></tr>`;
   }).join("");
 }
@@ -780,7 +836,8 @@ async function loadRequests(reset){
   const query = params.toString(), queryChanged = query !== reqState.query;
   if (queryChanged){
     Object.assign(reqState,{query,before:0,rows:[],hasMore:false,loaded:false});
-    $("reqBody").innerHTML = '<tr><td colspan="7" class="empty">正在加载最近请求…</td></tr>';
+    $("reqBody").innerHTML = '<tr><td colspan="8" class="empty">正在加载最近请求…</td></tr>';
+    resetUsageSummary("正在读取筛选范围内的近期用量…");
     $("reqMeta").textContent = "正在读取近期窗口…"; $("reqArchive").textContent = "接口仅查询有界近期窗口。"; $("reqLoss").hidden = true; $("btnReqMore").hidden = true;
   }
   const cursor = reset || queryChanged ? 0 : reqState.before;
@@ -793,7 +850,7 @@ async function loadRequests(reset){
   } catch(error){
     if (epoch === authEpoch && version === reqState.version){
       $("reqError").textContent = "请求记录加载失败：" + error.message; $("reqError").hidden = false;
-      if (!reqState.loaded){ $("reqMeta").textContent = "近期窗口加载失败"; $("reqBody").innerHTML = '<tr><td colspan="7" class="empty">无法读取最近请求，请点击刷新重试。</td></tr>'; }
+      if (!reqState.loaded){ $("reqMeta").textContent = "近期窗口加载失败"; $("reqBody").innerHTML = '<tr><td colspan="8" class="empty">无法读取最近请求，请点击刷新重试。</td></tr>'; resetUsageSummary("用量统计加载失败，请刷新重试。"); }
     }
     throw error;
   } finally {
@@ -846,7 +903,8 @@ function showLogin(){
   $("connRecentBody").innerHTML = '<tr><td colspan="5" class="empty">正在读取近期记录…</td></tr>';
   $("connError").hidden = $("connLoss").hidden = true; $("btnConnRefresh").disabled = false;
   Object.assign(reqState,{before:0,rows:[],hasMore:false,loaded:false,loading:false,query:null});
-  $("reqBody").innerHTML = '<tr><td colspan="7" class="empty">正在加载最近请求…</td></tr>';
+  $("reqBody").innerHTML = '<tr><td colspan="8" class="empty">正在加载最近请求…</td></tr>';
+  resetUsageSummary("登录后读取筛选范围内的近期用量。");
   $("reqBody").classList.remove("table-updating"); $("requestCard").setAttribute("aria-busy","false"); $("btnReqMore").hidden = true; $("reqError").hidden = true; $("reqLoss").hidden = true;
   closeOAuthModal(false); setDrawer(false,false);
   $("bootView").classList.add("hidden"); $("appView").classList.add("hidden"); $("loginView").classList.remove("hidden"); $("loginBtn").disabled = false;

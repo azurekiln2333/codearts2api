@@ -70,6 +70,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		canonical      string
 		triedOrder     []string
 		auditErr       error
+		tokenUsage     *audit.TokenUsage
 	)
 	// Registered first, so it runs last: after the attempt lease/body cleanup
 	// below. The sink call is a non-blocking enqueue and never holds a lock or
@@ -118,6 +119,9 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			TotalMS:        total.Milliseconds(),
 			Canceled:       canceled,
 			Cause:          cause,
+		}
+		if ev.Outcome == "ok" {
+			ev.Usage = tokenUsage
 		}
 		// Capture the Retry-After actually offered to the client.
 		if v := w.Header().Get("Retry-After"); v != "" {
@@ -500,11 +504,23 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		}
 		if req.Stream {
 			var usage func(*upstream.RawCompletion) map[string]any
+			var completedUsage map[string]any
 			if req.IncludeUsage {
-				usage = func(comp *upstream.RawCompletion) map[string]any { return usageEstimate(msgs, comp) }
+				usage = func(comp *upstream.RawCompletion) map[string]any {
+					completedUsage = usageEstimate(msgs, comp)
+					return completedUsage
+				}
+			}
+			// onDone runs only after successful delivery of the terminal chunk.
+			// Audit observes usage even when the client did not request its chunk.
+			onDone := func(comp *upstream.RawCompletion) {
+				if completedUsage == nil {
+					completedUsage = usageEstimate(msgs, comp)
+				}
+				tokenUsage = completionAuditUsage(comp, completedUsage)
 			}
 			telemetry.SetPhase(lifetime.ctx, telemetry.Stream)
-			streamErr := upstream.StreamCaptureWithUsage(w, current.body, model, nil, usage)
+			streamErr := upstream.StreamCaptureWithUsage(w, current.body, model, onDone, usage)
 			if w.err == nil && r.Context().Err() == nil && isConcurrentUpstreamError(streamErr) {
 				h.cfg.Pool.NoteUpstreamBusy(acct, sentAuth, h.cfg.QueueRetryDelay)
 			}
@@ -572,11 +588,13 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			finish = "tool_calls"
 		}
 		telemetry.SetPhase(lifetime.ctx, telemetry.WriteResponse)
-		writeJSON(w, http.StatusOK, buildCompletion(model, comp.Reasoning, content, calls, finish, chatID, usageEstimate(msgs, comp)))
+		completedUsage := usageEstimate(msgs, comp)
+		writeJSON(w, http.StatusOK, buildCompletion(model, comp.Reasoning, content, calls, finish, chatID, completedUsage))
 		if w.err != nil {
 			outcome = "downstream_canceled"
 			return
 		}
+		tokenUsage = completionAuditUsage(comp, completedUsage)
 		storeChat()
 		h.markModelUsable(acct, sentAuth, canonical)
 		h.cfg.Pool.NoteSuccessForAuth(acct, sentAuth)
@@ -610,6 +628,16 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	}
 	outcome = "no_healthy_account"
 	writeOpenAIError(w, http.StatusServiceUnavailable, "no_healthy_account", "no eligible account is currently available")
+}
+
+// completionAuditUsage retains only reviewed numeric metadata; the provider's
+// arbitrary usage object still belongs solely to the public response path.
+func completionAuditUsage(comp *upstream.RawCompletion, usage map[string]any) *audit.TokenUsage {
+	source := audit.UsageSourceEstimated
+	if comp.Usage != nil {
+		source = audit.UsageSourceUpstream
+	}
+	return audit.UsageFromMap(usage, source)
 }
 
 // Call before account health updates or failover. A timeout can originate in the

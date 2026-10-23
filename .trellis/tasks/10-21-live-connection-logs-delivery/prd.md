@@ -165,3 +165,25 @@ production evidence matches the catalog-exclusion defect and identifies old
 revision `709f63e`; production rollout and the separate R13 historical causes
 remain open. See `research/production-eligibility-findings.md` and
 `research/eligibility-quality-review.md`.
+
+## Token usage persistence and console follow-up, 2026-10-24
+
+- R15: Capture generation token usage independently of whether a streaming client
+  requests a usage chunk. Persist safe per-request input/output/total counters,
+  distinguish upstream-reported counts from estimates, and show them in request
+  audit and bounded account/model summaries. Existing API usage behavior stays
+  compatible. The account credential expiry label must not imply generation quota.
+- [x] AC15: Successful actual stream/nonstream chat routes persist typed usage
+  and its source, including streams without include_usage. Native zero values
+  are known zero; missing/invalid values and old records remain unknown. Estimates
+  remain estimates. No success-like token cost is fabricated for failures.
+  Persistence/replay/API/connection snapshots own copied metadata. Summaries use
+  the existing filtered recent audit window, explicitly label that scope, ignore
+  pagination for totals, bound grouping/numbers and preserve disabled/loss states.
+  Real browser checks cover per-request counts, source labels, filtered summaries,
+  legacy/empty/disabled/error states, safe rendering, logout/query races and mobile
+  overflow. Full normal/race/vet/build and independent review pass before delivery.
+
+No historical backfill or all-time billing metric is claimed: old events do not
+contain generation counts and the existing API exposes a bounded recent window.
+R13 historical incident attribution and production rollout remain separate.
