@@ -212,7 +212,14 @@ Original credentials/config and prior archives were preserved. See
 - [x] Replace optional Compose environment enumeration with env_file; preserve
   required key/listener/timezone exceptions, update example/deployment docs and
   validate synthetic configuration without reading live secrets.
-- [ ] Independent integrated review, appropriate normal/race/vet/build/browser
+- [x] Independent integrated review, appropriate normal/race/vet/build/browser
   and release-tool checks; sync executable specs, commit/export/test actual ZIP.
 
 Keep the parent task active for historical R13 and production rollout.
+
+R16/R17 product commit `7a9bc5b8755ab30d203311995a17f14907f487c2` was exported as
+`codearts2api-source-7a9bc5b8755a.zip`. Its actual131-member archive passed hashes/
+private-value exclusions, preservation, extraction, compile/start, seven packaged
+GET routes, usage replay/API/embedded token checks and the full OAuth Chrome suite
+against its extracted panel asset. See `research/oauth-compose-source-release.md`.
+No real OAuth, push or production deployment occurred; keep R13 open.
