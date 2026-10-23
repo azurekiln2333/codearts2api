@@ -139,3 +139,22 @@ exclusion checks, extraction, compilation, startup and all packaged read-only
 health/console/build/requests/audit/models/connections checks. Current-round
 original credential hashes matched, and the current user ZIP matched the
 pre-release baseline after generation. No production deployment or push occurred.
+
+
+## Reopened stability gate R13
+
+- [x] Instrument a private diagnostic build without changing product files or exposing diagnostics publicly.
+- [x] Run aligned independent Go health/control sampling and capture HTTP phase/runtime scheduling evidence under cap3 / wait10s.
+- [ ] Investigate every reproduced failure, make only evidenced source corrections, and verify the affected HTTP boundary.
+- [x] Pass six consecutive 18-request waves plus cold-start and >30s useful long-stream checks with truthful audit and complete cleanup.
+- [ ] Independently review source changes, run appropriate checks, capture cause/spec, and commit/package the actual tested source.
+
+The previous release remains historical and is not proof of this reopened gate. Do not raise timeouts or lower concurrency to satisfy these checks.
+
+The ordinary build passed the finite workload; HTTP/runtime and structural SSE
+evidence were independently reviewed. No new product defect was demonstrated,
+so no new product patch or source ZIP is asserted. The existing product source
+and verified archive remain unchanged. The earlier one-answer strict-content
+failure remains failed and unassigned. Historical cause closure and actual
+production verification stay open; keep the task active and its whole-task
+quality flag false while recording the bounded regression pass separately.

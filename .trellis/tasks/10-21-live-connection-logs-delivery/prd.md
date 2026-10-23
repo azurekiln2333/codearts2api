@@ -104,3 +104,42 @@ the first per-account-3 wave completed 9/18 and rejected nine locally at the
 four subsequent calls. Historical one-second local health timeouts remain
 unattributed. Production deployment, provider capacity beyond these finite
 trials, and real benefit inference on an enabled channel remain unverified.
+
+## Reopened stability acceptance, 2026-10-23
+
+The user rejected closing this work with an unexplained per-account-3 failure.
+The prior finite success and source archive remain historical deliveries, not
+completion of this newly explicit stability gate. No new task or authorization
+prompt is needed.
+
+- R13: Diagnose the observed pre-header/preparation stalls and local queue
+  failures using aligned independent-process controls and captured runtime /
+  network-phase evidence. A later successful wave cannot explain an earlier
+  failure. Keep the effective account wait at 10 seconds and per-account cap at
+  3 while comparing; do not hide the issue by changing timeouts or reducing load.
+- [ ] AC13: Capture discriminating timing/runtime evidence for any reproduced
+  stall, implement the evidenced correction if it belongs to the gateway, and
+  verify at least six consecutive 18-request waves (GLM/DeepSeek, useful content,
+  DONE, correct audits, no retained activity). Repeat cold startup and a useful
+  generation beyond 30 seconds. Health sampling must include an independent Go
+  client and minimal HTTP control in the same time window. Report scheduling
+  delay separately from handler/network duration. Any failed acceptance wave
+  remains failed until investigated and the corrected sequence is rerun; no
+  unconditional stability or production-deployment claim follows from finite
+  tests.
+
+### Current measured regression milestone
+
+The unchanged ordinary product build passed six consecutive mixed-model waves
+(108/108 useful replies), two cold nonstream calls, a 66.307-second useful long
+stream, and eighteen subsequent streamed replies. Each correlated audit was
+successful and every case returned active tracking to zero. Separate combined
+diagnostics verified 216 complete streams with matching parser/output lengths.
+
+The earlier diagnostic post-long wave still failed its useful-answer gate for
+one reasoning-only DeepSeek reply. It was not reproduced in the final focused
+108-request capture. The historical preparation/health stall and this empty
+answer remain causally unresolved. Keep AC13's whole-incident closure unchecked,
+while recording `bounded_regression_passed=true` separately. The task stays
+in progress; current finite regression success is not a claim that the old
+incident's cause was explained or that production has been deployed.

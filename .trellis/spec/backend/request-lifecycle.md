@@ -331,6 +331,27 @@ first-data latency, total duration, and outcome; omit messages and credentials.
   beyond the production 30-second heartbeat interval, progressive concurrency,
   correlated truthful audits, responsive health and cleanup. Direct successful
   upstream calls or local fixtures cannot be reported as that acceptance.
+- For intermittent live stalls, hold effective per-account capacity and cumulative
+  account-wait limits constant across comparisons. Retain every failed wave.
+  Require useful answer content as well as protocol completion: HTTP 200, DONE,
+  reasoning-only output and an `ok` audit do not alone prove a useful answer.
+  Verify six consecutive 18-request waves, cold startup, a useful stream beyond
+  30 seconds and subsequent reuse on an ordinary product build. A diagnostic
+  overlay passes only its own measured construction.
+- Align independent gateway/control health probes with each actual server request
+  window (audit start plus total duration, including cleanup). Report planned
+  probe-start lateness separately from HTTP operation latency. Inspect in-process
+  timer/GC evidence before attributing a network-looking delay to runtime pauses;
+  a healthy external control alone cannot exclude a gateway-only pause. Diagnostic
+  lifetimes start when their process initializes, so start observation/workload
+  immediately and record coverage gaps and caps explicitly.
+- Value-free SSE diagnostics must compare complete per-stream records of
+  whitelisted input shapes,
+  parser builder lengths and successful output lengths, with matching begin/end
+  and zero drops. Read actual JSONL records before calling a trace empty; file
+  metadata sampled while a writer is open is insufficient. Later success cannot
+  explain a prior timeout or empty answer. Record bounded current regression
+  success separately from unresolved historical cause and production deployment.
 
 ## 7. Wrong vs Correct
 
