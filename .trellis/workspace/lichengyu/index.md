@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-10-22
+- **Total Sessions**: 7
+- **Last Active**: 2026-10-23
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~196 | Active |
+| `journal-1.md` | ~231 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-10-23 | Live model and remote session repair with bounded concurrency evidence | `72e83fbed57d862d85e4d20b8b96f7a44e41019d` | `fix/deepseek-concurrency-20261021` |
 | 6 | 2026-10-22 | Account model identity and bounded busy retries | `b9b318ccc026426f593af09cc66eaea62cd19479` | `fix/deepseek-concurrency-20261021` |
 | 5 | 2026-10-22 | Local benefit channel repair and verified source release | `709f63ede82f8f790a853a4550f9430a7e1b2cfc` | `fix/deepseek-concurrency-20261021` |
 | 4 | 2026-10-22 | Local model discovery and live connection delivery | `3d10b4c`, `365f482` | `fix/deepseek-concurrency-20261021` |

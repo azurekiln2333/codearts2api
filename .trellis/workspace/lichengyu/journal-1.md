@@ -194,3 +194,38 @@ Fixed selected-account wire casing and explicit concurrency retry/health behavio
 ### Next Steps
 
 - Rebuild the actual deployment using release.env and existing env/config/auth/data mounts, refresh model catalog and verify real account registration and concurrency results. No deployment or push performed.
+
+
+## Session 7: Live model and remote session repair with bounded concurrency evidence
+<!-- trellis-session: v=2 fp=393c024884c9b7b9 -->
+
+**Date**: 2026-10-23
+**Task**: Live model and remote session repair with bounded concurrency evidence
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Committed and packaged verified model identity, managed remote sessions, credential-fresh catalog and bounded busy admission repairs. Real gateway trials recorded 106 completions and nine local queue rejections; production and historical health-stall attribution remain open.
+
+### Main Changes
+
+- Preserve exact inference IDs by account/auth/source; sign independent remote sessions with busy renewal and bounded idle cleanup; isolate busy and metadata backoff; preserve truthful completion audits.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `72e83fbed57d862d85e4d20b8b96f7a44e41019d` | fix: balance upstream sessions and repair live model discovery |
+
+### Testing
+
+- [OK] Independent full Go normal/race/vet/build and release-tool tests passed. Real cold/repeated/long GLM/DeepSeek and per-account 1/2/3 waves measured; initial cap3 9/18 followed by synchronized 18/18 and four reuse successes, all active counts zero.
+- [OK] Source ZIP 72e83fbed57d passed hashes, private exclusion, extraction, actual compile/start and every packaged GET-only route/revision check; original credential current-round hashes and pre-release user ZIP baseline matched.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Rebuild production from the new source release with existing env/config/auth/data mounts, verify actual revision and runtime limits; retain unexplained historical health misses and first cap3 local queue timeouts as measurement limits. No push or deployment performed.
