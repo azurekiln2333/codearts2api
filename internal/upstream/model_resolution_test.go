@@ -29,8 +29,8 @@ func TestResolveModelForAuthOwnsExactCaseAndRoute(t *testing.T) {
 		t.Fatalf("foreign model leaked: %q %v", id, benefit)
 	}
 	replacement := &auth.Auth{UserID: a.UserID}
-	if id, benefit := ResolveModelForAuth(a.UserID, "Glm-5.3", replacement); id != "Glm-5.3" || benefit {
-		t.Fatalf("previous auth leaked: %q %v", id, benefit)
+	if id, benefit := ResolveModelForAuth(a.UserID, "Glm-5.3", replacement); id != "glm-5.3" || benefit {
+		t.Fatalf("replacement must use captured normal seed, not prior benefit route: %q %v", id, benefit)
 	}
 	f.mu.Lock()
 	f.bodies[EpBenefitGatewayConfig] = `{"enabled":false}`

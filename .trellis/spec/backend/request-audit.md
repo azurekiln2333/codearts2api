@@ -36,6 +36,14 @@ cause. `committed=false` omits `status`; never fabricate HTTP 200 for a disconne
 before any response commitment. A stream failure after HTTP 200 keeps status 200
 and records its failure outcome separately.
 
+A successfully flushed protocol DONE completes a streamed response. The client
+may close immediately while the handler is still doing bounded detached remote
+idle cleanup. That later context cancellation must not turn delivered success
+into `canceled`: record `outcome=ok`, `canceled=false`. A real read/write failure
+or disconnect before delivery remains canceled/error. Keep nonstreamed cancellation
+before the final JSON write distinct. Record only after cleanup, and let diagnostics
+observers wait a bounded cleanup window after DONE for the correlated event.
+
 Once a real upstream attempt occurs, `model_canonical` is the exact ID actually
 sent on the last attempt, resolved from that selected account/auth and route.
 Update active tracking at the same point; a union-wide display name computed

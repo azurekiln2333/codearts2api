@@ -203,6 +203,6 @@ func TestChatSourceCaseSwitchAndAuthReplacementOnWire(t *testing.T) {
 	upstream.PublishModelDiscovery(acct.UID, owner, h.cfg.Upstream.DiscoverModels(context.Background(), owner, true))
 	chat("GLM-5.3", false)
 	p.AddAccount(auth.New(acct.UID, "replacement", "domain", "new-token", "ak", "sk", time.Now().Add(time.Hour).Format(time.RFC3339), "", ""))
-	chat("gLm-5.3", false)
+	chat("glm-5.3", false) // Captured normal seed; prior login's route stays hidden.
 	assertLifecycleHealthy(t, p)
 }

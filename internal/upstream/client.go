@@ -116,6 +116,11 @@ type Client struct {
 	benefitBase string
 	// chatURL chat-completions 完整地址覆盖（测试注入用，留空走 snapBase）。
 	chatURL string
+	// Session lifecycle is enabled for production inference. Legacy chat-only
+	// fixtures opt out; combined local fixtures opt in explicitly.
+	manageSessions  bool
+	sessionInterval time.Duration
+	sessionTimeout  time.Duration
 
 	// claimAuto 模型发现时是否自动领取限时福利。
 	// 默认开启：不领取时福利模型一律返回 InferHub.4004.200 benefit not found
@@ -126,7 +131,7 @@ type Client struct {
 	// 分来源失败退避：同一账号的 builtin/福利接口打不通时短期内不再重试，
 	// 避免每次 /v1/models 刷新都空等超时。
 	srcMu   sync.Mutex
-	srcFail map[string]time.Time
+	srcFail map[string]*modelSourceBackoff
 }
 
 // srcFailCooldown 上游某一来源连续失败后的退避窗口。
@@ -146,12 +151,15 @@ func New(timeout time.Duration) *Client {
 		ResponseHeaderTimeout: timeout,
 	}
 	c := &Client{
-		http:        &http.Client{Timeout: timeout, Transport: tr},
-		streamHTTP:  &http.Client{Transport: tr},
-		streamWait:  timeout,
-		snapBase:    SnapEngineApiHost,
-		benefitBase: BenefitHost,
-		srcFail:     map[string]time.Time{},
+		http:            &http.Client{Timeout: timeout, Transport: tr},
+		streamHTTP:      &http.Client{Transport: tr},
+		streamWait:      timeout,
+		snapBase:        SnapEngineApiHost,
+		benefitBase:     BenefitHost,
+		manageSessions:  true,
+		sessionInterval: 30 * time.Second,
+		sessionTimeout:  3 * time.Second,
+		srcFail:         map[string]*modelSourceBackoff{},
 	}
 	c.claimAuto.Store(true)
 	return c
@@ -161,9 +169,19 @@ func New(timeout time.Duration) *Client {
 // 主要用于端到端测试：仅替换外部 CodeArts HTTP 边界，其余请求链保持真实。
 func NewWithChatEndpoint(timeout time.Duration, endpoint string) *Client {
 	c := New(timeout)
+	c.manageSessions = false
 	if strings.TrimSpace(endpoint) != "" {
 		c.chatURL = endpoint
 	}
+	return c
+}
+
+// NewWithSessionEndpoint replaces the inference boundary and enables its
+// complete session lifecycle against the same origin. Unlike the legacy
+// chat-only fixture constructor, the endpoint must also serve heartbeats.
+func NewWithSessionEndpoint(timeout time.Duration, endpoint string) *Client {
+	c := NewWithChatEndpoint(timeout, endpoint)
+	c.manageSessions = true
 	return c
 }
 
@@ -187,38 +205,6 @@ func (c *Client) snapURL(path string) string { return c.snapBase + path }
 
 // benefitURL 拼接福利网关主机地址。
 func (c *Client) benefitURL(path string) string { return c.benefitBase + path }
-
-// srcBlocked 报告某来源是否处于失败退避窗口内。
-func (c *Client) srcBlocked(key string) bool {
-	c.srcMu.Lock()
-	defer c.srcMu.Unlock()
-	until, ok := c.srcFail[key]
-	if !ok {
-		return false
-	}
-	if time.Now().After(until) {
-		delete(c.srcFail, key)
-		return false
-	}
-	return true
-}
-
-// noteSrcFail 记录某来源失败，进入退避窗口。
-func (c *Client) noteSrcFail(key string) {
-	c.srcMu.Lock()
-	defer c.srcMu.Unlock()
-	if c.srcFail == nil {
-		c.srcFail = map[string]time.Time{}
-	}
-	c.srcFail[key] = time.Now().Add(srcFailCooldown)
-}
-
-// clearSrcFail 清空某来源的失败退避。
-func (c *Client) clearSrcFail(key string) {
-	c.srcMu.Lock()
-	defer c.srcMu.Unlock()
-	delete(c.srcFail, key)
-}
 
 // ---------------------------------------------------------------------------
 // 认证
@@ -571,12 +557,27 @@ func (c *Client) SendChatV2(ctx context.Context, body map[string]any, traceID st
 // chatID/sessionID 作为请求亲和与 prompt cache 标识（不代替 messages 里的语义历史）。
 // benefit 由调用方按账号判定，maas_type 在签名前写入，计入 SignedHeaders。
 func (c *Client) sendChatV2(ctx context.Context, body map[string]any, traceID string, cred SignCredential, userToken, chatID, sessionID string, benefit bool) (io.ReadCloser, error) {
-	raw, _ := json.Marshal(body)
-	wait := newStreamWait(ctx, c.streamWait)
-	httpReq, err := http.NewRequestWithContext(wait.ctx, http.MethodPost, c.chatEndpoint(), bytes.NewReader(raw))
+	raw, err := json.Marshal(body)
 	if err != nil {
-		wait.close()
 		return nil, err
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.chatEndpoint(), bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	var session *chatSession
+	if c.manageSessions {
+		session, err = c.beginChatSession(ctx, httpReq.URL, cred)
+		if err != nil {
+			return nil, err
+		}
+		httpReq.Header.Set("user-session-id", session.id)
+	}
+	wait := newStreamWait(ctx, c.streamWait)
+	httpReq = httpReq.WithContext(wait.ctx)
+	if session != nil && !session.setTransport(sessionCloseFunc(func() error { wait.close(); return nil })) {
+		session.finish()
+		return nil, ctx.Err()
 	}
 	for k, v := range ChatHeadersV2(userToken, traceID, "zh-cn") {
 		httpReq.Header.Set(k, v)
@@ -584,22 +585,29 @@ func (c *Client) sendChatV2(ctx context.Context, body map[string]any, traceID st
 	if benefit {
 		httpReq.Header.Set(HeaderMaasType, MaasBenefit)
 	}
-	signRequest(httpReq, raw, cred)
 	if chatID != "" {
 		httpReq.Header.Set("Chat-Id", chatID)
 	}
 	if sessionID != "" {
 		httpReq.Header.Set("Session-Id", sessionID)
 	}
+	signRequest(httpReq, raw, cred)
 	telemetry.SetPhase(ctx, telemetry.WaitHeaders)
 	resp, err := c.streamHTTP.Do(httpReq)
 	wait.end()
 	if err != nil {
 		err = wait.result(err)
 		wait.close()
+		if session != nil {
+			session.finish()
+		}
 		return nil, err
 	}
-	streamBody := &timeoutReadCloser{body: resp.Body, wait: wait}
+	var streamBody io.ReadCloser = &timeoutReadCloser{body: resp.Body, wait: wait}
+	if session != nil {
+		session.setTransport(streamBody)
+		streamBody = &sessionReadCloser{body: streamBody, session: session}
+	}
 	if resp.StatusCode >= 400 {
 		telemetry.SetPhase(ctx, telemetry.ReadError)
 		rawBody, readErr := io.ReadAll(io.LimitReader(streamBody, 1<<20))

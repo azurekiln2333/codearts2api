@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"codearts2api/internal/audit"
+	"codearts2api/internal/auth"
 	"codearts2api/internal/pool"
 	"codearts2api/internal/telemetry"
 	"codearts2api/internal/upstream"
@@ -76,11 +77,14 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	defer func() {
 		telemetry.SetPhase(lifetime.ctx, telemetry.Cleanup)
 		total := time.Since(started)
-		firstData := observer.firstData()
+		firstData, hasFirstData := observer.firstData()
 		log.Printf("chat id=%s model=%s account=%s attempts=%d wait=%s first_data=%s total=%s outcome=%s", requestID, model, accountName, attempts,
 			waited.Round(time.Millisecond), firstData.Round(time.Millisecond), total.Round(time.Millisecond), outcome)
 		status, committed := w.Status()
-		canceled := r.Context().Err() != nil
+		// A client may close immediately after receiving protocol DONE while the
+		// detached remote-idle cleanup is still running. The delivered completion
+		// remains successful; canceled means the response itself was interrupted.
+		canceled := outcome != "ok" && r.Context().Err() != nil
 		// The final context cause takes precedence over an earlier provider
 		// failure. Acquire/refresh return context.Canceled for both caller
 		// cancellation and our startup deadline; they are different outcomes.
@@ -125,7 +129,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			name := accountName
 			ev.Account = &name
 		}
-		if firstData > 0 {
+		if hasFirstData {
 			ms := firstData.Milliseconds()
 			ev.FirstDataMS = &ms
 		}
@@ -253,6 +257,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 
 	tried := map[string]bool{}
 	var lastErr error
+	var lastBusyDelay time.Duration
 	var current *chatAttempt
 	defer func() { current.close() }()
 	remainingWait := h.cfg.AccountWaitTimeout
@@ -294,7 +299,9 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			if writeChatLifecycleError(w, r, lifetime, aerr) {
 				// Distinguish "waited too long for a slot" from "the ticket cap
 				// rejected this request": the operator action differs.
-				if errors.Is(aerr, pool.ErrAcquireTimeout) {
+				if errors.Is(aerr, pool.ErrUpstreamBusy) {
+					outcome = "upstream_saturated"
+				} else if errors.Is(aerr, pool.ErrAcquireTimeout) {
 					outcome = "queue_wait_timeout"
 				} else {
 					outcome = "admission_rejected"
@@ -341,6 +348,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 
 		authRetried := false
 		var sendErr error
+		var sentAuth *auth.Auth
 		for attempt := 0; attempt < h.cfg.QueueMaxAttempts; attempt++ {
 			if writeChatLifecycleError(w, r, lifetime, nil) {
 				outcome = "canceled_or_timeout"
@@ -349,6 +357,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			tracker.SetAttempt(attempts+1, acct.Name)
 			telemetry.SetPhase(lifetime.ctx, telemetry.PrepareUpstream)
 			authz := acct.AuthSnapshot()
+			sentAuth = authz
 			if authz == nil {
 				sendErr = errors.New("account credentials are missing")
 				auditErr = sendErr
@@ -371,6 +380,9 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				outcome = "canceled_or_timeout"
 				auditErr = sendErr
 				return
+			}
+			if isConcurrentUpstreamError(sendErr) {
+				lastBusyDelay = h.cfg.Pool.NoteUpstreamBusy(acct, authz, h.cfg.QueueRetryDelay)
 			}
 			if current.body != nil {
 				_ = current.body.Close()
@@ -401,12 +413,14 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			current.close()
 			current = nil
-			telemetry.SetPhase(lifetime.ctx, telemetry.RetryDelay)
-			if err := waitChatRetry(lifetime.ctx, h.cfg.QueueRetryDelay); err != nil {
-				outcome = "canceled_or_timeout"
-				auditErr = err
-				writeChatLifecycleError(w, r, lifetime, err)
-				return
+			if !isConcurrentUpstreamError(sendErr) {
+				telemetry.SetPhase(lifetime.ctx, telemetry.RetryDelay)
+				if err := waitChatRetry(lifetime.ctx, h.cfg.QueueRetryDelay); err != nil {
+					outcome = "canceled_or_timeout"
+					auditErr = err
+					writeChatLifecycleError(w, r, lifetime, err)
+					return
+				}
 			}
 			lease, err = acquire([]pool.AccountCandidate{{Name: acct.Name}})
 			if err != nil {
@@ -414,7 +428,9 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				if writeChatLifecycleError(w, r, lifetime, err) {
 					// Retry re-acquisition timing out is a queue wait, not a ticket
 					// cap rejection.
-					if errors.Is(err, pool.ErrAcquireTimeout) {
+					if errors.Is(err, pool.ErrUpstreamBusy) {
+						outcome = "upstream_saturated"
+					} else if errors.Is(err, pool.ErrAcquireTimeout) {
 						outcome = "queue_wait_timeout"
 					} else {
 						outcome = "admission_rejected"
@@ -424,7 +440,26 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				lastErr = err
 				break
 			}
+			// A same-name replacement owns another client and credential state.
+			// Do not reserve it and then continue sending through the stale object.
+			if lease.Account != acct {
+				lease.Release()
+				lastErr = errors.New("account changed during retry")
+				break
+			}
 			current = &chatAttempt{lease: lease, ctx: lifetime.ctx}
+			telemetry.SetPhase(lifetime.ctx, telemetry.ValidateAccount)
+			valid, verr = h.cfg.Pool.ValidateContext(lifetime.ctx, acct)
+			if verr != nil || !valid {
+				current.close()
+				current = nil
+				lastErr, auditErr = verr, verr
+				if writeChatLifecycleError(w, r, lifetime, verr) {
+					outcome = "canceled_or_timeout"
+					return
+				}
+				break
+			}
 		}
 		if current == nil {
 			// Failed reacquisition owns no slot and is not a provider failure.
@@ -441,7 +476,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			// Account-specific capability failures may succeed on another account
 			// and are not charged against the generic rotation budget.
-			capabilityOnly := h.handleUpstreamError(acct, canonical, sendErr)
+			capabilityOnly := h.handleUpstreamError(acct, canonical, sendErr, sentAuth)
 			if !capabilityOnly {
 				rotations++
 			}
@@ -470,27 +505,33 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			telemetry.SetPhase(lifetime.ctx, telemetry.Stream)
 			streamErr := upstream.StreamCaptureWithUsage(w, current.body, model, nil, usage)
+			if w.err == nil && r.Context().Err() == nil && isConcurrentUpstreamError(streamErr) {
+				h.cfg.Pool.NoteUpstreamBusy(acct, sentAuth, h.cfg.QueueRetryDelay)
+			}
 			current.close()
-			if w.err != nil || r.Context().Err() != nil {
+			if w.err != nil || (streamErr != nil && r.Context().Err() != nil) {
 				outcome = "downstream_canceled"
 				return
 			}
 			if streamErr != nil {
 				outcome = "upstream_stream_error"
 				auditErr = streamErr
-				h.handleUpstreamError(acct, canonical, streamErr)
+				h.handleUpstreamError(acct, canonical, streamErr, sentAuth)
 				return
 			}
 			storeChat()
-			markUsable(acct.UID, canonical)
+			h.markModelUsable(acct, sentAuth, canonical)
 			h.cfg.Pool.PingKeepalive(acct.Name)
-			h.cfg.Pool.NoteSuccess(acct.Name)
+			h.cfg.Pool.NoteSuccessForAuth(acct, sentAuth)
 			outcome = "ok"
 			return
 		}
 
 		telemetry.SetPhase(lifetime.ctx, telemetry.Aggregate)
 		comp, aggregateErr := upstream.AggregateRaw(current.body)
+		if r.Context().Err() == nil && isConcurrentUpstreamError(aggregateErr) {
+			h.cfg.Pool.NoteUpstreamBusy(acct, sentAuth, h.cfg.QueueRetryDelay)
+		}
 		current.close()
 		if aggregateErr != nil {
 			auditErr = aggregateErr
@@ -505,7 +546,7 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			}
 			// A first-data success ends the startup/failover phase. A late error
 			// must be surfaced rather than silently regenerating a partial reply.
-			h.handleUpstreamError(acct, canonical, aggregateErr)
+			h.handleUpstreamError(acct, canonical, aggregateErr, sentAuth)
 			outcome = "upstream_body_error"
 			status := http.StatusBadGateway
 			code := "upstream_error"
@@ -537,8 +578,8 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			return
 		}
 		storeChat()
-		markUsable(acct.UID, canonical)
-		h.cfg.Pool.NoteSuccess(acct.Name)
+		h.markModelUsable(acct, sentAuth, canonical)
+		h.cfg.Pool.NoteSuccessForAuth(acct, sentAuth)
 		outcome = "ok"
 		return
 	}
@@ -559,7 +600,11 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 	var ae *upstream.ApiError
 	if errors.As(lastErr, &ae) && isQueueLimitError(ae) {
 		outcome = "upstream_saturated"
-		w.Header().Set("Retry-After", "2")
+		retry := 2
+		if isConcurrentUpstreamError(lastErr) {
+			retry = busyRetrySeconds(lastBusyDelay)
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(retry))
 		writeOpenAIError(w, http.StatusTooManyRequests, "upstream_busy", "upstream is busy; retry later")
 		return
 	}
@@ -582,6 +627,12 @@ func writeChatLifecycleError(w http.ResponseWriter, r *http.Request, l *chatLife
 	if cause != nil || errors.Is(err, context.Canceled) {
 		return true
 	}
+	var busy *pool.UpstreamBusyError
+	if errors.As(err, &busy) {
+		w.Header().Set("Retry-After", strconv.Itoa(busyRetrySeconds(busy.RetryAfter)))
+		writeOpenAIError(w, http.StatusTooManyRequests, "upstream_busy", "eligible accounts recently reached the upstream concurrent-session limit; retry later")
+		return true
+	}
 	var downstream *upstream.DownstreamWriteError
 	if errors.As(err, &downstream) {
 		return true
@@ -592,4 +643,12 @@ func writeChatLifecycleError(w http.ResponseWriter, r *http.Request, l *chatLife
 		return true
 	}
 	return false
+}
+
+func busyRetrySeconds(delay time.Duration) int {
+	seconds := int((delay + time.Second - 1) / time.Second)
+	if seconds < 1 {
+		seconds = 1
+	}
+	return seconds
 }

@@ -41,6 +41,9 @@ type ModelInfo struct {
 	// Benefit 限时福利（免费套餐）模型：聊天需带 maas_type: benefit 头。
 	Benefit bool   `json:"benefit,omitempty"`
 	Desc    string `json:"desc,omitempty"`
+	// displayAlias is populated only from an unchanged, bounded source name.
+	// It is account-local compatibility evidence, never a union-wide alias.
+	displayAlias string
 }
 
 // 冷启动种子：没有账号权威福利快照时回退；成功空目录或明确关闭
@@ -51,6 +54,9 @@ var seedBenefitModels = []string{
 
 // 内置模型种子（大小写归一用，不标记福利）。
 var seedKnownModels = []string{
+	// Captured normal-source inference IDs (2026-10-22), distinct from their
+	// GLM-5.3 / DeepSeek-V4.1-Flash display names. These are not benefit seeds.
+	"glm-5.3", "deepseek-v4.1-flash",
 	"GLM-5.2", "GLM-5.2-ArkTS-SPARK", "GLM-5.1", "GLM-4.7",
 	"OpenPangu-2.0-Pro", "OpenPangu-2.0-Flash",
 	"Qwen3-VL-235B", "Qwen3.5-397B-A17B-VL", "Qwen3.6-27B-VL",
@@ -66,15 +72,17 @@ var seedBenefit = func() map[string]bool {
 
 // accountCatalog 一个账号的模型目录快照。
 type accountCatalog struct {
-	infos   []ModelInfo
-	benefit map[string]bool   // lower(id) -> true（本轮发现确认的福利）
-	knows   map[string]bool   // lower(id) -> true（该账号目录里登记过的全部模型）
-	exact   map[string]string // lower(id) -> this account's exact upstream ID
-	sources map[string]sourceSnapshot
-	claim   ClaimStatus
-	owner   *auth.Auth
-	fetched time.Time
-	known   bool
+	infos      []ModelInfo
+	benefit    map[string]bool   // lower(id) -> true（本轮发现确认的福利）
+	knows      map[string]bool   // lower(id) -> true（该账号目录里登记过的全部模型）
+	exact      map[string]string // lower(id) -> this account's exact upstream ID
+	aliases    map[string]string // lower(display name) -> unambiguous lower(id)
+	wireSource map[string]string // lower(id) -> source governing exact ID and route
+	sources    map[string]sourceSnapshot
+	claim      ClaimStatus
+	owner      *auth.Auth
+	fetched    time.Time
+	known      bool
 }
 
 var catalog = struct {
@@ -158,7 +166,7 @@ func AccountModelKnowledgeForAuth(accountID, model string, owner *auth.Auth) (pr
 	if ac == nil || !ac.known || (ac.owner != nil && ac.owner != owner) {
 		return false, false
 	}
-	present = ac.knows[strings.ToLower(strings.TrimSpace(model))]
+	present = ac.knows[catalogModelKey(ac, model)]
 	// Compatibility snapshots are explicit whole-catalog replacements.
 	if len(ac.sources) == 0 {
 		return present, true
@@ -230,13 +238,13 @@ func ResolveModelForAuth(accountID, model string, owner *auth.Auth) (exact strin
 	}
 	exact = model
 	if ac != nil {
-		if id, ok := ac.exact[strings.ToLower(strings.TrimSpace(model))]; ok {
+		if id, ok := ac.exact[catalogModelKey(ac, model)]; ok {
 			return id, benefitModelLocked(ac, id)
 		}
 	}
 	exact = canonicalStaticModel(model)
 	if ac != nil {
-		if id, ok := ac.exact[strings.ToLower(strings.TrimSpace(exact))]; ok {
+		if id, ok := ac.exact[catalogModelKey(ac, exact)]; ok {
 			exact = id
 		}
 	}
@@ -257,8 +265,20 @@ func isBenefitModel(accountID, model string, owner *auth.Auth, checkOwner bool) 
 	return benefitModelLocked(ac, key)
 }
 
-func benefitModelLocked(ac *accountCatalog, model string) bool {
+// Exact registrations take precedence over display aliases, including aliases
+// that collide with an ID from a different source or route.
+func catalogModelKey(ac *accountCatalog, model string) string {
 	key := strings.ToLower(strings.TrimSpace(model))
+	if ac != nil && !ac.knows[key] {
+		if target := ac.aliases[key]; target != "" {
+			return target
+		}
+	}
+	return key
+}
+
+func benefitModelLocked(ac *accountCatalog, model string) bool {
+	key := catalogModelKey(ac, model)
 	if ac != nil {
 		if ac.benefit[key] {
 			return true

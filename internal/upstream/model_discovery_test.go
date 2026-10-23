@@ -200,14 +200,14 @@ func TestDiscoveryFreshBenefitRouteUsesMergedModelIdentity(t *testing.T) {
 			merged = model
 		}
 	}
-	if merged.ID != mergedID || !merged.Benefit || !contains(fresh, mergedID) {
+	if merged.ID != mergedID || !merged.Benefit || !contains(fresh, "deepseek-v4.1-flash") {
 		t.Fatalf("fresh governing benefit source lost the merged identity: merged=%+v fresh=%v", merged, fresh)
 	}
 	f.mu.Lock()
 	f.statuses[EpBenefitConfig] = http.StatusServiceUnavailable
 	f.mu.Unlock()
 	_, fresh = PublishModelDiscovery(a.UserID, a, c.DiscoverModels(context.Background(), a, true))
-	if contains(fresh, mergedID) {
+	if contains(fresh, "deepseek-v4.1-flash") {
 		t.Fatal("agent casing match incorrectly refreshed a retained failed benefit route")
 	}
 }

@@ -162,3 +162,142 @@ The user's successful rebuild supersedes the historical old-panel finding. It do
 ## Validation and rollback
 
 Use localhost source fixtures for partial/malformed/empty responses, benefits, cancellation, refresh coalescing, source backoff bypass, concurrent chat rejection, exact new model IDs, health responsiveness and model filtering. Add lifecycle active/final trace assertions to meaningful stall/refresh/long-stream/disconnect tests. Run full Go tests/race/vet/build for backend changes and real-browser desktop/mobile/light/dark checks using synthetic metadata. Review actual screenshots and JavaScript errors. Test release inclusion/exclusion and verifier failure modes. Rollback code/image independently; the data/auth format remains additive and credentials require no migration.
+
+## E. Live-evidenced inference identity correction
+
+Actual builtin records return model_id glm-5.3 with model_name GLM-5.3,
+model_id deepseek-v4.1-flash with model_name DeepSeek-V4.1-Flash, and
+model_id glm-5.2-sft-harmony with model_name GLM-5.2-ArkTS-SPARK. Agent records
+contain the same inference IDs in model_parameters.model_id and model_alias,
+while model_name is the display name. GLM-5.2 and Qwen3-VL-235B remain uppercase
+in builtin model_id, so globally lowercasing outbound strings would be wrong.
+The actual account accepted glm-5.3 and returned content, while the prior actual
+handler sent GLM-5.3 and received provider not_registered. This establishes the
+previously unproven parser/source defect, independently from account entitlement.
+
+Smallest behavior gap: model-name display merging must never replace explicit
+inference identity. Its owner is upstream model parsing/catalog indexing, not a
+hard-coded GLM alias in the chat handler. Prefer agent parameter model_id when
+present; preserve the historical name-before-opaque-top-level-id fallback when
+no explicit inference parameter exists. Retain display Name separately. Within
+a normal-route same-fold collision, the builtin model_id owns sending; benefit
+source remains authoritative when that route applies. Keep explicit source-backed
+display-name compatibility only where its target is unambiguous; exact IDs win
+collisions. Do not invent version aliases or add a second route attempt.
+
+Candidate membership, negative cache, source refresh reset and actual audit IDs
+must follow resolved inference identity. A successful agent refresh cannot clear
+a denial if sending still depends on a retained failed builtin source. Preserve
+same-auth retention, changed-auth isolation, bounded source parsing and no metadata
+network on chat. No new scheduler policy is introduced during this identity fix.
+
+Implementation owner: internal/upstream/{model_discovery,models}.go and focused
+upstream tests. Independent HTTP regression owner: new server test file only.
+Parent owns task/spec/reports, live credential operations and release verification.
+If server implementation changes are needed, coordinate through the parent.
+
+## F. Live-evidenced cross-request upstream saturation
+
+The repaired identity gateway reproduced 8 completed and 4 TM concurrency
+refusals in 12 sequential streams at max_concurrent=1. Direct normal-route calls
+fully drained to actual HTTP EOF also accepted three successive requests and
+then returned TM.00001041. Minimal bodies and independent conversation IDs did
+not remove the refusal. These observations establish saturation outside local
+lease occupancy, not its provider-side expiry or a required undocumented API.
+
+Add transient account/auth-scoped busy admission independent of health cooldown,
+errors and model capability. Record explicit concurrency refusals before retry
+selection, prefer an immediately usable backup, and share bounded increasing
+backoff across independent handlers. Wake bounded admission waiters at busy
+expiry; preserve existing startup, cumulative wait, cancellation and ticket caps.
+Report known provider saturation honestly rather than inventing model 404/health
+503 or silently waiting forever. Ordinary rate/TPM penalties remain unchanged.
+Retried acquisition must use the exact acquired account object and validated auth;
+old-login results must not affect a replacement. Success resets transient busy
+state. No hard-coded claim of a universal provider quota or release duration.
+
+Owner: one coordinated implementation agent owns pool busy admission plus server
+integration and meaningful regressions. Upstream identity code is stable and
+belongs to its prior owner. Parent owns real calls, task/spec evidence and release.
+
+## G. Confirmed official remote-session lifecycle
+
+Current official 26.10.0 client source sends user-session-id with inference and
+signed PUT /snap-manager/v1/chat-session/heartbeat?status=busy|idle at the same
+inference origin, body {}, no benefit header. Busy starts immediately and repeats
+every 30 seconds; idle covers completion, error and cancellation. Existing
+Chat-Id/Session-Id are not substitutes for user-session-id. Parent reproduced the
+protocol against a supplied account: ten immediate sequential DeepSeek calls
+with matching busy/inference/idle all returned content and HTTP200 notifications.
+
+Own this at the upstream inference HTTP/body boundary so actual chat and probes
+share cleanup. Each attempt owns a unique tracked session; preserve conversation
+and prompt-cache IDs separately. Start bounded busy work before sending inference,
+sign matching user-session-id, and keep at most one heartbeat worker per owned
+active attempt. Stop/join it before bounded detached-context idle cleanup, even
+after caller cancellation. Close transport before releasing remote session/local
+lease. Preflight/request failures must also finish the session. No inference
+regeneration after content; cleanup cannot become unbounded or overwrite the
+actual inference outcome. Test endpoint injection must remain entirely local.
+
+Owner: upstream client/session lifecycle implementation and focused upstream plus
+actual server HTTP regressions, coordinated with the pool busy owner. Parent owns
+real traffic and final full-scope validation.
+
+## H. Credential validation before bounded model discovery
+
+The parent observed cold startup metadata use expired STS and leave all sources
+in HTTP failure/backoff, while later chat validation successfully refreshed the
+same account. Source eligibility is account health/identity, not credential
+freshness. Bounded catalog workers therefore reuse `Pool.ValidateContext` before
+any metadata request; shared refresh remains cancellable for that job waiter and
+bounded independently for provider-rotated token persistence. Check exact
+account/auth eligibility again after validation and keep `WithCurrentAuth` on
+publication. Initial disabled accounts remain skipped. Credential validation
+failure counts failed account work, without fabricating errors or attempts for
+model sources that were never contacted. Source failure backoff itself is owned
+by the captured auth and a private digest of its exact signing tuple, so a refresh
+already completed by another caller also isolates the new generation. Keep one
+generation and three retry timestamps per account, replace obsolete generations,
+and ignore late old-generation updates. Same-generation five-minute failure
+backoff and explicit force semantics remain. Existing cached admin GETs,
+job/worker bounds, API shape, claim policy and chat's cached-only selection remain.
+
+Admin catalog negative projection uses the same exact wire/auth predicate as
+routing. Copy candidate negative entries under availability lock, then resolve
+current wire IDs after releasing it; never take a catalog lock while holding
+availability. Old-login/wrong-wire entries cannot contribute exclusions or blocked
+counts, while literal unknown IDs retain current-login provider authority.
+
+Owner: catalog worker and snapshot implementation in `server/model_catalog.go`,
+upstream source-backoff state, dedicated auth/rotation/backoff regressions and
+the bounded credential research note. Parent
+owns integrated real-account validation, specs, task acceptance and release.
+
+## H. Live-discovered cold-start identity and expired catalog credentials
+
+The rebuilt gateway's first test exposed another concrete boundary: startup
+metadata used expired STS credentials, all sources returned HTTP400, and the job
+backed off for five minutes. Chat's later ValidateContext refreshed credentials,
+but the catalog remained empty. A display-case request then went out unchanged,
+was denied, and its folded negative key blocked the correct lowercase wire ID.
+An explicit catalog refresh after chat refreshed credentials retrieved the real
+IDs and cleared all six old negatives; four nonstreamed gateway calls then
+completed with actual content. This is evidence of the boundary, not a substitute
+for repairing it or final cold-start validation.
+
+Keep chat metadata reads cached and make the bounded discovery job refresh
+expired/expiring credentials through the existing shared cancellable validator.
+Preserve account/auth publication guards and disabled/replaced-account policy.
+Metadata refresh failures must not be invented model-capability failures; cached
+admin GETs must remain side-effect-free. Add the two source-captured exact GLM
+and DeepSeek IDs to normal known seeds. Preserve uppercase real IDs and avoid
+inventing benefit routing. Availability must retain the actual rejected wire
+identity, so a source-authorized exact-ID correction does not inherit wrong-wire
+negatives, including a denial arriving late from the old attempt. Matching-wire
+denials remain authoritative and discovery is never proof of callability.
+
+Owners: the pool/busy owner handles model_catalog.go and separate auth regressions;
+the upstream identity owner handles known seeds, identity-aware availability and
+its callers; the independent reviewer owns cold-start dynamic HTTP regressions.
+Parent owns actual calls and final cold-start/progressive concurrency evidence.

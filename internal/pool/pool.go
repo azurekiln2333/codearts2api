@@ -47,8 +47,13 @@ type Account struct {
 	disabled         bool
 	disabledRevision uint64
 	removed          bool
-	disabledReason   string
-	lastErr          string
+	// Provider concurrency refusal is temporary admission state, independent of
+	// persisted health/capability. It belongs to this exact credential object.
+	busyAuth       *auth.Auth
+	busyUntil      time.Time
+	busyStreak     uint
+	disabledReason string
+	lastErr        string
 	// lastErrAt / lastSuccessAt separate *current* schedulability from
 	// *historical* failure. They are presentation-only and never feed the
 	// cooldown decision. Zero means unknown (e.g. legacy state.json).
@@ -88,6 +93,7 @@ type Pool struct {
 	waiters          []*admissionWaiter
 	nextAccount      int
 	admittedRequests int
+	admissionChanged chan struct{}
 }
 
 // New 构建池。
@@ -553,27 +559,8 @@ func failureClass(reason string) (string, string) {
 // resurrect a stale errCount. Routine successes perform no disk write at all.
 // An active cooldown or a manual disable is never overridden.
 func (p *Pool) NoteSuccess(name string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	now := time.Now()
-	for _, a := range p.accounts {
-		if a.Name != name {
-			continue
-		}
-		a.mu.Lock()
-		recovering := a.errCount > 0 || a.lastErr != ""
-		cooling := now.Before(a.coolUntil)
-		blocked := a.disabled || cooling
-		a.lastSuccessAt = now
-		if recovering && !blocked {
-			a.errCount = 0
-			a.lastErr = ""
-		}
-		a.mu.Unlock()
-		if recovering && !blocked {
-			p.saveState()
-		}
-	}
+	a := p.Get(name)
+	p.NoteSuccessForAuth(a, a.AuthSnapshot())
 }
 
 // Disable 禁用账号。

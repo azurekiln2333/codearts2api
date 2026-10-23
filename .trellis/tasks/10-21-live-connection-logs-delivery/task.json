@@ -30,7 +30,7 @@
     "internal/audit/audit.go",
     "README.md"
   ],
-  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '到现在还没开始做', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; reviewed product committed in 709f63e and new source ZIP extracted/compiled/started with every packaged GET-only check passed. Production account evidence and deployment remain pending. Model identity/concurrency follow-up now passes independent review and full Go normal/race/vet/build; actual wire-ID regression fails on the prior release and passes on repaired source. Product committed as b9b318c; its new source ZIP passed full member checksum/exclusion checks, extraction, actual compilation/start and every packaged GET-only route/revision check. Prior archives remain unchanged. Production deployment and real account/model success remain unverified.",
+  "notes": "Final scope was presented on 2026-10-21. On 2026-10-22 the user replied '鍒扮幇鍦ㄨ繕娌″紑濮嬪仛', directing immediate execution of that scope after repeatedly requesting all fixes. Proceed on that authorization without another process confirmation. Production UI rebuild is reported by the user; remote access remains unavailable. Local implementation, independent review and all six local acceptance criteria passed on 2026-10-22. Work commits 3d10b4c and 365f482; verified source ZIP generated and tested from extraction. Keep operational deployment and exact live V4.1 response pending; no production delivery claim. User subsequently reported benefit directory failure; reopened local quality gate for account channel-switch and business-error follow-up. Localhost reproduction and pinned primary implementation evidence recorded; live account result remains unavailable. Benefit follow-up local implementation, final full Go test/vet/build, affected race, Chrome and independent review now pass; reviewed product committed in 709f63e and new source ZIP extracted/compiled/started with every packaged GET-only check passed. Production account evidence and deployment remain pending. Model identity/concurrency follow-up now passes independent review and full Go normal/race/vet/build; actual wire-ID regression fails on the prior release and passes on repaired source. Product committed as b9b318c; its new source ZIP passed full member checksum/exclusion checks, extraction, actual compilation/start and every packaged GET-only route/revision check. Prior archives remain unchanged. Production deployment and real account/model success remain unverified. Real-credential follow-up now passes independent full normal/race/vet/build and finite full-gateway cold/repeated/streamed/long/concurrent measurements. Limit-3 first wave retained nine bounded local queue rejections; synchronized rerun passed 18/18 plus four reuse calls. Historical health timeouts remain unattributed. Source release pending; production not deployed.",
   "meta": {
     "task_creation_authorized": true,
     "production_target": "https://codearts2api.azurekiln.cn",
@@ -41,7 +41,7 @@
     "source_finding_status": "repository defects confirmed; exact production V4.1 source response remains unobserved",
     "local_implementation_complete": true,
     "quality_gate_passed": true,
-    "local_verified_at": "2026-10-22",
+    "local_verified_at": "2026-10-23",
     "work_commits": [
       "3d10b4cf90005c9699f50993be87cc4066e031fd",
       "365f4828d0194fdfb7878ffc7fffb29f88a15052",
@@ -52,10 +52,11 @@
     "release_sha256": "9a9c7b0430b7ce976ef495cefb1718fdd52dfacf06518de6d848c073ff5227b7",
     "extracted_release_smoke_passed": true,
     "production_deployment_verified": false,
-    "live_v41_source_verified": false,
+    "live_v41_source_verified": true,
     "pending": [
+      "source release commit and extracted verification",
       "production rebuild and read-only deployment verification",
-      "exact live V4.1 Flash source and real completion"
+      "historical intermittent local health timeouts remain unattributed; limit-3 first load trial had nine bounded local queue rejections"
     ],
     "benefit_followup": {
       "state": "local_delivery_complete_pending_production",
@@ -105,6 +106,57 @@
       "release_sha256": "9a9c7b0430b7ce976ef495cefb1718fdd52dfacf06518de6d848c073ff5227b7",
       "extracted_release_smoke_passed": true,
       "verified_at": "2026-10-22"
+    },
+    "live_credential_followup": {
+      "state": "local_gateway_validated_release_pending",
+      "authorized": "User supplied local credentials after agreeing to actual single and progressive multi-account/concurrency validation. Copies and generated test runtime stay in Git-excluded .local-test/.",
+      "credential_count": 4,
+      "catalog_result": "All four completed agent/builtin discovery and confirmed benefit channel disabled. Exact display catalog includes GLM-5.3 and DeepSeek-V4.1-Flash.",
+      "first_chat_result": "Requested lowercase glm-5.3, sent GLM-5.3, actual provider registration rejection from three accounts; fourth skipped after expired refresh token.",
+      "production_gateway_traffic": false,
+      "live_completion_verified": true,
+      "confirmed_defect": "Agent display model_name overrides explicit model_parameters.model_id; merged normal-source display casing can override builtin model_id",
+      "real_glm_exact_id_completed": true,
+      "real_deepseek_content_completed": true,
+      "repaired_gateway_identity_completed": true,
+      "repeated_gateway_before_heartbeat": {
+        "requests": 12,
+        "completed_with_content": 8,
+        "upstream_concurrency_refused": 4,
+        "local_active_after": 0
+      },
+      "official_session_contract_verified": true,
+      "direct_managed_session_calls": 10,
+      "direct_managed_session_completed_with_content": 10,
+      "full_gateway_session_lifecycle_verified": true,
+      "independent_quality_gate_passed": true,
+      "real_short_requests": 114,
+      "real_short_completions": 105,
+      "real_short_local_queue_rejections": 9,
+      "real_long_content_completions": 1,
+      "all_load_trials_succeeded": false,
+      "per_account_limits_measured": [
+        1,
+        2,
+        3
+      ],
+      "per_account_3_first_wave": {
+        "completed": 9,
+        "requests": 18,
+        "local_queue_wait_timeout": 9,
+        "actual_upstream_attempts": 9,
+        "active_after": 0
+      },
+      "per_account_3_controlled_wave": {
+        "completed": 18,
+        "requests": 18,
+        "actual_upstream_attempts": 18,
+        "reuse_completed": 4,
+        "active_after": 0
+      },
+      "benefit_inference_verified": false,
+      "production_deployment_verified": false,
+      "health_stall_attribution": "not established; later synchronized gateway/control comparison had no one-second timeout"
     }
   }
 }

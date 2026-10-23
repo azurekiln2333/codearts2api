@@ -183,9 +183,26 @@ func (h *Handler) runModelRefresh(parent context.Context, initial modelRefreshSt
 					h.catalogSkip()
 					continue
 				}
-				// Do not implicitly validate/claim on ordinary cached GETs. The
-				// discovery job uses synchronized credentials and preserves the
-				// configured claim policy without creating any inference probes.
+				// Only bounded jobs validate credentials; cached admin GETs never
+				// reach this path. Share the pool's refresh with chat/watch callers
+				// rather than sending expired STS to every model source.
+				if eligible, _ := h.cfg.Pool.ModelDiscoveryEligibility(item.acct, item.authz); !eligible {
+					h.catalogSkip()
+					continue
+				}
+				valid, err := h.cfg.Pool.ValidateContext(ctx, item.acct)
+				if ctx.Err() != nil {
+					h.catalogSkip()
+					continue
+				}
+				if err != nil || !valid {
+					h.catalogCredentialFailure()
+					continue
+				}
+				if eligible, _ := h.cfg.Pool.ModelDiscoveryEligibility(item.acct, item.authz); !eligible {
+					h.catalogSkip()
+					continue
+				}
 				d := h.cfg.Upstream.DiscoverModels(ctx, item.authz, force)
 				resets := 0
 				published := h.cfg.Pool.WithCurrentAuth(item.acct, item.authz, func() {
@@ -232,6 +249,13 @@ func (h *Handler) runModelRefresh(parent context.Context, initial modelRefreshSt
 func (h *Handler) catalogSkip() {
 	h.modelCatalog.mu.Lock()
 	h.modelCatalog.refresh.Skipped++
+	h.modelCatalog.mu.Unlock()
+}
+
+func (h *Handler) catalogCredentialFailure() {
+	h.modelCatalog.mu.Lock()
+	h.modelCatalog.refresh.Completed++
+	h.modelCatalog.refresh.Failed++
 	h.modelCatalog.mu.Unlock()
 }
 
@@ -340,6 +364,7 @@ func (h *Handler) catalogSnapshot() catalogPage {
 	models := map[string]*catalogModelSummary{}
 	omittedModels := map[string]struct{}{}
 	accountNames := map[string]string{}
+	accountAuths := map[string]*auth.Auth{}
 	for _, acct := range accounts {
 		authz := acct.AuthSnapshot()
 		eligible, reason := h.cfg.Pool.ModelDiscoveryEligibility(acct, authz)
@@ -351,6 +376,7 @@ func (h *Handler) catalogSnapshot() catalogPage {
 		}
 		page.Accounts = append(page.Accounts, a)
 		accountNames[acct.UID] = a.Account
+		accountAuths[acct.UID] = authz
 		for _, mi := range d.Models {
 			key := strings.ToLower(mi.ID)
 			m := models[key]
@@ -382,6 +408,12 @@ func (h *Handler) catalogSnapshot() catalogPage {
 	// Availability is read after all pool/account snapshots; no lock inversion
 	// with the atomic pool -> account -> catalog/availability publisher.
 	now := time.Now()
+	type negativeSnapshot struct {
+		accountID string
+		model     string
+		entry     availEntry
+	}
+	var negatives []negativeSnapshot
 	availability.Lock()
 	for key, entry := range availability.byKey {
 		if entry.state != availUnusable || now.Sub(entry.at) > availabilityTTL {
@@ -391,11 +423,21 @@ func (h *Handler) catalogSnapshot() catalogPage {
 		if sep < 0 {
 			continue
 		}
-		name, ok := accountNames[key[:sep]]
-		if !ok {
+		if _, ok := accountNames[key[:sep]]; !ok {
 			continue
 		}
-		model := key[sep+1:]
+		negatives = append(negatives, negativeSnapshot{accountID: key[:sep], model: key[sep+1:], entry: entry})
+	}
+	availability.Unlock()
+	// Resolution reads account catalog locks, so it must run after releasing
+	// availability: publication holds pool -> catalog -> availability.
+	for _, snapshot := range negatives {
+		entry, model := snapshot.entry, snapshot.model
+		owner := accountAuths[snapshot.accountID]
+		exact, _ := upstream.ResolveModelForAuth(snapshot.accountID, entry.wireID, owner)
+		if !availabilityEntryMatches(entry, exact, owner) {
+			continue
+		}
 		if m := models[model]; m != nil {
 			m.BlockedAccounts++
 		}
@@ -403,9 +445,8 @@ func (h *Handler) catalogSnapshot() catalogPage {
 			page.Truncated.Exclusions++
 			continue
 		}
-		page.Exclusions = append(page.Exclusions, catalogExclusion{Account: name, Model: catalogText(model), Reason: availabilityReasonCode(entry.reason), RecordedAt: entry.at, ExpiresAt: entry.at.Add(availabilityTTL)})
+		page.Exclusions = append(page.Exclusions, catalogExclusion{Account: accountNames[snapshot.accountID], Model: catalogText(model), Reason: availabilityReasonCode(entry.reason), RecordedAt: entry.at, ExpiresAt: entry.at.Add(availabilityTTL)})
 	}
-	availability.Unlock()
 	for _, m := range models {
 		page.Models = append(page.Models, *m)
 	}

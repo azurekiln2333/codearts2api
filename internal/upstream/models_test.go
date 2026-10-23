@@ -147,8 +147,7 @@ func TestSendChatV2BenefitHeaderSigned(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := New(5 * time.Second)
-	c.snapBase = srv.URL
+	c := NewWithChatEndpoint(5*time.Second, srv.URL+EpChatV2)
 	cred := SignCredential{AccessKeyID: "AK", SecretAccessKey: "SK", SecurityToken: "ST"}
 	body := map[string]any{"model": CanonicalModel("glm-5.3-flash"), "stream": true}
 
@@ -169,9 +168,11 @@ func TestSendChatV2BenefitHeaderSigned(t *testing.T) {
 	}
 
 	// 非福利模型不得带该头（否则会被路由到福利网关）。
-	if _, err := c.SendChatV2(context.Background(), body, "trace-2", cred, "tok", false); err != nil {
+	second, err := c.SendChatV2(context.Background(), body, "trace-2", cred, "tok", false)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer second.Close()
 	mu.Lock()
 	got = header.Clone()
 	mu.Unlock()

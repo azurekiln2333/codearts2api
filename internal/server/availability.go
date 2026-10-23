@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"codearts2api/internal/auth"
 	"codearts2api/internal/pool"
 	"codearts2api/internal/upstream"
 )
@@ -60,6 +61,10 @@ type availEntry struct {
 	reason   string
 	at       time.Time
 	revision uint64
+	// A fold key is an index only. A denial applies to the actual rejected wire
+	// identity and captured login, not a later differently-cased registration.
+	wireID string
+	owner  *auth.Auth
 }
 
 // probesStop 在服务退出时关闭，让带 sleep 的探测循环尽快结束。
@@ -82,12 +87,30 @@ func availKey(accountID, model string) string {
 	return accountID + "|" + strings.ToLower(strings.TrimSpace(model))
 }
 
-// modelAvailability 返回缓存的可用性；过期视为未知。
+// modelAvailability is the compatibility query for ownerless fixtures. Actual
+// routing uses modelAvailabilityForAuth with the captured selected login.
 func modelAvailability(accountID, model string) (availState, string) {
+	resolved, _ := upstream.ResolveModelForAuth(accountID, model, nil)
+	return modelAvailabilityExact(accountID, resolved, nil, false)
+}
+
+func modelAvailabilityForAuth(accountID, model string, owner *auth.Auth) (availState, string) {
+	resolved, _ := upstream.ResolveModelForAuth(accountID, model, owner)
+	return modelAvailabilityExact(accountID, resolved, owner, true)
+}
+
+// availabilityEntryMatches is also used by cached admin projections after they
+// resolve each configured account/login. It performs no pool/catalog reads.
+func availabilityEntryMatches(entry availEntry, exact string, owner *auth.Auth) bool {
+	return entry.wireID == strings.TrimSpace(exact) && (entry.owner == nil || entry.owner == owner)
+}
+
+func modelAvailabilityExact(accountID, exact string, owner *auth.Auth, checkOwner bool) (availState, string) {
 	availability.Lock()
 	defer availability.Unlock()
-	e, ok := availability.byKey[availKey(accountID, model)]
-	if !ok || time.Since(e.at) > availabilityTTL {
+	e, ok := availability.byKey[availKey(accountID, exact)]
+	if !ok || time.Since(e.at) > availabilityTTL || e.wireID != strings.TrimSpace(exact) ||
+		(checkOwner && !availabilityEntryMatches(e, exact, owner)) {
 		return availUnknown, ""
 	}
 	return e.state, e.reason
@@ -95,24 +118,46 @@ func modelAvailability(accountID, model string) (availState, string) {
 
 // markUnusable 记录某账号下某模型不可用（来自探测或真实请求失败）。
 func markUnusable(accountID, model, reason string) {
+	markAvailability(accountID, model, nil, availUnusable, reason)
+}
+
+func markAvailability(accountID, model string, owner *auth.Auth, state availState, reason string) {
+	model = strings.TrimSpace(model)
 	if accountID == "" || model == "" {
 		return
 	}
 	availability.Lock()
 	defer availability.Unlock()
 	availability.revision++
-	availability.byKey[availKey(accountID, model)] = availEntry{state: availUnusable, reason: reason, at: time.Now(), revision: availability.revision}
+	availability.byKey[availKey(accountID, model)] = availEntry{state: state, reason: reason, at: time.Now(), revision: availability.revision, wireID: model, owner: owner}
 }
 
 // markUsable 记录某账号下某模型可用。
 func markUsable(accountID, model string) {
-	if accountID == "" || model == "" {
+	markAvailability(accountID, model, nil, availUsable, "")
+}
+
+func (h *Handler) markModelUnusable(acct *pool.Account, owner *auth.Auth, wireID, reason string) {
+	h.markModelAvailability(acct, owner, wireID, availUnusable, reason)
+}
+
+func (h *Handler) markModelUsable(acct *pool.Account, owner *auth.Auth, wireID string) {
+	h.markModelAvailability(acct, owner, wireID, availUsable, "")
+}
+
+func (h *Handler) markModelAvailability(acct *pool.Account, owner *auth.Auth, wireID string, state availState, reason string) {
+	if acct == nil || owner == nil {
 		return
 	}
-	availability.Lock()
-	defer availability.Unlock()
-	availability.revision++
-	availability.byKey[availKey(accountID, model)] = availEntry{state: availUsable, at: time.Now(), revision: availability.revision}
+	h.cfg.Pool.WithCurrentAuth(acct, owner, func() {
+		resolved, _ := upstream.ResolveModelForAuth(acct.UID, wireID, owner)
+		if resolved != wireID {
+			// A late result from the old mapping cannot overwrite a real result
+			// already recorded for the corrected effective source identity.
+			return
+		}
+		markAvailability(acct.UID, wireID, owner, state, reason)
+	})
 }
 
 // invalidateCatalogNegatives permits another real call; discovery alone never
@@ -187,7 +232,7 @@ func upstreamUnavailableReason(err error) string {
 
 // probeModel 用一条最小请求真实试一次该模型，并记录结果。
 //
-// 探测会占用上游会话槽位（单账号只有 3 个并发会话），因此这里必须走账号的并发锁：
+// 探测会占用上游会话槽位，因此这里必须走账号的并发锁：
 // 拿不到锁就让位给真实请求，等下一轮再试——否则用户请求会被探测挤成
 // TM.00001041「并发会话数已达上限」。
 func (h *Handler) probeModel(acct *pool.Account, model string) {
@@ -200,7 +245,7 @@ func (h *Handler) probeModel(acct *pool.Account, model string) {
 	}
 	// 账号一旦有真实请求在跑（或刚跑过），本轮探测整体让位：探测只是为了让
 	// /v1/models 说真话，绝不能因此让用户请求排队等锁。下一轮再试。
-	if h.cfg.Pool.Busy(acct.Name) || trafficIdleFor(acct.UID) < probeIdleBefore {
+	if h.cfg.Pool.Busy(acct.Name) || h.cfg.Pool.UpstreamBusy(acct) || trafficIdleFor(acct.UID) < probeIdleBefore {
 		return
 	}
 	// 按 lease 持有槽位，而不是按名字获取/释放：账号被删除后重新登录会生成新的
@@ -247,11 +292,12 @@ func (h *Handler) probeModel(acct *pool.Account, model string) {
 		benefit)
 	if err != nil {
 		// 并发上限是暂时的，不代表模型不可用。
-		if strings.Contains(err.Error(), "TM.00001041") {
+		if isConcurrentUpstreamError(err) {
+			h.cfg.Pool.NoteUpstreamBusy(acct, authz, h.cfg.QueueRetryDelay)
 			return
 		}
 		if reason := upstreamUnavailableReason(err); reason != "" {
-			markUnusable(acct.UID, model, reason)
+			h.markModelUnusable(acct, authz, model, reason)
 			log.Printf("probe %s/%s: 不可用：%s", acct.Name, model, reason)
 			return
 		}
@@ -270,15 +316,19 @@ func (h *Handler) probeModel(acct *pool.Account, model string) {
 		}
 	}
 	headStr := head.String()
+	if isConcurrentLimitError(headStr) {
+		h.cfg.Pool.NoteUpstreamBusy(acct, authz, h.cfg.QueueRetryDelay)
+		return
+	}
 	if reason := upstreamUnavailableReasonText(headStr); reason != "" {
-		markUnusable(acct.UID, model, reason)
+		h.markModelUnusable(acct, authz, model, reason)
 		log.Printf("probe %s/%s: 不可用：%s", acct.Name, model, reason)
 		return
 	}
 	if headStr == "" {
 		return
 	}
-	markUsable(acct.UID, model)
+	h.markModelUsable(acct, authz, model)
 	log.Printf("probe %s/%s: 可用", acct.Name, model)
 }
 
@@ -349,12 +399,13 @@ func (h *Handler) pendingProbes() []pendingProbe {
 		if acct == nil || acct.AuthSnapshot() == nil || !h.cfg.Pool.Healthy(acct.Name) {
 			continue
 		}
-		models, ok := upstream.AccountModelsForAuth(acct.UID, acct.AuthSnapshot())
+		owner := acct.AuthSnapshot()
+		models, ok := upstream.AccountModelsForAuth(acct.UID, owner)
 		if !ok {
 			continue
 		}
 		for _, mi := range models {
-			if st, _ := modelAvailability(acct.UID, mi.ID); st != availUnknown {
+			if st, _ := modelAvailabilityForAuth(acct.UID, mi.ID, owner); st != availUnknown {
 				continue
 			}
 			out = append(out, pendingProbe{acct: acct, model: mi.ID})

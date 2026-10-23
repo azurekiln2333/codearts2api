@@ -56,7 +56,9 @@ func TestDiscoveryDisabledBenefitChannelRemovesOldContributionAndSeed(t *testing
 	f.bodies[EpAgentDetail] = `{"gpts":{"models":[{"model_name":"deepseek-v4.1-flash"}]}}`
 	f.statuses[EpBenefitConfig] = http.StatusServiceUnavailable
 	f.mu.Unlock()
-	c.noteSrcFail(a.UserID + "|benefit")
+	token, ak, sk := a.Credentials()
+	backoff := c.beginModelSourceBackoff(a, SignCredential{AccessKeyID: ak, SecretAccessKey: sk, SecurityToken: token})
+	c.finishModelSource(a.UserID, backoff, 2, true)
 	d := c.DiscoverModels(context.Background(), a, true)
 	models, fresh := PublishModelDiscovery(a.UserID, a, d)
 	status := AccountModelDiagnosticsForAuth(a.UserID, a).Sources[2]
@@ -79,7 +81,7 @@ func TestDiscoveryDisabledBenefitChannelRemovesOldContributionAndSeed(t *testing
 	if claimCalls != claims {
 		t.Fatal("disabled channel still attempted a claim")
 	}
-	if d.Successes() != 3 || d.FailedSources() != 0 || AccountCatalogStaleForAuth(a.UserID, a) || c.srcBlocked(a.UserID+"|benefit") {
+	if d.Successes() != 3 || d.FailedSources() != 0 || AccountCatalogStaleForAuth(a.UserID, a) || !c.modelSourceRetry(a.UserID, backoff, 2).IsZero() {
 		t.Fatalf("disabled source was counted as a failed/stale pull: %+v", d)
 	}
 	if present, complete := AccountModelKnowledgeForAuth(a.UserID, "deepseek-v4.1-flash", a); !present || !complete {

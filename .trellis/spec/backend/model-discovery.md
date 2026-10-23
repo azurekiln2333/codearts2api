@@ -20,6 +20,10 @@ source compatibility and the request-lifecycle/account-auth contracts.
 - `ResolveModelForAuth(accountID, model, owner)` atomically resolves the selected
   account's exact ID and benefit flag. `ChatStreamWithExactModel` sends that ID
   without another union-wide lookup; legacy client entry points remain compatible.
+- Server `modelAvailabilityForAuth(accountID, input, owner)` resolves the caller's
+  ID/alias against that account/login before reading availability. Production
+  writes use `markModelUnusable(acct, capturedAuth, actualWireID, reason)` and
+  `markModelUsable(acct, capturedAuth, actualWireID)` under `Pool.WithCurrentAuth`.
 - `(*server.Handler).StartModelDiscovery(context.Context)` attaches the service
   lifecycle and begins bounded metadata discovery.
 - Authenticated `GET /admin/api/models` reads current diagnostics only.
@@ -78,11 +82,28 @@ the current job rather than creating goroutines/wait queues. Keep at least 15
 seconds between starts and expose retry time. A caller disconnect cannot cancel
 another caller's shared job; service cancellation and the job deadline end work.
 Chat selection remains cached-only and never waits for discovery.
+Before contacting sources, bounded startup/background/explicit workers call the
+pool's shared `ValidateContext` with the job context. Recheck the exact account
+and auth object's discovery eligibility after validation, and retain guarded
+publication. Canceling a worker releases its refresh wait promptly; it cannot
+cancel persistence of another caller's shared token refresh. Disabled, removed
+or replacement accounts cannot publish old work. Credential validation failure
+counts failed account work without inventing source HTTP errors or attempts.
 Each source also has at most 15 seconds within the shared budget, with optional
 claim work limited to five seconds, so one source cannot starve all later ones.
 The admin overview uses the same cached filtered model projection, without
 starting discovery, claims or real probes. Only the explicit refresh, service
 startup and existing public model-list path may request their documented work.
+
+Source failure backoff belongs to the captured auth owner and exact signing
+credential generation, represented only by a private digest. A refresh completed
+by another caller before the catalog job starts must invalidate old-credential
+backoff just as a refresh performed by the worker does. Keep same-generation
+failures backed off for five minutes and preserve explicit force behavior.
+Retain one generation with three source retry times per account; replace obsolete
+generations and prune removed/relogged accounts. A late old-generation failure
+or success cannot set or clear a newer generation's backoff. Do not expose the
+digest, signed credentials or raw provider response in diagnostics.
 
 The snapshot contains model summaries (exact ID, discovered/fallback origin,
 catalog/benefit/blocked account counts), account/source freshness and safe errors,
@@ -112,13 +133,50 @@ ID wins even if display merging prefers a richer differently-cased normal-source
 entry. After confirmed benefit closure, use the surviving normal-source ID.
 Unknown or replaced-login catalogs cannot borrow another account's dynamic ID;
 only existing static aliases/seeds are cold-start fallbacks, otherwise preserve
-the unknown input. Display names are not new aliases and versions are not interchangeable.
+the unknown input. Do not guess display aliases or interchange versions. A
+bounded unchanged model_name explicitly paired with a source inference ID may
+be an account-local alias only when unambiguous across all retained sources;
+exact registered IDs win collisions. Compatibility SetAccountModels snapshots
+do not manufacture aliases from arbitrary Name fields.
+
+Cold-start normal seeds include the actually captured inference IDs `glm-5.3`
+and `deepseek-v4.1-flash`, so first display-case requests work before metadata is
+published. They are not benefit seeds, proof of entitlement or a reason to mark
+an account usable. Keep uppercase genuine seeds (`GLM-5.2`, `Qwen3-VL-235B`).
+Do not add guessed nearby model versions or borrow dynamic IDs from other accounts.
+
+Agent model_parameters.model_id precedes model_name. Keep the display name in
+Name; without that explicit parameter, retain legacy name-before-opaque-ID
+fallback. For normal-route same-fold conflicts, builtin model_id governs the
+wire ID even if richer agent metadata wins display merging. Benefit source
+governs when benefit routing applies. GLM-5.3/DeepSeek-V4.1-Flash display names
+can correspond to lowercase actual IDs, while GLM-5.2/Qwen3-VL-235B remain
+uppercase actual IDs. Global lowercasing is therefore incorrect.
 
 Use the same account resolution for actual chat, background probes, candidate
-checks and capability cache reads/writes. Normalize cache keys by case and outer
-whitespace only after resolving established aliases, so `snap-chat` and GLM-5.2
-cannot bypass each other's real denial. Never run discovery on this path. The
-outbound body must preserve the chosen ID instead of recanonicalizing globally.
+checks, public model filtering and capability cache reads/writes. Resolve caller
+case and established aliases before querying; `snap-chat` and GLM-5.2 must reach
+the same actual registration. Never run discovery on this path. The outbound body
+must preserve the chosen ID instead of recanonicalizing globally.
+
+Availability's case-folded account/model key is an index, not an inference
+identity. Each record stores the exact actual `wireID` and captured auth owner.
+A cached state applies only when the current account/login resolution returns
+that exact string and the owner still matches. Therefore a valid ordinary
+non-forced discovery correcting `Dynamic-Wire-ID` to `dynamic-wire-id` immediately
+makes the former wrong-wire denial inapplicable without treating metadata as a
+successful call or resetting a genuine denial for the unchanged exact ID.
+Compatibility ownerless helpers exist for older fixtures; production must use
+the auth-aware read/write wrappers.
+
+At write time, validate the still-configured account/auth with `WithCurrentAuth`
+and confirm resolving the actual attempted wire ID still yields the same exact
+ID. Discard a late old-mapping or old-login outcome, whether success or denial,
+rather than overwriting newer effective-wire evidence under the shared fold key.
+The cached admin projection must apply the same exact-wire/auth predicate after
+copying entries outside the availability lock; it cannot display stale wrong-wire
+exclusions or blocked-account counts after mapping correction. Never acquire pool
+or catalog locks while holding the availability lock.
 
 An absent model excludes an account only when discovery is complete and current.
 Partial, failed, unknown or expired discovery leaves absence unknown; retained
@@ -128,18 +186,22 @@ between separate reads cannot produce a false authoritative exclusion. Explicit
 legacy `SetAccountModels` snapshots retain their whole-catalog semantics. A real
 cached provider denial remains authoritative even when discovery is incomplete.
 
-The availability cache is per account/model, with a 30-minute TTL. An explicit
+The availability cache has a 30-minute TTL. For an unchanged effective wire
+identity, an explicit
 refresh may invalidate an older negative to unknown only for an exact rediscovered
 pair whose effective route's source was freshly and authoritatively refreshed.
-Fresh agent metadata plus a retained stale benefit route is insufficient. Guard
+Fresh agent metadata plus a retained failed builtin ID or stale benefit route
+is insufficient. Use the same effective source authority for exact sending and
+negative-reset authorization. Guard
 the negative's timestamp and monotonic revision, plus account/auth identity: a concurrent newer
 denial or replacement login must survive. Do not clear unrelated models/accounts,
 mark discovery as usable, or change cooldown/manual-disable state. Revision guards
 are required because a new denial can share a coarse system-clock tick with job
 creation; a timestamp comparison alone cannot distinguish them safely.
-Fresh-route matching uses the same case-insensitive identity as the merge/cache,
-while preserving the returned exact model ID for inference. A different casing in
-a richer source record cannot suppress a valid scoped reset.
+Fresh-source pair lookup uses the same case-folded registration grouping as the
+merge, while preserving the exact effective ID used for inference and record
+applicability. A richer display label cannot suppress a valid scoped reset or
+revive an inapplicable wrong-wire denial.
 
 An empty filtered `/v1/models` result stays empty. Never restore all excluded
 entries merely because the filtered result has length zero. The diagnostic admin
@@ -169,12 +231,19 @@ new state. Keep BASE prefixes and existing escaping/clipboard behavior.
 | Benefit fails, agent lists same ID | Preserve proven benefit route until authoritative change |
 | Concurrent refresh starts | One bounded job; same job ID/progress |
 | Metadata source hangs | Job deadline, partial/failed result, responsive chat/health |
+| Catalog credentials expired | Share bounded credential validation, then fetch with refreshed STS |
+| Credential validation fails | Failed account work; no fabricated source HTTP error |
+| Another caller refreshed STS before the catalog job | Old-generation source backoff cannot suppress fresh metadata calls |
+| Late old-generation metadata result | Preserve current generation's source retry state |
 | Removed/relogged account | No stale publication/reset over the replacement |
 | Fresh chat denial during refresh | Preserve new denial; only older scoped negatives may reset |
 | Cold partial catalog omits requested model | Attempt eligible account; absence is unknown, no guessed route |
 | Complete current catalog omits requested model | Account may be excluded by authoritative absence |
 | Every advertised model excluded | OpenAI data array empty; admin explains exclusions |
 | Lowercase/mixed-case request | Send this account/route's exact discovered ID |
+| Cold display-case GLM-5.3 or DeepSeek-V4.1-Flash before discovery | Use captured lowercase normal seed IDs; no benefit header or positive capability claim |
+| Valid non-forced discovery changes effective exact wire ID | Old wrong-wire availability becomes inapplicable immediately; unchanged exact-wire denials remain |
+| Late result from old mapping or old login | Discard it; preserve current exact-wire/auth result |
 | Other account or previous login has different casing | Do not rewrite the selected account's wire ID |
 | Normal display entry is richer than same-fold benefit entry | Benefit route uses benefit source's exact ID |
 | Unknown ID with no account evidence | Keep input or established static alias; no guessed dynamic registration |
@@ -213,6 +282,27 @@ Reproduce cold partial discovery with an agent success and failed benefit source
 the real chat route must reach an otherwise eligible account for an unlisted model.
 Cover complete absence, expired snapshots, present retained entries, replacement
 auth and preservation of actual negative capability.
+
+Exercise a genuinely cold account through actual HTTP chat before metadata:
+display-case GLM-5.3 and DeepSeek-V4.1-Flash, stream/nonstream, exact lowercase wire,
+content and audit. For a nonseed dynamic model, first reject the preserved unknown
+case, publish a valid explicit lower inference ID through non-forced discovery,
+then require another actual HTTP send using the corrected ID. Assert old wrong-wire
+exclusions disappear from cached admin/public model views, unrelated and genuine
+unchanged-wire denials remain, and no forced-refresh reset is needed. Block an
+old-wire HTTP attempt across publication; let the corrected wire obtain a genuine
+denial first, then release the old result and verify it cannot overwrite or bypass
+the corrected wire's denial. Cover old-login success/denial after replacement.
+`cold_identity_test.go`, `wire_availability_test.go` and upstream
+`cold_seed_test.go` own these boundaries.
+
+`model_catalog_auth_test.go` and `catalog_rotation_boundary_test.go` cover expired
+STS through actual localhost sources and the shared token endpoint, refresh
+coalescing, cached admin GET no-I/O, job/service cancellation, disabled/removed/
+replacement publication guards, and validation-failure source diagnostics.
+`model_source_backoff_test.go` covers changes to each signing credential field,
+same-generation 5xx/force/recovery, late old-generation success/failure, replacement
+auth with identical STS, bounded generation replacement and account/expiry pruning.
 
 Run Go tests/race/vet/build after integration. The real-browser fixture verifies
 pull loading/completion/partial/error states, retained data, no duplicate jobs,

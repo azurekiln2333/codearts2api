@@ -17,6 +17,10 @@ var (
 type AccountCandidate struct {
 	Name     string
 	Priority int
+	// Sticky preserves an existing conversation while the account remains
+	// healthy and has not explicitly refused provider concurrency. Retain other
+	// candidates so that a waiter can fail over if this changes while queued.
+	Sticky bool
 }
 
 // Lease owns a slot on the actual acquired account, including across reloads.
@@ -44,6 +48,7 @@ func (l *Lease) Release() {
 type admissionWaiter struct {
 	ctx        context.Context
 	candidates map[string]int
+	sticky     string
 	deadline   time.Time
 	done       chan struct{}
 	lease      *Lease
@@ -91,9 +96,13 @@ func (p *Pool) AcquireAccount(ctx context.Context, candidates []AccountCandidate
 		return nil, err
 	}
 	priorities := make(map[string]int, len(candidates))
+	sticky := ""
 	for _, candidate := range candidates {
 		if old, ok := priorities[candidate.Name]; !ok || candidate.Priority < old {
 			priorities[candidate.Name] = candidate.Priority
+		}
+		if candidate.Sticky && sticky == "" {
+			sticky = candidate.Name
 		}
 	}
 	p.mu.Lock()
@@ -102,7 +111,7 @@ func (p *Pool) AcquireAccount(ctx context.Context, candidates []AccountCandidate
 		return nil, err
 	}
 	p.dispatchWaitersLocked()
-	lease, healthy := p.reserveAccountLocked(priorities)
+	lease, healthy := p.reserveAccountLocked(priorities, sticky)
 	if lease != nil {
 		p.mu.Unlock()
 		if err := ctx.Err(); err != nil {
@@ -116,71 +125,89 @@ func (p *Pool) AcquireAccount(ctx context.Context, candidates []AccountCandidate
 		return nil, ErrNoHealthyAccount
 	}
 	if wait <= 0 {
+		_, err := p.admissionWaitLocked(priorities, sticky, time.Now())
 		p.mu.Unlock()
-		return nil, ErrAcquireTimeout
+		return nil, err
 	}
 	if len(p.waiters) >= p.cfg.MaxPending {
 		p.mu.Unlock()
 		return nil, ErrQueueFull
 	}
-	w := &admissionWaiter{ctx: ctx, candidates: priorities, deadline: time.Now().Add(wait), done: make(chan struct{})}
+	w := &admissionWaiter{ctx: ctx, candidates: priorities, sticky: sticky, deadline: time.Now().Add(wait), done: make(chan struct{})}
 	p.waiters = append(p.waiters, w)
 	p.mu.Unlock()
 
-	timer := time.NewTimer(wait)
-	defer timer.Stop()
 	var waitErr error
-	select {
-	case <-ctx.Done():
-		waitErr = ctx.Err()
-	case <-timer.C:
-		waitErr = ErrAcquireTimeout
-	case <-w.done:
-	}
-	p.mu.Lock()
-	// Cancellation wins even if a release dispatched a slot simultaneously.
-	if err := ctx.Err(); err != nil {
-		waitErr = err
-	}
-	if !w.completed {
-		p.removeWaiterLocked(w)
-		w.err = waitErr
-		w.completed = true
-	} else if waitErr != nil {
-		if w.lease != nil {
-			p.releaseAccountLocked(w.lease.account)
-			w.lease = nil
+	for {
+		p.mu.Lock()
+		// Cancellation wins even if dispatch reserved a slot simultaneously.
+		if err := ctx.Err(); err != nil {
+			waitErr = err
 		}
-		w.err = waitErr
+		p.dispatchWaitersLocked()
+		if w.completed || waitErr != nil {
+			if !w.completed {
+				p.removeWaiterLocked(w)
+				w.err, w.completed = waitErr, true
+			} else if waitErr != nil {
+				if w.lease != nil {
+					p.releaseAccountLocked(w.lease.account)
+					w.lease = nil
+				}
+				w.err = waitErr
+			}
+			lease, err := w.lease, w.err
+			p.dispatchWaitersLocked()
+			p.mu.Unlock()
+			return lease, err
+		}
+		// One caller-owned timer also wakes on provider-backoff expiry. No
+		// background goroutine or timer is retained when the waiter leaves.
+		wake := w.deadline
+		if next, _ := p.admissionWaitLocked(priorities, sticky, time.Now()); !next.IsZero() && next.Before(wake) {
+			wake = next
+		}
+		if p.admissionChanged == nil {
+			p.admissionChanged = make(chan struct{})
+		}
+		changed := p.admissionChanged
+		p.mu.Unlock()
+		timer := time.NewTimer(time.Until(wake))
+		select {
+		case <-ctx.Done():
+			waitErr = ctx.Err()
+		case <-timer.C:
+		case <-changed:
+		case <-w.done:
+		}
+		timer.Stop()
 	}
-	lease, err := w.lease, w.err
-	p.dispatchWaitersLocked()
-	p.mu.Unlock()
-	return lease, err
 }
 
 // reserveAccountLocked checks all candidates before waiting. The pool mutex
 // serializes selection with every reservation, health mutation and reload.
-func (p *Pool) reserveAccountLocked(candidates map[string]int) (*Lease, bool) {
+func (p *Pool) reserveAccountLocked(candidates map[string]int, sticky string) (*Lease, bool) {
 	healthy := false
 	best, bestPriority, bestActive, bestMax := -1, 0, 0, 1
 	now := time.Now()
+	sticky = p.effectiveStickyLocked(sticky, now)
 	for offset := 0; offset < len(p.accounts); offset++ {
 		index := (p.nextAccount + offset) % len(p.accounts)
 		a := p.accounts[index]
 		priority, ok := candidates[a.Name]
-		if !ok {
+		if !ok || (sticky != "" && a.Name != sticky) {
 			continue
 		}
 		a.mu.Lock()
 		eligible := !a.removed && !a.disabled && !now.Before(a.coolUntil) && a.Auth != nil
 		active, max := a.activeConcurrent, a.maxConcurrent
+		busy := a.busyAuth == a.Auth && now.Before(a.busyUntil)
 		a.mu.Unlock()
 		if !eligible {
 			continue
 		}
 		healthy = true
-		if max <= 0 || active >= max {
+		if busy || max <= 0 || active >= max {
 			continue
 		}
 		if best < 0 || priority < bestPriority || (priority == bestPriority && int64(active)*int64(bestMax) < int64(bestActive)*int64(max)) {
@@ -223,11 +250,11 @@ func (p *Pool) dispatchWaitersLocked() {
 	for _, w := range p.waiters {
 		w.err = w.ctx.Err()
 		if w.err == nil && !time.Now().Before(w.deadline) {
-			w.err = ErrAcquireTimeout
+			_, w.err = p.admissionWaitLocked(w.candidates, w.sticky, time.Now())
 		}
 		if w.err == nil {
 			var healthy bool
-			w.lease, healthy = p.reserveAccountLocked(w.candidates)
+			w.lease, healthy = p.reserveAccountLocked(w.candidates, w.sticky)
 			if w.lease == nil && !healthy {
 				w.err = ErrNoHealthyAccount
 			}

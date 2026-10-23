@@ -472,8 +472,8 @@ func (h *Handler) modelKnownUnusable(model string) bool {
 		if acct == nil || !h.cfg.Pool.Healthy(acct.Name) {
 			continue
 		}
-		resolved, _ := upstream.ResolveModelForAuth(acct.UID, model, acct.AuthSnapshot())
-		st, _ := modelAvailability(acct.UID, resolved)
+		owner := acct.AuthSnapshot()
+		st, _ := modelAvailabilityForAuth(acct.UID, model, owner)
 		if st == availUnknown {
 			return false // 还没结论，别急着下架
 		}
@@ -557,7 +557,7 @@ func (h *Handler) pickByCatalog(tried map[string]bool, model string) *pool.Accou
 		resolved, _ := upstream.ResolveModelForAuth(acct.UID, model, authz)
 		wantLower := strings.ToLower(resolved)
 		if models, known := upstream.AccountModelsForAuth(acct.UID, authz); known && catalogHas(models, wantLower) {
-			if st, _ := modelAvailability(acct.UID, wantLower); st == availUnusable {
+			if st, _ := modelAvailabilityForAuth(acct.UID, resolved, authz); st == availUnusable {
 				continue // 该账号实测调不通这个模型，别选它
 			}
 			return acct
@@ -766,13 +766,17 @@ func buildCompletion(model, reasoning, content string, calls []openAIToolCall, f
 
 // handleUpstreamError 记录错误并决定是否处罚账号。
 // 返回 true 表示模型只对当前账号不可用；首次数据前可继续尝试其他候选账号。
-func (h *Handler) handleUpstreamError(acct *pool.Account, model string, err error) bool {
+func (h *Handler) handleUpstreamError(acct *pool.Account, model string, err error, capturedOwner ...*auth.Auth) bool {
 	var downstream *upstream.DownstreamWriteError
 	if isParamInvalidError(err) || isChatTimeout(err) || errors.Is(err, context.Canceled) || errors.As(err, &downstream) {
 		return false
 	}
 	if reason := upstreamUnavailableReason(err); reason != "" {
-		markUnusable(acct.UID, model, reason)
+		owner := acct.AuthSnapshot()
+		if len(capturedOwner) != 0 {
+			owner = capturedOwner[0]
+		}
+		h.markModelUnusable(acct, owner, model, reason)
 		log.Printf("model unusable account=%s model=%s: %s", acct.Name, model, reason)
 		return true
 	}

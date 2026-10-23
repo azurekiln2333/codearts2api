@@ -106,6 +106,9 @@ func classifyUpstreamError(err error) audit.Cause {
 	if errors.Is(err, context.Canceled) {
 		return audit.Cause{Class: audit.CauseCancel, Text: "canceled"}
 	}
+	if errors.Is(err, pool.ErrUpstreamBusy) {
+		return audit.Cause{Class: audit.CauseConcurrencyLimit, Text: "concurrency limit"}
+	}
 	if errors.Is(err, pool.ErrQueueFull) || errors.Is(err, pool.ErrAcquireTimeout) {
 		return audit.Cause{Class: audit.CauseQueueWait, Text: "capacity"}
 	}

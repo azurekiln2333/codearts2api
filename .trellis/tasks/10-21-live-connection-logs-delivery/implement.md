@@ -76,3 +76,57 @@ The model identity/concurrency follow-up is committed in `b9b318ccc026426f593af0
 extraction, actual server compile/start and all packaged GET-only route/revision
 checks. See `research/model-retry-verification.md`. Production deployment and
 real account/model entitlement remain pending; keep operational step 8 open.
+
+## Real-credential identity and repeated-busy follow-up
+
+- [x] Reproduce display-ID provider rejection and capture explicit source IDs.
+- [x] Demonstrate exact GLM/DeepSeek content, then repair source identity owner.
+- [x] Add full HTTP discovery/chat/probe/negative-reset regressions.
+- [x] Test repaired gateway sequential streams; reproduce later TM refusals.
+- [x] Compare independent IDs, minimal body and full HTTP EOF consumption.
+- [x] Add shared transient busy admission and account-replacement-safe retries.
+- [x] Repeat actual gateway calls and progressive bounded concurrency with health,
+  actual content/DONE, audit attempts and zero retained local requests.
+- [x] Independent full-scope review, full tests/race/vet/build and spec updates.
+- [ ] Commit only owned files, produce and verify the actual source artifact.
+
+Do not represent provider busy as model absence or promise that local admission
+can remove an external account quota. Preserve supplied originals and refreshed
+test copies. Production deployment remains unverified.
+
+- [x] Inspect official 26.10.0 source and confirm user-session-id/busy/idle contract.
+- [x] Direct real protocol comparison: ten consecutive managed DeepSeek replies,
+  each initial busy and final idle HTTP200, on the same supplied account.
+- [x] Integrate official lifecycle at shared upstream HTTP/body ownership boundary.
+- [x] Verify cancellation/error/long-stream cleanup using actual local HTTP fixtures.
+- [ ] Repeat real full-gateway success, progressive concurrency and release checks.
+
+## Cold-start boundary discovered during real gateway verification
+
+- [x] Validate account credential freshness in bounded catalog workers, retaining
+  cached GET semantics and exact account/auth publication guards.
+- [x] Register source-captured normal exact IDs in known cold-start seeds and
+  prevent wrong-wire negatives from poisoning corrected dynamic identities.
+- [x] Actual HTTP regressions for cold startup, non-seed correction/late rejection,
+  same-wire authority, cancellation, disabled/replaced accounts and shared refresh.
+- [x] Rebuild and restart the real isolated gateway; verify without manual pull,
+  then run progressive 1/3/18 requests, actual content/DONE, audit and cleanup.
+
+## Final real-account measurement state, 2026-10-23
+
+The rebuilt full gateway was tested cold, sequentially, streamed, for a
+content-bearing 38.907-second generation, and with 18 requests at effective
+per-account limits 1, 2 and 3. The first limit-3 wave had nine local account-wait
+timeouts (zero upstream attempts), while a synchronized-control repeat passed
+18/18 followed by 4/4 reuse. All trials returned active tracking to zero, and
+all actual completions had successful correlated audits. Three valid test
+accounts ended with zero errors and no cooling; the fourth older test copy was
+disabled for refresh expiry. Do not infer that a newer original login is expired.
+
+The latest 55-second loaded comparison had 220/220 successful health checks on
+each of four independent gateway/control connection modes. Older one-second
+timeouts remain unexplained; the later success does not erase those results.
+See `research/live-gateway-session-verification.md` and
+`research/health-stall-investigation.md`. The owned gateway and all control
+processes were stopped. Final source-release verification follows the work
+commit; operational deployment step 8 stays open.

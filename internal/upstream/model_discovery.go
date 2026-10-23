@@ -180,6 +180,7 @@ func PruneModelCatalogs(current map[string]*auth.Auth) {
 func indexCatalog(ac *accountCatalog) {
 	ac.knows, ac.benefit = map[string]bool{}, map[string]bool{}
 	ac.exact = make(map[string]string, len(ac.infos))
+	ac.aliases, ac.wireSource = map[string]string{}, map[string]string{}
 	for _, mi := range ac.infos {
 		key := strings.ToLower(mi.ID)
 		ac.knows[key] = true
@@ -188,12 +189,30 @@ func indexCatalog(ac *accountCatalog) {
 			ac.benefit[key] = true
 		}
 	}
-	// Display merging may prefer a richer normal-source record with different
-	// casing. A benefit-routed request must use the benefit source's exact ID.
-	for _, mi := range ac.sources["benefit"].models {
-		key := strings.ToLower(mi.ID)
-		if ac.benefit[key] {
-			ac.exact[key] = mi.ID
+	// Normal inference IDs come from builtin when both normal sources know a
+	// same-fold ID. Benefit has the final route authority. Retained snapshots
+	// retain that authority too; freshness must follow this exact same choice.
+	for _, name := range modelSources {
+		for _, mi := range MergeModels(ac.sources[name].models) {
+			key := strings.ToLower(mi.ID)
+			ac.exact[key], ac.wireSource[key] = mi.ID, name
+		}
+	}
+	// Inspect every source entry before display deduplication so even a less
+	// rich duplicate can make a shared display name ambiguous. Empty targets
+	// remain ambiguous for the rest of this snapshot.
+	for _, name := range modelSources {
+		for _, mi := range ac.sources[name].models {
+			alias := strings.ToLower(strings.TrimSpace(mi.displayAlias))
+			key := strings.ToLower(mi.ID)
+			if alias == "" || ac.knows[alias] {
+				continue
+			}
+			if target, seen := ac.aliases[alias]; seen && target != key {
+				ac.aliases[alias] = ""
+			} else if !seen {
+				ac.aliases[alias] = key
+			}
 		}
 	}
 }
@@ -222,25 +241,9 @@ func rebuildKnownLocked() {
 	}
 }
 
-func (c *Client) PruneModelDiscoveryBackoff(current map[string]*auth.Auth) {
-	c.srcMu.Lock()
-	defer c.srcMu.Unlock()
-	now := time.Now()
-	for key, until := range c.srcFail {
-		sep := strings.LastIndexByte(key, '|')
-		if sep < 0 {
-			delete(c.srcFail, key)
-			continue
-		}
-		if _, ok := current[key[:sep]]; !ok || !now.Before(until) {
-			delete(c.srcFail, key)
-		}
-	}
-}
-
 // PublishModelDiscovery returns exactly the committed effective catalog and the
-// exact fresh IDs whose governing route source succeeded. A retained benefit
-// route requires a fresh benefit response before a negative can be invalidated.
+// exact fresh IDs whose governing wire source succeeded. A retained builtin or
+// benefit ID requires that source to recover before invalidating its rejection.
 func PublishModelDiscovery(accountID string, owner *auth.Auth, d ModelDiscovery) ([]ModelInfo, []string) {
 	if accountID == "" || owner == nil {
 		return nil, nil
@@ -277,25 +280,9 @@ func PublishModelDiscovery(accountID string, owner *auth.Auth, d ModelDiscovery)
 	rebuildKnownLocked()
 	fresh := make([]string, 0, len(ac.infos))
 	for _, mi := range ac.infos {
-		for _, name := range modelSources {
-			if mi.Benefit && name != "benefit" {
-				continue
-			}
-			s := ac.sources[name]
-			if !modelSourceSucceeded(s.Status) {
-				continue
-			}
-			found := false
-			for _, item := range s.models {
-				if strings.EqualFold(item.ID, mi.ID) {
-					found = true
-					break
-				}
-			}
-			if found {
-				fresh = append(fresh, mi.ID)
-				break
-			}
+		key := strings.ToLower(mi.ID)
+		if source := ac.wireSource[key]; source != "" && modelSourceSucceeded(ac.sources[source].Status) {
+			fresh = append(fresh, ac.exact[key])
 		}
 	}
 	return append([]ModelInfo(nil), ac.infos...), fresh
@@ -310,17 +297,15 @@ func (c *Client) DiscoverModels(ctx context.Context, acct *auth.Auth, force bool
 	}
 	token, ak, sk := acct.Credentials()
 	cred := SignCredential{AccessKeyID: ak, SecretAccessKey: sk, SecurityToken: token}
-	for _, name := range modelSources {
+	backoff := c.beginModelSourceBackoff(acct, cred)
+	for source, name := range modelSources {
 		s := sourceSnapshot{SourceStatus: SourceStatus{Source: name}}
-		key := acct.UserID + "|" + name
 		if ctx.Err() != nil {
 			s.Status, s.Error = "canceled", discoveryError(ctx.Err())
 			d.sources[name] = s
 			continue
 		}
-		c.srcMu.Lock()
-		retry := c.srcFail[key]
-		c.srcMu.Unlock()
+		retry := c.modelSourceRetry(acct.UserID, backoff, source)
 		if !force && time.Now().Before(retry) {
 			s.Status, s.RetryAt, s.Error = "backoff", &retry, &SourceError{Kind: "backoff"}
 			d.sources[name] = s
@@ -370,17 +355,16 @@ func (c *Client) DiscoverModels(ctx context.Context, acct *auth.Auth, force bool
 			}
 			success := time.Now().UTC()
 			s.LastSuccessAt, s.Count = &success, len(s.models)
-			c.clearSrcFail(key)
+			c.finishModelSource(acct.UserID, backoff, source, false)
 		} else {
 			s.Status, s.Error = "failed", discoveryError(err)
 			if errors.Is(ctx.Err(), context.Canceled) {
 				s.Status = "canceled"
 			} else {
-				c.noteSrcFail(key)
-				c.srcMu.Lock()
-				retry = c.srcFail[key]
-				c.srcMu.Unlock()
-				s.RetryAt = &retry
+				retry = c.finishModelSource(acct.UserID, backoff, source, true)
+				if !retry.IsZero() {
+					s.RetryAt = &retry
+				}
 			}
 		}
 		d.sources[name] = s
@@ -518,17 +502,24 @@ func parseModelEntries(entries []json.RawMessage, source string) ([]ModelInfo, e
 		}
 		id := firstNonEmpty(m.ModelID, m.ModelName)
 		if source == "agent" {
-			// Existing captured client fixture prefers model_name. Do not guess a
-			// different inference identifier when opaque IDs and names coexist.
-			id = firstNonEmpty(m.ModelName, m.ModelID, m.ModelAlias, m.Params.ModelID)
+			// The explicit inference parameter wins over the UI display name.
+			// Without it, preserve name-before-opaque-top-level-ID compatibility.
+			id = firstNonEmpty(m.Params.ModelID, m.ModelName, m.ModelID, m.ModelAlias)
 			m.ContextWindow, m.MaxTokens, m.ModelDesc = m.Params.ContextWindow, m.Params.MaxTokens, m.Params.ModelDesc
 		}
 		if id == "" || len(id) > 192 || !utf8.ValidString(id) || boundedModelText(id, 192) != id || m.ContextWindow < 0 || m.MaxTokens < 0 {
 			return nil, &SourceError{Kind: "parse"}
 		}
-		out = append(out, ModelInfo{ID: id, Name: boundedModelText(id, 192), ContextWindow: m.ContextWindow, MaxTokens: m.MaxTokens, Desc: boundedModelText(m.ModelDesc, 512), Benefit: source == "benefit"})
+		name := firstNonEmpty(m.ModelName, id)
+		mi := ModelInfo{ID: id, Name: boundedModelText(name, 192), ContextWindow: m.ContextWindow, MaxTokens: m.MaxTokens, Desc: boundedModelText(m.ModelDesc, 512), Benefit: source == "benefit"}
+		if m.ModelName != "" && mi.Name == m.ModelName {
+			mi.displayAlias = m.ModelName
+		}
+		out = append(out, mi)
 	}
-	return MergeModels(out), nil
+	// Preserve source alias evidence until account indexing; display merging
+	// must not hide conflicting aliases from less rich duplicate records.
+	return out, nil
 }
 
 func (c *Client) fetchAgentModelsContext(ctx context.Context, cred SignCredential) ([]ModelInfo, error) {

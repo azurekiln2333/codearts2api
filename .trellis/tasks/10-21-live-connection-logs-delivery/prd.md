@@ -43,3 +43,64 @@ Retain the Go-embedded panel, API-key authentication, existing account/OAuth act
 ## Deferred operational evidence
 
 Server/deployment access is not available. Remote deployment verification and the exact official-client response for V4.1 Flash require operational evidence; local implementation and deterministic checks do not depend on that access. The final scope was presented and the user's subsequent 2026-10-22 direction authorized execution. No further user product choices are required for the listed scope.
+
+## Live-credential follow-up authorization and acceptance
+
+The user supplied four local credentials and explicitly authorized actual model
+calls followed by bounded progressive concurrency testing. This supersedes the
+prior lack of account evidence. Testing uses an isolated localhost server and
+credential copies, not the deployed New API gateway. Existing claims policy and
+credential originals must be preserved; no credential/raw-response content is
+committed. Source release archives remain immutable.
+
+- R9: Parse actual inference IDs separately from provider display names, using
+  the real agent model_parameters.model_id and builtin model_id evidence. Keep
+  account/auth/source ownership, truthful negative-cache resets and safe explicit
+  display-name compatibility; never lowercase every model or guess another version.
+- [x] AC9: Reproduce the observed GLM/DeepSeek display-ID failure on actual HTTP
+  fixtures, correct parsing/resolution, and demonstrate real lowercase GLM and
+  DeepSeek completion on a supplied valid account. Test streams/repeated calls
+  and progressively bounded concurrency while observing health and cleanup.
+  Clearly separate refresh-expired credentials from model capability failures.
+
+- R10: Reproduce successful-then-busy requests with supplied credentials and
+  prevent independent requests from repeatedly hammering a recently rejected
+  account. Preserve health/capability neutrality and distinguish provider
+  saturation from local slot waiting, authentication and model registration.
+- [x] AC10: Account-scoped transient busy admission is shared across handlers,
+  bounded and cancellable, wakes on recovery, selects a free backup immediately,
+  and cannot transfer old-login state onto a replacement account. Actual repeated
+  and concurrent calls report content, statuses, attempts, health and cleanup;
+  upstream capacity/release behavior remains an explicit measurement boundary.
+
+- R11: Implement the official current user-session lifecycle for inference and
+  availability probes: matching signed user-session-id, initial busy notification,
+  periodic busy heartbeat for long generations, and bounded idle notification on
+  success, provider failure, cancellation and timeout. Closing HTTP alone is
+  insufficient. Keep cleanup scoped to the session this attempt owns.
+- [x] AC11: Actual-HTTP fixtures reproduce three retained remote sessions without
+  idle and demonstrate repeated recovery with the lifecycle. Verify long streams,
+  every failure/close path, bounded heartbeat/cleanup, unique attempt ownership,
+  signed matching headers and no heartbeat loop after cleanup. Repeat real
+  gateway GLM/DeepSeek sequential/streamed and 18-request bounded concurrency.
+
+- R12: Cold startup must not replace the verified GLM/DeepSeek inference IDs with
+  their display casing. A negative result belongs to the exact wire identity that
+  failed; discovery of a corrected identity must not inherit an old wrong-wire
+  rejection. Bounded background and explicit catalog jobs must obtain valid
+  account credentials before fetching metadata; cached admin GETs stay read-only.
+- [x] AC12: Actual HTTP cold-start and dynamic non-seed identity regressions cover
+  a request before catalog warm-up, automatic recovery after exact-ID correction,
+  a late old-wire denial, same-wire denial retention, and account/auth isolation.
+  Expired credential metadata refresh shares the existing bounded refresh and
+  respects cancellation, disabled/replaced accounts and safe publication. Verify
+  a freshly rebuilt real gateway without requiring a manual catalog warm-up.
+
+AC9–AC12 are supported by the independent integrated quality report and final
+real-gateway verification report dated 2026-10-23. Acceptance includes truthful
+bounded rejection and cleanup, not a guarantee that every load trial succeeds:
+the first per-account-3 wave completed 9/18 and rejected nine locally at the
+10-second account-wait limit; a synchronized control rerun completed 18/18 and
+four subsequent calls. Historical one-second local health timeouts remain
+unattributed. Production deployment, provider capacity beyond these finite
+trials, and real benefit inference on an enabled channel remain unverified.

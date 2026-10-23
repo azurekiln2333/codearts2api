@@ -19,14 +19,15 @@ const (
 	CLIENT_ID = "codearts-agent"
 
 	// 聊天端点（chatDomain 商业版 = snap-access.cn-north-4）。
-	EpChatV2         = "/api/v2/chat/completions"
-	EpChat           = "/v1/chat/chat"
-	EpStartChat      = "/v1/chat/start-chat"
-	EpChatAgents     = "/v1/chat/agents"
-	EpChatManagement = "/v1/chat/management/event"
-	EpChatRecord     = "/v1/chat/record-request"
-	EpAgentList      = "/v1/agent-center/agents/useragents"
-	EpAgentDetail    = "/v1/agent-center/agents/detail"
+	EpChatV2           = "/api/v2/chat/completions"
+	EpChat             = "/v1/chat/chat"
+	EpStartChat        = "/v1/chat/start-chat"
+	EpChatAgents       = "/v1/chat/agents"
+	EpChatManagement   = "/v1/chat/management/event"
+	EpChatRecord       = "/v1/chat/record-request"
+	EpSessionHeartbeat = "/snap-manager/v1/chat-session/heartbeat"
+	EpAgentList        = "/v1/agent-center/agents/useragents"
+	EpAgentDetail      = "/v1/agent-center/agents/detail"
 	// 内置模型（与官方 ModelService.listBuiltinModels 一致，Agent-Type: PromptCenter）。
 	EpModelBuiltin = "/v1/model/builtin"
 	// 账号福利通道开关（snap，Agent-Type: PromptCenter）。

@@ -158,11 +158,11 @@ func TestChatConcurrentLimitRetryBudgets(t *testing.T) {
 			})
 			f.h.cfg.MaxRotate = tc.rotates
 			rec, id := doChat(f.h, "glm-5.2")
-			if rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), `"code":"upstream_busy"`) || rec.Header().Get("Retry-After") != "2" {
+			if rec.Code != http.StatusTooManyRequests || !strings.Contains(rec.Body.String(), `"code":"upstream_busy"`) || rec.Header().Get("Retry-After") != "1" {
 				t.Fatalf("concurrency exhaustion = %d %s, Retry-After=%q", rec.Code, rec.Body.String(), rec.Header().Get("Retry-After"))
 			}
 			ev := f.assertAttempts(t, id, tc.want)
-			if ev.Outcome != "upstream_saturated" || ev.Cause.Class != audit.CauseConcurrencyLimit || ev.Cause.Code != "TM.00001041" || ev.ErrorCode != "upstream_busy" || ev.Status != rec.Code || !ev.Committed || ev.RetryAfterS != 2 {
+			if ev.Outcome != "upstream_saturated" || ev.Cause.Class != audit.CauseConcurrencyLimit || ev.Cause.Code != "TM.00001041" || ev.ErrorCode != "upstream_busy" || ev.Status != rec.Code || !ev.Committed || ev.RetryAfterS != 1 {
 				t.Fatalf("concurrency exhaustion audit = %+v", ev)
 			}
 			f.assertNeutral(t)
@@ -213,6 +213,9 @@ func TestChatConcurrentLimitAfterFirstDataDoesNotRetry(t *testing.T) {
 			f := newConcurrencyFixture(t, 2, func(index int, w http.ResponseWriter) {
 				w.Header().Set("Content-Type", "text/event-stream")
 				if index == 0 {
+					// Keep first-data latency distinct from the zero/unknown value
+					// on platforms whose wall clock has coarse timer resolution.
+					time.Sleep(2 * time.Millisecond)
 					_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n"+concurrencyErrorSSE)
 					return
 				}

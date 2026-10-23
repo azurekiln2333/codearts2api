@@ -104,13 +104,13 @@ func (o *chatObserver) FirstSSEData() {
 	o.tracker.FirstSSEData()
 }
 
-func (o *chatObserver) firstData() time.Duration {
+func (o *chatObserver) firstData() (time.Duration, bool) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.first.IsZero() {
-		return 0
+		return 0, false
 	}
-	return o.first.Sub(o.started)
+	return o.first.Sub(o.started), true
 }
 
 type chatResponseWriter struct {
@@ -231,7 +231,7 @@ func (h *Handler) chatCandidates(tried map[string]bool, model, sticky string) []
 		}
 		authz := a.AuthSnapshot()
 		want, _ := upstream.ResolveModelForAuth(a.UID, model, authz)
-		state, _ := modelAvailability(a.UID, want)
+		state, _ := modelAvailabilityForAuth(a.UID, want, authz)
 		if state == availUnusable {
 			continue
 		}
@@ -243,10 +243,7 @@ func (h *Handler) chatCandidates(tried map[string]bool, model, sticky string) []
 		if present {
 			priority = 0
 		}
-		candidate := pool.AccountCandidate{Name: a.Name, Priority: priority}
-		if a.Name == sticky {
-			return []pool.AccountCandidate{candidate}
-		}
+		candidate := pool.AccountCandidate{Name: a.Name, Priority: priority, Sticky: a.Name == sticky}
 		candidates = append(candidates, candidate)
 	}
 	return candidates

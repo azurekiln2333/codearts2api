@@ -624,8 +624,10 @@ func TestCatalogAllFilteredModelsRemainEmptyAndDiagnosticsExplain(t *testing.T) 
 	h, p := catalogHandler(t, 1, f, backend)
 	acct := p.Accounts()[0]
 	upstream.SetAccountModels(acct.UID, []upstream.ModelInfo{{ID: f.model, Benefit: true}})
+	owner := acct.AuthSnapshot()
 	for _, m := range modelEntries([]upstream.ModelInfo{{ID: f.model, Benefit: true}}) {
-		markUnusable(acct.UID, m["id"].(string), "模型未在当前账号注册")
+		exact, _ := upstream.ResolveModelForAuth(acct.UID, m["id"].(string), owner)
+		h.markModelUnusable(acct, owner, exact, "模型未在当前账号注册")
 	}
 	w := catalogRequest(h, http.MethodGet, "/v1/models", "", "fixture-key")
 	var body struct {
