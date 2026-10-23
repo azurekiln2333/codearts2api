@@ -301,3 +301,22 @@ Owners: the pool/busy owner handles model_catalog.go and separate auth regressio
 the upstream identity owner handles known seeds, identity-aware availability and
 its callers; the independent reviewer owns cold-start dynamic HTTP regressions.
 Parent owns actual calls and final cold-start/progressive concurrency evidence.
+
+## I. Eligibility outcome classification
+
+The final chat fallback currently consults negative availability independently
+from candidate construction. A healthy account excluded by a complete current
+model catalog can therefore disappear from candidates without establishing a
+negative availability entry, and the request falls through to the generic
+no-healthy-account error. Reuse the existing selected-account/auth model knowledge
+and eligibility rules when classifying the exhausted candidates. Authoritative
+model exclusion from otherwise healthy accounts belongs to the existing
+model-unavailable status/error/audit path. Empty, disabled, cooling or unusable
+account pools remain pool-unavailable; concurrency waiting/busy and request
+deadlines retain their dedicated paths. No synchronous discovery, new cache,
+guessed alias, relaxed entitlement or credential mutation is introduced.
+
+Actual HTTP regressions must preserve unknown/partial/stale/replaced-auth evidence
+as nonauthoritative and assert status, error code and audit outcome. The parent
+owns deployment evidence and sanitized reports; the implementer owns the narrow
+server eligibility helper and route regressions, followed by independent review.

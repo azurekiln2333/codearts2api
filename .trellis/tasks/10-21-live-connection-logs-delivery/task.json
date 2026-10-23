@@ -203,6 +203,26 @@
       "user_and_release_archives_preserved": true,
       "report": "research/reopened-stability-verification.md",
       "independent_report": "research/reopened-stability-independent-review.md"
+    },
+    "eligibility_followup": {
+      "state": "local_review_complete_release_pending_production",
+      "verified_at": "2026-10-23",
+      "reported": "503 no_healthy_account despite three otherwise eligible accounts",
+      "observed_request_model": "glm-5.3-flash",
+      "observed_request_attempts": 0,
+      "production_get_only_observed": true,
+      "production_running_commit": "709f63ede82f8f790a853a4550f9430a7e1b2cfc",
+      "production_snapshot_boundary": "Sequential request/account/catalog observations match the confirmed classification defect; not an atomic execution capture or evidence for every503 or historical stalls.",
+      "confirmed_defect": "Complete current catalog exclusions produce zero candidates, but final classification previously considered only explicit provider negatives, yielding misleading503 and unsupported static public entries.",
+      "repair": "Reuse existing captured-auth cached eligibility predicate for candidates, terminal model classification and cached public list; preserve unknown evidence and true unhealthy pools.",
+      "quality_gate_passed": true,
+      "actual_http_subcases_passed": 12,
+      "full_go_normal_race_vet_build_passed": true,
+      "independent_review_passed": true,
+      "source_report": "research/production-eligibility-findings.md",
+      "independent_report": "research/eligibility-quality-review.md",
+      "production_deployment_verified": false,
+      "historical_r13_closed": false
     }
   }
 }

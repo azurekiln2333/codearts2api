@@ -221,6 +221,20 @@ func isChatTimeout(err error) bool {
 		(errors.As(err, &ne) && ne.Timeout())
 }
 
+// cachedAccountModelEligibility shares the routing predicate with final error
+// classification and model listing. Unknown catalog absence remains eligible;
+// only a current complete catalog or an actual provider denial can exclude it.
+func cachedAccountModelEligibility(acct *pool.Account, model string) (present, eligible bool) {
+	authz := acct.AuthSnapshot()
+	want, _ := upstream.ResolveModelForAuth(acct.UID, model, authz)
+	state, _ := modelAvailabilityForAuth(acct.UID, want, authz)
+	if state == availUnusable {
+		return false, false
+	}
+	present, complete := upstream.AccountModelKnowledgeForAuth(acct.UID, want, authz)
+	return present, state == availUsable || present || !complete
+}
+
 // chatCandidates only reads cached capability. Discovery has its own background/
 // administrative lifecycle and must not silently extend a chat's startup budget.
 func (h *Handler) chatCandidates(tried map[string]bool, model, sticky string) []pool.AccountCandidate {
@@ -229,14 +243,8 @@ func (h *Handler) chatCandidates(tried map[string]bool, model, sticky string) []
 		if a == nil || tried[a.Name] || !h.cfg.Pool.Healthy(a.Name) {
 			continue
 		}
-		authz := a.AuthSnapshot()
-		want, _ := upstream.ResolveModelForAuth(a.UID, model, authz)
-		state, _ := modelAvailabilityForAuth(a.UID, want, authz)
-		if state == availUnusable {
-			continue
-		}
-		present, complete := upstream.AccountModelKnowledgeForAuth(a.UID, want, authz)
-		if state != availUsable && complete && !present {
+		present, eligible := cachedAccountModelEligibility(a, model)
+		if !eligible {
 			continue
 		}
 		priority := 1

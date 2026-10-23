@@ -145,6 +145,8 @@ local checkout or claim a successful deployment without checking the running bui
 | Caller disconnect before commitment | Cancellation outcome, absent HTTP status |
 | Streaming upstream fails after 200 | Committed 200 plus failure outcome and safe cause |
 | Provider capability error | Safe provider code/description; no account-wide penalty |
+| Healthy pool excludes model from current authoritative catalogs before sending | Committed 404 `model_not_available`, audit `model_unavailable`, capability cause, attempts/tried 0; no invented provider code |
+| Empty/unhealthy pool before sending | Committed 503, `no_healthy_account`, attempts/tried 0; no invented provider failure |
 | Full audit queue / failed storage | Chat and health stay responsive; visible loss counters |
 | Audit closed / disabled | No stranded enqueues; post-close drops counted; disabled API honest |
 | Unauthenticated audit API | Existing 401 envelope; no metadata disclosure |

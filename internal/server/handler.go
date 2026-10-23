@@ -464,25 +464,20 @@ func (h *Handler) probeUnknownAsync() {
 	}()
 }
 
-// modelKnownUnusable 报告该模型是否在**所有**健康账号上都被判定为不可用。
-// 只要有一个账号没结论或可用，就返回 false（列表保留该模型）。
+// modelKnownUnusable reports whether every healthy account is excluded by
+// authoritative model knowledge. An empty/unhealthy pool is not model evidence.
 func (h *Handler) modelKnownUnusable(model string) bool {
-	anyKnown, allUnusable := false, true
+	anyHealthy := false
 	for _, acct := range h.cfg.Pool.Accounts() {
 		if acct == nil || !h.cfg.Pool.Healthy(acct.Name) {
 			continue
 		}
-		owner := acct.AuthSnapshot()
-		st, _ := modelAvailabilityForAuth(acct.UID, model, owner)
-		if st == availUnknown {
-			return false // 还没结论，别急着下架
-		}
-		anyKnown = true
-		if st != availUnusable {
-			allUnusable = false
+		anyHealthy = true
+		if _, eligible := cachedAccountModelEligibility(acct, model); eligible {
+			return false
 		}
 	}
-	return anyKnown && allUnusable
+	return anyHealthy
 }
 
 // modelEntries 把账号模型目录 + 静态兜底包装成 OpenAI /v1/models 条目。

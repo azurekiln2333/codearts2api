@@ -143,3 +143,25 @@ answer remain causally unresolved. Keep AC13's whole-incident closure unchecked,
 while recording `bounded_regression_passed=true` separately. The task stays
 in progress; current finite regression success is not a claim that the old
 incident's cause was explained or that production has been deployed.
+
+## Reported no-eligible-account 503 follow-up
+
+- R14: Explain the reported `no_healthy_account` using the actual eligibility
+  branches. A healthy account excluded by authoritative current model knowledge
+  must not be misreported as an unhealthy account pool. Preserve distinct model,
+  pool-health, concurrent-capacity, local-wait and timeout outcomes. Do not infer
+  the live account state from the generic error text or old local snapshots.
+- [x] AC14: Actual chat-route regressions demonstrate healthy current complete
+  catalogs lacking the requested model produce model-unavailable, while empty /
+  disabled / cooling / unusable-auth account pools retain no-healthy-account.
+  Partial, stale and replaced-login catalog evidence remains nonauthoritative.
+  Existing bounded busy/wait/timeout behavior and audit classifications hold.
+  Verify the repair independently and preserve credentials and private files.
+
+R14 local acceptance passed on 2026-10-23: the zero-attempt 503 was reproduced
+before the fix, twelve actual-HTTP subcases and independent boundary review
+passed afterward, as did full Go normal/race/vet/build checks. Current GET-only
+production evidence matches the catalog-exclusion defect and identifies old
+revision `709f63e`; production rollout and the separate R13 historical causes
+remain open. See `research/production-eligibility-findings.md` and
+`research/eligibility-quality-review.md`.

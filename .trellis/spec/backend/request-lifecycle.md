@@ -87,6 +87,11 @@ selected attempt's AK/SK and token. Set the final query and headers before
   Missing entries in partial or stale catalogs also remain unknown. Use the atomic
   `AccountModelKnowledgeForAuth` read to exclude by absence only for complete,
   current discovery; actual provider denials remain authoritative independently.
+  The final model-unavailable decision and cached public model projection must
+  reuse that same account/auth eligibility predicate. Healthy accounts excluded
+  by authoritative model knowledge require 404 `model_not_available`, even when
+  no provider request was sent; they are not an unhealthy pool. Require at least
+  one otherwise healthy account before making this all-model-excluded decision.
   A positive availability entry alone must not raise an unknown account's
   priority and starve other unknown accounts.
 - Account-specific capability rejections do not consume the generic `MaxRotate`
@@ -230,7 +235,8 @@ first-data latency, total duration, and outcome; omit messages and credentials.
 |---|---|---|
 | Lifecycle cap or slot queue full; account wait exhausted | 429 `server_busy`, `Retry-After` | No penalty |
 | All healthy candidates remain in remembered concurrent-session backoff at wait exhaustion | 429 `upstream_busy`, bounded `Retry-After` advice | No health or model-capability penalty |
-| No eligible healthy account | 503 `no_healthy_account` | No invented provider failure |
+| Empty pool, or no otherwise healthy account (disabled/cooling/unusable auth) | 503 `no_healthy_account` | No invented provider failure |
+| Otherwise healthy accounts all excluded by complete/current catalogs or applicable provider denials | 404 `model_not_available`, including zero-attempt rejection | No whole-account penalty or invented provider attempt |
 | Startup or upstream inactivity before headers | 504 `upstream_timeout` | No cooldown from timeout alone |
 | Late stream read failure | SSE error + DONE if writable; release resources | Classify actual error; timeout alone is neutral |
 | Client cancellation or downstream write/flush failure | Stop waits/I/O/retries, release ticket/body/lease | No cooldown, disable, availability change, or failover |

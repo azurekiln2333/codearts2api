@@ -158,3 +158,23 @@ and verified archive remain unchanged. The earlier one-answer strict-content
 failure remains failed and unassigned. Historical cause closure and actual
 production verification stay open; keep the task active and its whole-task
 quality flag false while recording the bounded regression pass separately.
+
+## R14: no-eligible-account error classification
+
+- [x] Trace the exact 503 fallback and record model-filter versus health evidence.
+- [x] Reproduce a healthy complete-catalog exclusion through the chat route;
+  fix only the demonstrated misclassification using existing eligibility rules.
+- [x] Cover unavailable model, unhealthy/empty pools and nonauthoritative catalog
+  boundaries, with actual HTTP status/error and correlated audit assertions.
+- [x] Independent full-scope lifecycle/model/audit review, full normal/race tests,
+  vet/build and diff checks; update specs and commit only owned files.
+
+Current GET-only production snapshots identify three eligible accounts, zero
+catalog support for the failing distinct `glm-5.3-flash` static entry, and old
+running revision `709f63e`. They are adjacent observations rather than an atomic
+capture of the request. The repair shares the existing cached predicate across
+selection, terminal classification and list filtering. Twelve new actual-HTTP
+subcases, independent full-scope affected-contract review, full Go normal/race,
+vet/build and whitespace checks pass. Commit/release verification is recorded
+after the work commit. This does not close historical R13 causes or change
+provider entitlement, concurrency limits, refresh policy or model mapping.

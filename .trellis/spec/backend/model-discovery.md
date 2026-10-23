@@ -207,6 +207,14 @@ An empty filtered `/v1/models` result stays empty. Never restore all excluded
 entries merely because the filtered result has length zero. The diagnostic admin
 catalog may still show excluded models with safe reasons. A gateway 404 based on
 cached candidates is not proof that a model does not exist in the provider's UI.
+Use the same captured-auth model eligibility predicate for chat candidates,
+terminal model-unavailable classification and cached public list filtering.
+If at least one otherwise healthy account exists and all such accounts are
+excluded by complete/current catalog absence or applicable provider denials,
+return 404 `model_not_available` instead of 503 `no_healthy_account`. This also
+filters unsupported static fallback names from the public list. Do not turn an
+empty/unhealthy pool into a model denial, treat unknown absence as negative, or
+substitute a different model to make a static entry appear callable.
 
 ### Console consumption
 
@@ -239,6 +247,8 @@ new state. Keep BASE prefixes and existing escaping/clipboard behavior.
 | Fresh chat denial during refresh | Preserve new denial; only older scoped negatives may reset |
 | Cold partial catalog omits requested model | Attempt eligible account; absence is unknown, no guessed route |
 | Complete current catalog omits requested model | Account may be excluded by authoritative absence |
+| Every otherwise healthy account excludes model by current catalog absence and/or applicable denial | Chat returns 404 `model_not_available`; cached public list excludes it; no fabricated upstream attempt |
+| No otherwise healthy accounts | Preserve 503 `no_healthy_account`; not evidence of model absence |
 | Every advertised model excluded | OpenAI data array empty; admin explains exclusions |
 | Lowercase/mixed-case request | Send this account/route's exact discovered ID |
 | Cold display-case GLM-5.3 or DeepSeek-V4.1-Flash before discovery | Use captured lowercase normal seed IDs; no benefit header or positive capability claim |
@@ -282,6 +292,15 @@ Reproduce cold partial discovery with an agent success and failed benefit source
 the real chat route must reach an otherwise eligible account for an unlisted model.
 Cover complete absence, expired snapshots, present retained entries, replacement
 auth and preservation of actual negative capability.
+Exercise the terminal chat response and cached model list together: complete
+catalogs containing `glm-5.3` but lacking distinct `glm-5.3-flash` must produce
+zero-send 404 capability metadata and omit the unsupported public fallback entry.
+Cover mixed catalog/negative exclusions, actual success with nonauthoritative
+absence, and empty/disabled/cooling/unusable-auth pools retaining 503. A TTL
+expiry helper test complements HTTP tests for retained-source staleness; do not
+claim an HTTP TTL-expiry fixture if only the cache unit test advances its clock.
+`eligibility_error_test.go` owns these actual-chat/correlated-audit and cached
+list assertions; existing public-route tests supplement the list projection.
 
 Exercise a genuinely cold account through actual HTTP chat before metadata:
 display-case GLM-5.3 and DeepSeek-V4.1-Flash, stream/nonstream, exact lowercase wire,
