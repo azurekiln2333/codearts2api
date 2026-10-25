@@ -363,6 +363,30 @@
       "original_credentials_preserved": true,
       "prior_archives_preserved": true,
       "release_report": "research/cnb-console-source-release.md"
+    },
+    "release_deployment_followup": {
+      "state": "local_source_delivery_complete_pending_remote_publication",
+      "verified_at": "2026-10-26",
+      "quality_gate_passed": true,
+      "independent_review_passed": true,
+      "source_commit": "32f33db3460b239ee1f4a581c2c4cd1fee762287",
+      "release_artifact": "codearts2api-source-32f33db3460b.zip",
+      "release_sha256": "2e47db401bfcd67684c3fa206fa3625539de5b9a25d4bb3da8135b24b1616848",
+      "extracted_release_smoke_passed": true,
+      "python_tests": 85,
+      "go_normal_race_vet_build_passed": true,
+      "linux_amd64_arm64_compile_passed": true,
+      "official_compose_matrix_passed": true,
+      "packaged_python_actionlint_compose_passed": true,
+      "three_complete_readmes": true,
+      "original_credentials_preserved": true,
+      "prior_archives_preserved": true,
+      "remote_publication_verified": false,
+      "docker_image_runtime_verified": false,
+      "production_deployment_verified": false,
+      "historical_r13_closed": false,
+      "source_report": "research/r19-integrated-delivery.md",
+      "release_report": "research/r19-source-release.md"
     }
   }
 }

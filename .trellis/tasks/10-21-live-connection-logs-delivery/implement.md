@@ -250,4 +250,6 @@ token proof and all four browser suites against extracted HTML. See
 - [x] Extend explicit source exporter and meaningful deployment/release checks.
 - [x] Update accurate migration/pull/update/private-registry/local-build/rollback docs in three complete synchronized READMEs (Simplified Chinese, Traditional Chinese, English).
 - [x] Independent integrated review; Compose/YAML/action checks and appropriate Go/release tests; preserve private inputs.
-- [ ] Commit owned changes and verify actual exported artifact; journal evidence and honest remote boundary without closing R13.
+- [x] Commit owned changes and verify actual exported artifact; journal evidence and honest remote boundary without closing R13.
+
+Actual140-member source archive passed extracted build/start, seven GET routes, synthetic token replay,85 Python tests, actionlint and official Compose matrix. See `research/r19-source-release.md`. No remote publication/deployment; R13 remains open.

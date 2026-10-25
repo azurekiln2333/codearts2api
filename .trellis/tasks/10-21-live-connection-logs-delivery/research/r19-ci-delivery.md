@@ -161,7 +161,7 @@ pushed.
   `FROM --platform=$BUILDPLATFORM … GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0`,
   so the Go compilation stage needs no QEMU. The final Alpine RUN still requires target-architecture execution support from the build environment.
   GitHub still installs QEMU defensively; it is harmless.
- 
+
 
 ## 7. Honest boundary
 
