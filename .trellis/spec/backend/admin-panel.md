@@ -5,8 +5,10 @@
 Read this before changing `internal/server/panel.html`, `panel.go`, panel navigation,
 account controls, OAuth presentation or request-audit rendering. The panel is a
 self-contained Go-embedded asset; use the existing admin API and request-audit
-contracts. Reference New API for general workspace styling, using original markup,
-styles and inline icons without importing its frontend dependency stack.
+contracts. Reference the local `cnb2api-panel` login, connecting stage and console design,
+using original standalone markup, styles and inline icons without importing its
+Vue application or introducing external runtime assets. The R18 reference and
+migration reports in the active task record the inspected source and contracts.
 
 ## 2. Signatures
 
@@ -29,9 +31,19 @@ labeled as credential time, not generation tokens.
 
 ## 3. Contracts
 
-- Keep shell/header/sidebar distinct from the active page. Use neutral surfaces,
-  restrained blue selection, semantic status colors, compact legible controls,
-  visible focus, reduced-motion support and a dismissible mobile drawer.
+- Match the reference shell: 52px full-width header, 180px sidebar (64px
+  collapsed), neutral canvas and independently scrolling inset content. Use its
+  restrained blue selection, semantic status colors, compact controls, visible
+  focus, reduced-motion support and a dismissible mobile drawer.
+- Login uses the reference split composition with an original inline gateway
+  illustration and a compact form. Mobile removes the decorative column. The
+  full-viewport connecting stage says “正在连接控制台” and tracks actual initial
+  or submitted authentication validation; never add an artificial delay.
+- Authentication validates overview with a 15-second cancellable request. Success
+  reveals the shell only for the current login epoch. Failure/timeout returns to
+  a usable login. Initial no-key 401 is silent; submitted invalid keys retain a
+  visible error. An obsolete response cannot reveal the shell or replace newer
+  feedback. Preserve the initial proxy-auth attempt even without a stored key.
 - Keep corners at 8 px for controls/navigation, 12 px for cards and no more than
   16 px for workspace/login/dialog shells. Sidebar branding/build footers, the
   service-region header caption and duplicate overview shortcut card are removed.
@@ -142,6 +154,14 @@ Assert root width and height against the viewport on every mobile view, scroll t
 the final source table inside the workspace, and exercise its horizontal scroll.
 Render failed claims even when an omitted JSON `succeeded:false` leaves only the
 safe `error` result.
+
+For the R18 design, also run `research/cnb-browser-check.cjs` against the actual
+embedded source and extracted release asset. Compare captured login/loading/shell
+images with local synthetic reference screenshots; include mobile and dark mode.
+Hold the validation response to inspect the real loading stage. Cover saved-key
+restore, proxy auth without a saved key, failure recovery, bounded timeout, stale
+completion and logout. A correct-looking screenshot alone cannot establish auth
+state correctness.
 
 Run relevant Go server tests and a build because the HTML is embedded. Check JS
 syntax and `git diff --check`. Broaden Go/race checks when the change actually

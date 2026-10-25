@@ -7,9 +7,9 @@ const path = require('node:path');
 const { chromium } = require(process.env.UI_PLAYWRIGHT_MODULE || path.join(os.tmpdir(), 'codearts2api-ui-verification/node_modules/playwright'));
 let root = __dirname;
 while (!fs.existsSync(path.join(root, 'go.mod'))) root = path.dirname(root);
-const html = fs.readFileSync(path.join(root, 'internal/server/panel.html'), 'utf8')
+const html = fs.readFileSync(process.env.UI_PANEL_SOURCE || path.join(root, 'internal/server/panel.html'), 'utf8')
   .replaceAll('__SERVICE_NAME__', 'codearts2api').replaceAll('__SERVICE_TITLE__', 'CodeArts2API').replaceAll('__LOGO__', 'CA').replaceAll('__ACCENT__', '#0284c7');
-const output = path.join(root, '.local-test', 'token-ui-' + Date.now());
+const output = process.env.UI_OUTPUT_DIR || path.join(root, '.local-test', 'token-ui-' + Date.now());
 fs.mkdirSync(output, { recursive: true });
 const stamp = '2026-10-24T00:00:00Z';
 const malicious = '<img src=x onerror="window.__usageXSS=1">';

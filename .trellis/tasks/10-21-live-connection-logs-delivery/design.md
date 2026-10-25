@@ -418,3 +418,14 @@ implementer owns server OAuth port selection/tests; Compose implementer owns
 Compose/.env.example and only the relevant deployment README paragraphs. Parent
 owns shared specs/task docs and final verification/export. Workers do not touch
 real credentials/config/env or historical screenshots.
+
+
+## R18: reference design and state boundary
+
+Gap: current generic login/old shell does not match cnb2api-panel. Design lives in internal/server/panel.html; backend APIs and persistence need no redesign. Reference App.vue and styles.css are read-only; research/cnb-reference-findings.md records exact component/style locations, research/cnb-migration-findings.md records operational contracts. Reproduce layout with original standalone HTML/CSS/inline SVG and existing Go embedding; prefer system fallbacks over introducing font/build dependencies.
+
+Ownership: one trellis-implement worker owns panel.html only, including small auth validation timeout and loading state changes where necessary. A separate worker owns new focused browser verification and updates existing browser fixtures only as required by changed presentation. Parent owns shared specs/task/release metadata. An independent reviewer owns fixes after implementation handoff.
+
+State: initial and submitted authentication enter boot; overview response alone authorizes app; epoch invalidation suppresses old completions. Bound initial overview using AbortController without changing other API contracts, recover to login with usable error/retry, clear timeout handles. Preserve proxy-supplied auth attempt even with no saved key, storage keys, reverse-proxy prefixes and logout cancellation. No arbitrary spinner delay.
+
+Visuals: reference split 1.08fr/1fr login, 320px form, SVG gateway scene; centered 30px blue braces mark plus 20px spinner/loading label. Auth shell 52px header/180px navigation (64px collapsed); #f2f4f7 canvas, #3169df accent, #cfddf2 navigation selection with dark 3px marker. Content16/card12/control8 radii. Adapt operational tables, forms, drawers and dialogs consistently in light/dark and mobile. Do not copy reference branding slogans or removed unrelated product chrome. No new chart/metric fabrication.

@@ -335,6 +335,24 @@
       "packaged_compose_matches_tested_source": true,
       "source_report": "research/compose-env-verification.md",
       "independent_report": "research/oauth-compose-quality-review.md"
+    },
+    "cnb_panel_followup": {
+      "state": "source_verified_pending_export",
+      "verified_at": "2026-10-25",
+      "quality_gate_passed": true,
+      "independent_review_passed": true,
+      "panel_sha256": "d3f9ac3a35460962ac92199a35c0f1cb4cea7c9f209e580f1b360440fa139f47",
+      "reference_rendered": true,
+      "full_browser_suite_passed": true,
+      "focused_browser_suite_passed": true,
+      "oauth_browser_suite_passed": true,
+      "token_browser_suite_passed": true,
+      "server_tests_vet_build_passed": true,
+      "release_tool_tests_passed": true,
+      "production_deployment_verified": false,
+      "historical_r13_closed": false,
+      "source_report": "research/cnb-console-delivery.md",
+      "independent_report": "research/cnb-quality-review.md"
     }
   }
 }

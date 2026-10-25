@@ -211,3 +211,16 @@ R13 historical incident attribution and production rollout remain separate.
   explains file-versus-shell behavior, native LISTEN compatibility, and unchanged
   credential mounts. Validate with synthetic config and existing release tests;
   never print or modify the user's real .env/config/auths.
+
+
+## R18: cnb2api-panel visual migration (2026-10-25)
+
+User explicitly requests the reference project's login, full-screen connecting stage and complete console design. This supersedes the older New API styling reference. Preserve the six operational pages, API contracts, saved API key, OAuth, audit/token semantics and credential data.
+
+Acceptance:
+- Render reference login/boot/authenticated desktop/mobile/dark states locally with synthetic APIs; record screenshots before judging visual fidelity.
+- Adopt its split login with gateway illustration and dot texture, restrained blue/neutral tokens, full-width 52px header, 180px collapsible sidebar and independently scrolling inset workspace. Original compatible markup/CSS may reproduce the design without adding Vue or network assets.
+- Connecting stage says 正在连接控制台; appears during actual initial/auth validation, handles failure/retry and stale responses, never adds artificial delay or exposes authenticated content prematurely. Bound the validation fetch so a hung server cannot trap the user forever.
+- All overview/accounts/requests/connections/models/settings controls remain usable. Preserve OAuth start/submit/done/continue serialization and token unknown/source/retained-window semantics.
+- Responsive mobile navigation, dark theme, reduced motion, visible keyboard focus, labels and modal/drawer focus remain correct. No restored sidebar brand/build block, regional caption or shortcut panel.
+- Existing browser regressions plus focused visual/loading/auth tests pass against actual embedded source and extracted final release. Inspect desktop/mobile screenshots, commit only owned changes, export and verify immutable source ZIP. No production deployment claim; historical R13 remains open.

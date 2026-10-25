@@ -16,7 +16,7 @@ while (!fs.existsSync(path.join(root, 'go.mod'))) {
 const baseline = process.argv.includes('--baseline');
 const original = baseline
   ? execFileSync('git', ['show', '3fefda8:internal/server/panel.html'], { cwd: root, encoding: 'utf8' })
-  : fs.readFileSync(path.join(root, 'internal/server/panel.html'), 'utf8');
+  : fs.readFileSync(process.env.UI_PANEL_SOURCE || path.join(root, 'internal/server/panel.html'), 'utf8');
 const html = original.replaceAll('__SERVICE_NAME__', 'codearts2api').replaceAll('__SERVICE_TITLE__', 'CodeArts2API').replaceAll('__LOGO__', 'CA').replaceAll('__ACCENT__', '#0284c7');
 const output = process.env.UI_OUTPUT_DIR || path.join(root, '.local-test', 'oauth-full-ui-' + Date.now());
 fs.mkdirSync(output, { recursive: true });
@@ -195,7 +195,7 @@ async function navigate(page, view) {
     await visible(page, '[data-view="overview"]');
     assert.equal(await page.locator('.sidebar-footer, #sidebarBuild, #subTitle, #btnAddAccount2').count(), 0, 'redundant sidebar/header/shortcut nodes are removed');
     assert.doesNotMatch(await page.locator('[data-view="overview"]').innerText(), /工作台快捷入口/);
-    const radii = await page.evaluate(() => ['.workspace', '.stat', '.nav-item', '.btn', '.login-box', '.modal'].map(selector => ({ selector, radius: parseFloat(getComputedStyle(document.querySelector(selector)).borderTopLeftRadius) })));
+    const radii = await page.evaluate(() => ['.workspace', '.stat', '.nav-item', '.btn', '#loginForm', '.modal'].map(selector => ({ selector, radius: parseFloat(getComputedStyle(document.querySelector(selector)).borderTopLeftRadius) })));
     for (const { selector, radius } of radii) assert.ok(radius <= 16, `${selector}: compact radius (${radius}px)`);
     await screenshot(page, 'overview-desktop');
     await noOverflow(page, 'desktop overview');

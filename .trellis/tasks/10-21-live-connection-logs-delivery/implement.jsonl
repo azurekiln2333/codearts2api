@@ -18,3 +18,5 @@
 {"file": ".trellis/spec/backend/token-usage.md", "reason": "R15 shared typed usage and server/UI contract: capture independent of streaming opt-in, unknown/estimated evidence, persistence ownership, bounded query-consistent summaries and honest scope."}
 {"file":".trellis/spec/backend/oauth-console.md","reason":"R16 primary action, done/continue status, consistent callback port and serialized polling/lifetime ownership."}
 {"file":".trellis/tasks/10-21-live-connection-logs-delivery/research/oauth-ui-findings.md","reason":"Proven ignored import-done, ambiguous controls, shared busy flag and fixture contract gap."}
+{"file": ".trellis/tasks/10-21-live-connection-logs-delivery/research/cnb-reference-findings.md", "reason": "R18 reference visual structure and preserved auth/API/operational contracts."}
+{"file": ".trellis/tasks/10-21-live-connection-logs-delivery/research/cnb-migration-findings.md", "reason": "R18 reference visual structure and preserved auth/API/operational contracts."}

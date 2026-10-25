@@ -223,3 +223,14 @@ private-value exclusions, preservation, extraction, compile/start, seven package
 GET routes, usage replay/API/embedded token checks and the full OAuth Chrome suite
 against its extracted panel asset. See `research/oauth-compose-source-release.md`.
 No real OAuth, push or production deployment occurred; keep R13 open.
+
+
+## R18: cnb2api-panel delivery
+
+- [x] Read reference and migration reports; specify visual/auth/behavior acceptance and single-file source ownership.
+- [x] Capture actual reference login/boot/shell/mobile/dark screenshots with synthetic local API.
+- [x] Implement login, connecting stage, shell and six-page coherent styling while preserving operational contracts.
+- [x] Run focused real-browser loading/auth/responsive/theme checks and existing console/OAuth/token suites; inspect actual screenshots.
+- [x] Independent review/self-fixes; appropriate Go embed/test/vet/build and whitespace checks.
+- [ ] Update specs, commit authorized owned files, export immutable source and verify actual extracted UI/server.
+- [ ] Record release evidence/journal without closing historical R13 or claiming deployment.

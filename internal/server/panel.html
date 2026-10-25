@@ -7,17 +7,19 @@
 <title>__SERVICE_TITLE__ · 控制台</title>
 <style>
 :root{
-  --canvas:#f7f7f8;--surface:#fff;--subtle:#fafafa;--hover:#f4f4f5;--line:#e7e7e9;
-  --text:#202024;--muted:#707078;--accent:__ACCENT__;--blue:#2463c5;--blue-soft:#edf3fd;
-  --ok:#16815e;--ok-bg:#edf8f3;--warn:#a46913;--warn-bg:#fcf5e8;--bad:#c33c43;--bad-bg:#fdf0f1;
-  --radius:12px;--radius-control:8px;--shadow:0 1px 2px #00000005;
-  --font-sans:ui-sans-serif,system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
-  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light;
+  --canvas:#f2f4f7;--surface:#fff;--subtle:#fafbfd;--hover:#f1f5fc;--line:#e9edf2;--line-strong:#dce2eb;
+  --text:#232b3a;--secondary:#596477;--muted:#7d8798;--accent:#3169df;--blue:#3169df;--blue-soft:#edf3ff;
+  --nav-active:#cfddf2;--nav-border:#9fb5d6;--nav-text:#232b3a;--on-blue:#fff;
+  --ok:#18836b;--ok-bg:#edf8f3;--warn:#a56b1b;--warn-bg:#fcf5e8;--bad:#cb4b51;--bad-bg:#fdf0f1;
+  --radius:12px;--radius-control:8px;--shadow:none;
+  --font-sans:'DM Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light;
 }
 :root[data-theme="dark"]{
-  --canvas:#232325;--surface:#2b2b2e;--subtle:#303033;--hover:#37373a;--line:#414144;
-  --text:#f1f1f3;--muted:#b1b1ba;--accent:#6eacfb;--blue:#a2c8ff;--blue-soft:#2a3c56;
-  --ok:#7dd9b3;--ok-bg:#263f35;--warn:#f0c477;--warn-bg:#443b2c;--bad:#ffa2aa;--bad-bg:#482f34;color-scheme:dark;
+  --canvas:#14181f;--surface:#1b2029;--subtle:#1e242e;--hover:#242d3b;--line:#2a313e;--line-strong:#3b4455;
+  --text:#e1e7f0;--secondary:#abb5c5;--muted:#8590a1;--accent:#78a2ff;--blue:#78a2ff;--blue-soft:#263653;
+  --nav-active:#b8cceb;--nav-border:#829dc6;--nav-text:#182437;--on-blue:#15243d;
+  --ok:#70d0ae;--ok-bg:#203b32;--warn:#e8ba70;--warn-bg:#3d3426;--bad:#f09a9f;--bad-bg:#402c33;color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;color:var(--text);background:var(--canvas);font:14px/1.5 var(--font-sans);-webkit-font-smoothing:antialiased}
@@ -37,47 +39,54 @@ svg{display:block}
 .muted{color:var(--muted)}.small{font-size:12px}
 .skip-link{position:fixed;top:-50px;left:12px;z-index:100;padding:8px 12px;border-radius:8px;background:var(--surface);border:1px solid var(--line)}
 .skip-link:focus{top:8px}
-.app{height:100dvh;display:flex;flex-direction:column}
-.app-header{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border-bottom:1px solid var(--line)}
+.app{height:100dvh;display:flex;flex-direction:column;background:var(--canvas)}
+.app-header{height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 18px 0 16px;background:var(--canvas)}
 .header-brand,.header-actions,.brand{display:flex;align-items:center;gap:10px;min-width:0}
-.logo{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;background:var(--text);color:var(--surface);border-radius:4px;font:700 11px/1 var(--font-mono);letter-spacing:-.5px}
-.brand-name{font-size:14px;font-weight:650;letter-spacing:-.3px;color:var(--text)}
-.header-separator{height:16px;border-left:1px solid var(--line);margin:0 3px}
-.header-caption{color:var(--muted);font-size:12px}.header-actions{gap:6px}
+.logo{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;background:var(--blue);color:#fff;border-radius:8px}
+.logo .icon{width:20px;height:20px;stroke-width:2}
+.brand-name{font-size:16px;font-weight:650;letter-spacing:-.5px;color:var(--text)}
+.header-separator{height:16px;border-left:1px solid var(--line-strong);margin:0 8px}
+.header-caption{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;white-space:nowrap}.header-caption strong{color:var(--secondary);font-weight:500}.header-caption .icon{width:13px;height:13px}.header-actions{gap:7px}
 .app-body{display:flex;flex:1;min-height:0;min-width:0}
-.sidebar{width:208px;flex-shrink:0;display:flex;flex-direction:column;padding:20px 12px 12px;min-height:0}
+.sidebar{width:180px;flex-shrink:0;display:flex;flex-direction:column;padding:8px 12px 12px;min-height:0;overflow-y:auto;scrollbar-width:thin}
 .nav-group{display:flex;flex-direction:column;gap:4px;margin-bottom:24px}
-.nav-label{font-size:11px;font-weight:500;color:var(--muted);padding:0 10px;margin-bottom:5px;letter-spacing:.4px}
-.nav-item{display:flex;align-items:center;gap:10px;min-height:34px;padding:7px 10px;color:var(--muted);border-radius:8px;font-size:13px;transition:background .12s,color .12s}
+.nav-label{font-size:11px;font-weight:500;color:var(--muted);padding:8px 10px;margin-bottom:1px;letter-spacing:.5px}
+.nav-item{position:relative;display:flex;align-items:center;gap:10px;min-height:36px;padding:8px 10px;color:var(--secondary);border-radius:8px;font-size:13px;white-space:nowrap;transition:background .12s,color .12s}
+.nav-item>.icon{width:17px;height:17px}
 .nav-item:hover{background:var(--hover);color:var(--text)}
-.nav-item[aria-current="page"]{background:var(--blue-soft);color:var(--blue);font-weight:600}
-.nav-count{margin-left:auto;color:inherit;font:11px var(--font-mono)}
+.nav-item[aria-current="page"]{background:var(--nav-active);color:var(--nav-text);font-weight:550;box-shadow:inset 0 0 0 1px var(--nav-border)}
+.nav-item[aria-current="page"]::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 2px 2px 0;background:var(--nav-text)}
+.nav-count{margin-left:auto;color:inherit;font:10px var(--font-mono)}
 .sidebar-mobile-head,#sidebarToggle,.drawer-backdrop{display:none}
-.workspace{min-width:0;min-height:0;flex:1;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:16px;margin:8px 8px 8px 0;overflow:hidden;box-shadow:var(--shadow)}
-.page-header{padding:22px 24px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-shrink:0}
-.page-header h1{margin:0;font-size:18px;font-weight:650;line-height:1.4;letter-spacing:-.3px}
+.sidebar-collapsed .sidebar{width:64px;padding-left:10px;padding-right:10px}
+.sidebar-collapsed .nav-label{font-size:0;height:24px;padding:0}
+.sidebar-collapsed .nav-item{justify-content:center;padding:9px 0}
+.sidebar-collapsed .nav-text,.sidebar-collapsed .nav-count{display:none}
+.workspace{min-width:0;min-height:0;flex:1;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:16px;margin:8px 8px 8px 0;overflow:hidden}
+.page-header{padding:20px 22px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-shrink:0;width:100%;max-width:1600px;margin:0 auto}
+.page-header h1{margin:0;font-size:21px;font-weight:650;line-height:1.4;letter-spacing:-.5px}
 .page-header p{margin:5px 0 0;color:var(--muted);font-size:12px}
-.page-content{overflow:auto;min-height:0;padding:0 24px 24px;scrollbar-gutter:stable}
-.page-content>section{display:flex;flex-direction:column;gap:18px;min-width:0}
+.page-content{overflow:auto;min-height:0;padding:0 22px 22px;scrollbar-gutter:stable}
+.page-content>section{display:flex;flex-direction:column;gap:18px;min-width:0;max-width:1554px;margin:0 auto}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:32px;padding:5px 11px;border:1px solid var(--line);border-radius:var(--radius-control);background:var(--surface);color:var(--text);font-size:12px;font-weight:500;line-height:20px;white-space:nowrap;transition:background .12s,border-color .12s}
 .btn:hover:enabled{background:var(--hover);border-color:var(--muted)}
-.btn.primary{background:var(--text);color:var(--surface);border-color:var(--text)}
-.btn.primary:hover:enabled{opacity:.88;background:var(--text)}
+.btn.primary{background:var(--blue);color:var(--on-blue);border-color:var(--blue)}
+.btn.primary:hover:enabled{background:color-mix(in srgb,var(--blue) 88%,#000);border-color:transparent}
 .btn.ghost{background:transparent;border-color:transparent}
 .btn.ghost:hover:enabled{border-color:transparent;background:var(--hover)}
 .btn.danger{color:var(--bad)}.btn.danger:hover:enabled{background:var(--bad-bg);border-color:var(--bad)}
 .btn.icon-btn{width:32px;padding:6px;flex-shrink:0}
 .btn.small-btn{min-height:28px;border-radius:8px;padding:3px 9px;font-size:12px}
-.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.stat{border:1px solid var(--line);border-radius:var(--radius);padding:17px 18px;background:var(--surface);min-width:0}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{border:1px solid var(--line);border-radius:var(--radius);padding:14px 15px 12px;background:var(--surface);min-width:0;min-height:130px}
 .stat-head{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--muted);font-size:12px}
-.stat-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:4px;background:var(--subtle);color:var(--muted)}
-.stat .v{font-size:26px;font-weight:600;letter-spacing:-.6px;line-height:1.25;margin:9px 0 6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stat-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--blue-soft);color:var(--blue)}
+.stat .v{font-size:29px;font-weight:650;letter-spacing:-.6px;line-height:1.25;margin:9px 0 6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .stat .hint{font-size:11px;color:var(--muted)}
 .two-column{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
 .card{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);min-width:0;overflow:hidden}
-.card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;min-height:54px}
-.card-h h2{font-size:13px;font-weight:600;margin:0}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;min-height:58px}
+.card-h h2{font-size:14px;font-weight:650;margin:0}
 .card-h p{font-size:12px;color:var(--muted);margin:4px 0 0}
 .card-b{padding:0 18px 18px}
 .card-foot{padding:12px 18px;background:var(--subtle);border-top:1px solid var(--line);color:var(--muted);font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -109,9 +118,9 @@ svg{display:block}
 .search-field>.input{padding-left:32px;width:230px}
 .table-card .card-h{border-bottom:1px solid var(--line)}.table-scroll{overflow-x:auto;max-width:100%}
 .table{width:100%;border-collapse:collapse;font-size:13px;text-align:left;table-layout:fixed}
-.table th{padding:10px 14px;color:var(--muted);background:var(--subtle);font-size:11px;font-weight:500;white-space:nowrap;border-bottom:1px solid var(--line)}
-.table td{padding:14px;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
-.table tr:last-child td{border-bottom:0}.table tbody tr:hover{background:var(--subtle)}
+.table th{padding:11px 14px;color:var(--muted);background:var(--subtle);font-size:12px;font-weight:500;white-space:nowrap;border-bottom:1px solid var(--line)}
+.table td{padding:19px 14px;vertical-align:top;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.table tr:last-child td{border-bottom:0}.table tbody tr:hover{background:color-mix(in srgb,var(--blue-soft) 45%,var(--surface))}
 .table td strong{font-size:13px;font-weight:550}.table td .secondary{display:block;color:var(--muted);font-size:11px;margin-top:5px;overflow-wrap:anywhere}
 #acctTable{min-width:930px}
 #acctTable th:nth-child(1){width:18%}#acctTable th:nth-child(2){width:18%}#acctTable th:nth-child(3){width:15%}#acctTable th:nth-child(4){width:27%}#acctTable th:nth-child(5){width:22%}
@@ -131,7 +140,7 @@ svg{display:block}
 .usage-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;min-width:0}.usage-table{min-width:620px}.usage-table th:first-child{width:30%}.usage-table th:last-child{width:25%}.usage-table td{padding:12px}
 .usage-caption{margin:12px 0 0;color:var(--muted);font-size:11px;overflow-wrap:anywhere}.usage-badge{margin-top:7px}
 @media(max-width:1150px){.usage-groups{grid-template-columns:1fr}}
-@media(max-width:767px){.usage-stats{grid-template-columns:1fr}.usage-stats .stat{padding:12px 14px}.usage-stats .v{margin:6px 0;font-size:22px}.usage-groups{gap:14px}}
+@media(max-width:800px){.usage-stats{grid-template-columns:1fr}.usage-stats .stat{padding:12px 14px}.usage-stats .v{margin:6px 0;font-size:22px}.usage-groups{gap:14px}}
 .outcome-label{font-size:11px;display:block;margin-top:6px;overflow-wrap:anywhere;color:var(--bad)}
 .outcome-label.success{color:var(--ok)}.outcome-label.canceled{color:var(--warn)}
 .notice{padding:11px 14px;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--muted);background:var(--subtle);overflow-wrap:anywhere}
@@ -154,18 +163,36 @@ svg{display:block}
 .settings-note{font-size:11px;color:var(--muted);margin:12px 0 0;overflow-wrap:anywhere}
 .toast{position:fixed;right:20px;bottom:20px;max-width:min(420px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);color:var(--text);padding:12px 16px;border-radius:8px;box-shadow:0 4px 20px #00000012;opacity:0;transform:translateY(8px);transition:opacity .15s,transform .15s;z-index:90;pointer-events:none;font-size:12px;overflow-wrap:anywhere}
 .toast.show{opacity:1;transform:none}
-.login{height:100dvh;overflow:auto;display:grid;place-items:center;padding:24px}
-.login-box{width:min(400px,100%);border:1px solid var(--line);border-radius:16px;padding:30px;background:var(--surface)}
-.login-box .brand{margin-bottom:26px}.login-box .logo{height:34px;width:34px;border-radius:4px}
-.login-box h1{margin:0;font-size:16px;font-weight:650}.login-box p{color:var(--muted);font-size:12px;margin:5px 0 0}
-.field{display:flex;flex-direction:column;gap:8px}.field label{font-size:12px;font-weight:500}.field input{height:38px}
-.login-box .btn{width:100%;height:36px;margin-top:16px}.login-box .login-note{font-size:11px;line-height:1.7;margin-top:20px}
-.login-error{color:var(--bad);font-size:12px;margin-top:12px;overflow-wrap:anywhere}
-.modal-mask{position:fixed;inset:0;background:#11111865;display:flex;align-items:center;justify-content:center;padding:20px;z-index:80;overflow:auto}
+.boot-screen{min-height:100dvh;display:flex;align-items:center;justify-content:center;gap:15px;background:var(--surface);color:var(--secondary);font-size:14px}
+.boot-screen .logo{margin-right:10px}.boot-screen>.spin{width:20px;height:20px;margin:0;border-width:2px;animation-duration:1.2s}
+.login-shell{height:100dvh;overflow:auto;display:grid;grid-template-columns:1.08fr 1fr;background:var(--surface)}
+.login-story{padding:42px 50px 28px;background:var(--subtle);border-right:1px solid var(--line);display:flex;flex-direction:column;position:relative;overflow:hidden;min-height:100dvh}
+.login-story::after{content:"";position:absolute;inset:0;background-image:radial-gradient(var(--line-strong) .65px,transparent .65px);background-size:21px 21px;opacity:.45;pointer-events:none}
+.login-story>*{position:relative;z-index:1}.login-brand{align-self:flex-start}.login-brand .logo{width:34px;height:34px}.login-brand .brand-name{font-size:19px}
+.login-story-content{margin:auto;max-width:450px;padding:70px 0 35px;width:100%}
+.eyebrow{font-size:11px;letter-spacing:1.6px;color:var(--muted)}
+.login-story-content>.eyebrow{color:var(--blue);margin:0 0 24px;display:flex;align-items:center;gap:9px}.blue-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--blue)}
+.login-story-content h1{margin:0;font-size:38px;font-weight:600;line-height:1.65;letter-spacing:-1.5px}
+.login-story-content>p:last-child{font-size:13px;color:var(--secondary);line-height:1.9;max-width:360px}
+.network-art{position:relative;width:100%;height:240px;margin-top:35px}
+.network-lines{position:absolute;top:15px;left:0;width:100%;height:200px;overflow:visible}
+.network-lines path{fill:none;stroke:var(--line-strong);stroke-width:1.5;stroke-dasharray:4 4}
+.network-center{position:absolute;left:10px;top:78px;display:flex;flex-direction:column;align-items:center;gap:9px;border:1px solid color-mix(in srgb,var(--blue) 20%,var(--surface));background:var(--surface);border-radius:12px;width:104px;padding:23px 15px;color:var(--blue);box-shadow:0 5px 20px #3169df06}
+.network-center>.icon{width:27px;height:27px}.network-center>span{font-size:12px;font-weight:550;color:var(--text)}
+.network-node{position:absolute;right:10px;display:flex;align-items:center;gap:10px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:12px;color:var(--secondary);width:140px}
+.network-node>.icon{color:var(--blue)}.network-node>i{width:5px;height:5px;background:var(--ok);border-radius:50%;margin-left:auto;flex-shrink:0}.node-1{top:20px;transform:rotate(-3deg)}.node-2{top:97px;right:0}.node-3{top:174px;transform:rotate(3deg)}
+.login-main{display:flex;align-items:center;justify-content:center;position:relative;padding:65px 30px;min-height:100dvh}
+.login-theme{position:absolute;right:32px;top:35px}.login-form{width:100%;max-width:320px}
+.login-lock{display:grid;place-items:center;width:48px;height:48px;background:var(--blue-soft);border:1px solid color-mix(in srgb,var(--blue) 10%,var(--surface));border-radius:16px;color:var(--blue);margin-bottom:28px}.login-lock>.icon{width:22px;height:22px}
+.login-form>.eyebrow{margin:0 0 8px}.login-form>h2{margin:0;font-size:25px;font-weight:600;letter-spacing:-.5px}.login-form>.login-intro{font-size:14px;color:var(--muted);margin:10px 0 33px}
+.field{display:flex;flex-direction:column;gap:9px}.field label{font-size:13px;font-weight:500;color:var(--secondary)}.login-form .field input{height:44px;width:100%;padding:12px;font-size:14px;border-color:var(--line-strong)}
+.login-form .login-submit{width:100%;min-height:42px;margin-top:21px;justify-content:space-between;padding:10px 15px;font-size:13px}.login-submit>span{flex:1;text-align:center}
+.login-error{color:var(--bad);font-size:12px;margin-top:15px;overflow-wrap:anywhere}
+.modal-mask{position:fixed;inset:0;background:#12203560;backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:80;overflow:auto}
 .modal{width:min(560px,100%);max-height:calc(100dvh - 40px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 48px #00000020}
-.modal-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}.modal-h h2{margin:0;font-size:15px;font-weight:600}
-.modal-b{padding:20px;display:flex;flex-direction:column;gap:16px}
-.modal-f{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;background:var(--subtle)}
+.modal-h{position:sticky;top:0;z-index:1;background:var(--surface);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 25px;border-bottom:1px solid var(--line)}.modal-h h2{margin:0;font-size:15px;font-weight:600}
+.modal-b{padding:24px 25px;display:flex;flex-direction:column;gap:16px}
+.modal-f{position:sticky;bottom:0;padding:16px 25px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;background:var(--subtle)}
 .steps{padding-left:18px;font-size:12px;color:var(--muted);margin:0;display:flex;flex-direction:column;gap:7px}
 .urlbox{background:var(--subtle);border:1px solid var(--line);border-radius:8px;padding:11px 12px;overflow-wrap:anywhere;font:11px/1.7 var(--font-mono);max-height:100px;overflow:auto;user-select:all}
 .modal-field{display:flex;flex-direction:column;gap:7px;min-width:0}.modal-field label,.modal-field .field-label{color:var(--muted);font-size:12px}
@@ -175,25 +202,34 @@ svg{display:block}
 @keyframes spin{to{transform:rotate(360deg)}}
 .theme-sun{display:none}:root[data-theme="dark"] .theme-sun{display:block}:root[data-theme="dark"] .theme-moon{display:none}
 @media(min-width:1600px){.page-header{padding:25px 32px 22px}.page-content{padding:0 32px 32px}}
-@media(max-width:1150px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.two-column{grid-template-columns:1fr}.settings-grid{grid-template-columns:1fr}.page-header{padding:20px 18px 16px}.page-content{padding:0 18px 20px}.header-caption{display:none}}
-@media(max-width:767px){
-  .app-header{padding:0 10px;gap:8px}.header-brand{gap:8px}.header-actions{gap:2px}.header-separator{display:none}.brand-name{font-size:13px}.header-actions .refresh-label,.logout-label{display:none}
-  #btnRefresh,#btnLogout{width:32px;padding:6px}.app-header .logo{width:25px;height:25px;border-radius:4px}
-  #sidebarToggle{display:inline-flex}.sidebar-mobile-head{display:flex;align-items:center;justify-content:space-between;padding:0 8px 20px;font-size:13px;font-weight:600}
-  .sidebar{position:fixed;top:0;bottom:0;left:0;z-index:65;width:min(272px,calc(100vw - 48px));padding:16px 12px;background:var(--surface);border-right:1px solid var(--line);transform:translateX(-100%);visibility:hidden;transition:transform .15s,visibility .15s}
-  .drawer-open .sidebar{transform:none;visibility:visible}.drawer-open .drawer-backdrop{display:block;position:fixed;inset:0;background:#11111865;border:0;z-index:60}
-  .nav-item{min-height:40px}.workspace{margin:6px;border-radius:16px}.page-header{padding:18px 16px 16px;align-items:flex-start}.page-header h1{font-size:16px}.page-header p{font-size:11px}.page-content{padding:0 16px 20px;scrollbar-gutter:auto}
+@media(max-width:1050px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.two-column{grid-template-columns:1fr}.settings-grid{grid-template-columns:1fr}.page-header{padding:20px 18px 16px}.page-content{padding:0 18px 20px}.header-caption{font-size:11px}}
+@media(max-width:800px){
+  .app-header{padding:0 12px;gap:8px}.header-brand{gap:8px}.header-actions{gap:2px}.header-separator{display:none}.brand-name{font-size:13px}.header-actions .refresh-label,.logout-label{display:none}
+  #btnRefresh,#btnLogout{width:32px;padding:6px}.app-header .logo{width:30px;height:30px;border-radius:8px}
+  #sidebarToggle{display:inline-flex}#sidebarCollapse{display:none}.header-caption{display:none}.sidebar-mobile-head{display:flex;align-items:center;justify-content:space-between;padding:0 8px 20px;font-size:13px;font-weight:600}
+  .sidebar,.sidebar-collapsed .sidebar{position:fixed;top:52px;bottom:0;left:0;z-index:65;width:208px;padding:12px;background:var(--canvas);border-right:1px solid var(--line);transform:translateX(-100%);visibility:hidden;transition:transform .15s,visibility .15s}
+  .drawer-open .sidebar{transform:none;visibility:visible}.drawer-open .drawer-backdrop{display:block;position:fixed;inset:52px 0 0;background:#12203560;backdrop-filter:blur(2px);border:0;z-index:60}
+  .nav-item{min-height:40px}.sidebar-collapsed .nav-item{justify-content:flex-start;padding:8px 10px}.sidebar-collapsed .nav-text,.sidebar-collapsed .nav-count{display:initial}.sidebar-collapsed .nav-label{font-size:11px;height:auto;padding:8px 10px}.workspace{margin:8px;border-radius:16px}.page-header{padding:18px 16px 16px;align-items:flex-start}.page-header h1{font-size:16px}.page-header p{font-size:11px}.page-content{padding:0 16px 20px;scrollbar-gutter:auto}
   .page-content>section{gap:14px}.grid{gap:10px}.stat{padding:14px;border-radius:12px}.stat .v{font-size:23px}.stat .hint{font-size:10px}.stat-icon{width:24px;height:24px}.stat-head{font-size:11px}
   .two-column,.settings-grid{gap:14px}.card-h{padding:14px 16px}.card-b{padding:0 16px 16px}.card-foot{padding:12px 16px}.health-heading strong{font-size:18px}.health-legend{gap:5px}.legend-label{font-size:10px}
   .toolbar{align-items:stretch;gap:10px}.toolbar-group{width:100%}.search-field{flex:1}.search-field>.input{width:100%}.toolbar-group select{max-width:130px}
   .toolbar-group.operations{gap:6px}.toolbar-group.operations .btn{flex:1 1 auto}.input,select{font-size:16px;height:36px}.filter-field select{font-size:13px}.filter-field{flex-basis:calc(50% - 10px)}.filter-field.outcome-field{flex-basis:100%}.filter-field.status-field{flex-basis:90px}.request-filters .btn{height:36px}
   .model-grid{grid-template-columns:1fr;gap:10px}.model-item{padding:14px}.page-header .btn{font-size:11px;padding:5px 9px}.card-h .small{font-size:11px}.modal-mask{padding:12px}.modal{max-height:calc(100dvh - 24px);border-radius:16px}.modal-b{padding:16px}.modal-f{padding:12px 16px;gap:7px}.modal-f .btn{min-height:36px}.toast{right:16px;bottom:16px}
 }
+@media(max-width:1050px){.login-story{padding:32px 30px 24px}.login-story-content h1{font-size:32px}.login-story-content{padding-top:50px}.network-node{right:0;width:128px;padding:14px 12px}.network-center{left:0;width:96px}}
+@media(max-width:600px){
+ .login-shell{display:flex;flex-direction:column}.login-story{min-height:0;overflow:visible;padding:22px 24px;background:var(--surface);border:0}.login-story::after,.login-story-content{display:none}.login-brand .brand-name{font-size:17px}.login-brand .logo{width:30px;height:30px}
+ .login-main{min-height:0;flex:1;padding:38px 25px 65px;position:static}.login-form{max-width:330px}.login-theme{top:22px;right:24px}.login-form>.login-intro{font-size:13px}.login-form .field input{font-size:16px}.boot-screen{gap:12px;font-size:13px}.boot-screen .logo{margin-right:4px}.login-lock{margin-bottom:25px}
+}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" class="hidden" aria-hidden="true">
+  <symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H6a2 2 0 0 0-2 2v4a3 3 0 0 1-2 3 3 3 0 0 1 2 3v4a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v4a3 3 0 0 0 2 3 3 3 0 0 0-2 3v4a2 2 0 0 1-2 2h-2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6zM8 12l3 3 5-6"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18m6-13-3 4 3 4"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
   <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 20v-2a6 6 0 0 0-4-5.7"/></symbol>
   <symbol id="i-requests" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM14 3v5h4M9 12h6M9 16h6"/></symbol>
@@ -214,22 +250,30 @@ svg{display:block}
   <symbol id="i-link" viewBox="0 0 24 24"><path d="m10 14 4-4M8 16l-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 12a4 4 0 0 0 6 0l5-5a4 4 0 0 0-6-6l-1 1" transform="translate(1 0) scale(.9 1)"/></symbol>
 </svg>
 <a class="skip-link" id="skipLink" href="#mainContent">跳到主要内容</a>
-<div id="bootView" class="login"><div class="login-box" role="status"><div class="brand"><div class="logo">__LOGO__</div><div><h1>__SERVICE_TITLE__</h1><p>管理控制台</p></div></div><p><span class="spin" aria-hidden="true"></span>正在连接服务…</p></div></div>
-<div id="loginView" class="login hidden">
-  <form class="login-box" id="loginForm">
-    <div class="brand"><div class="logo">__LOGO__</div><div><h1>__SERVICE_TITLE__</h1><p>管理控制台</p></div></div>
-    <div class="field"><label for="keyInput">API Key</label><input class="input" id="keyInput" type="password" placeholder="输入服务 API Key" autocomplete="off" required/></div>
-    <div id="loginError" class="login-error hidden" role="alert"></div>
-    <button class="btn primary" id="loginBtn" type="submit">进入控制台<svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
-    <p class="login-note">密钥保存在本机浏览器 localStorage，仅用于此服务的 Bearer 身份验证。</p>
-  </form>
+<div id="bootView" class="boot-screen" role="status" aria-live="polite" aria-busy="true"><span class="logo"><svg class="icon" aria-hidden="true"><use href="#i-braces"/></svg></span><span class="spin" aria-hidden="true"></span><span>正在连接控制台</span></div>
+<div id="loginView" class="login-shell hidden">
+  <section class="login-story" aria-label="服务连接">
+    <div class="brand login-brand"><span class="logo"><svg class="icon" aria-hidden="true"><use href="#i-braces"/></svg></span><span class="brand-name">__SERVICE_TITLE__</span></div>
+    <div class="login-story-content"><p class="eyebrow"><i class="blue-dot" aria-hidden="true"></i>API GATEWAY / CONSOLE</p><h1>连接你的账号，<br/>管理每一次请求。</h1>
+      <div class="network-art" aria-hidden="true"><svg class="network-lines" viewBox="0 0 450 200" preserveAspectRatio="none"><path d="M100 110H200Q225 110 225 86V40Q225 25 260 25H330M100 110H330M100 110H200Q225 110 225 135V180Q225 190 260 190H330"/></svg><div class="network-center"><svg class="icon"><use href="#i-braces"/></svg><span>API 网关</span></div><div class="network-node node-1"><svg class="icon"><use href="#i-users"/></svg><span>授权账号</span><i></i></div><div class="network-node node-2"><svg class="icon"><use href="#i-models"/></svg><span>模型目录</span><i></i></div><div class="network-node node-3"><svg class="icon"><use href="#i-requests"/></svg><span>请求审计</span><i></i></div></div>
+      <p>集中管理账号池、模型与连接记录。</p>
+    </div>
+  </section>
+  <main class="login-main"><button class="btn icon-btn ghost login-theme" id="loginThemeToggle" type="button" aria-label="切换主题"><svg class="icon theme-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="icon theme-sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+    <form class="login-form" id="loginForm"><div class="login-lock"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></div><p class="eyebrow">管理控制台</p><h2>欢迎回来</h2><p class="login-intro">输入管理密钥，进入控制台。</p>
+      <div class="field"><label for="keyInput">API Key</label><input class="input" id="keyInput" type="password" placeholder="输入服务 API Key" autocomplete="off" required/></div>
+      <div id="loginError" class="login-error hidden" role="alert"></div>
+      <button class="btn primary login-submit" id="loginBtn" type="submit"><span>进入控制台</span><svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></button>
+    </form>
+  </main>
 </div>
 <div id="appView" class="app hidden">
   <header class="app-header" id="appHeader">
     <div class="header-brand">
+      <button id="sidebarCollapse" class="btn icon-btn ghost" type="button" aria-label="收起侧栏" aria-controls="sidebar" aria-expanded="true"><svg class="icon" aria-hidden="true"><use href="#i-panel"/></svg></button>
       <button id="sidebarToggle" class="btn icon-btn ghost" type="button" aria-label="打开导航菜单" aria-controls="sidebar" aria-expanded="false"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></button>
-      <a class="brand" href="#overview" data-page="overview" aria-label="CodeArts2API 总览"><span class="logo">__LOGO__</span><span class="brand-name">__SERVICE_TITLE__</span></a>
-      <span class="header-separator" aria-hidden="true"></span><span class="header-caption">管理控制台</span>
+      <a class="brand" href="#overview" data-page="overview" aria-label="CodeArts2API 总览"><span class="logo"><svg class="icon" aria-hidden="true"><use href="#i-braces"/></svg></span><span class="brand-name">__SERVICE_TITLE__</span></a>
+      <span class="header-separator" aria-hidden="true"></span><span class="header-caption"><span>控制台</span><svg class="icon" aria-hidden="true"><use href="#i-chevron"/></svg><strong id="breadcrumbTitle">总览</strong></span>
     </div>
     <div class="header-actions">
       <button class="btn ghost" id="btnRefresh" type="button" aria-label="刷新控制台"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg><span class="refresh-label">刷新</span></button>
@@ -243,13 +287,13 @@ svg{display:block}
       <div class="sidebar-mobile-head"><span>控制台导航</span><button class="btn icon-btn ghost" id="sidebarClose" type="button" aria-label="关闭导航菜单"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
       <nav aria-label="主导航">
         <div class="nav-group"><div class="nav-label">工作空间</div>
-          <a class="nav-item" href="#overview" data-page="overview" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>总览</a>
-          <a class="nav-item" href="#accounts" data-page="accounts"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg>账号管理<span class="nav-count" id="navAccountCount">—</span></a>
-          <a class="nav-item" href="#requests" data-page="requests"><svg class="icon" aria-hidden="true"><use href="#i-requests"/></svg>请求审计</a>
-          <a class="nav-item" href="#connections" data-page="connections"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>连接日志</a>
-          <a class="nav-item" href="#models" data-page="models"><svg class="icon" aria-hidden="true"><use href="#i-models"/></svg>模型目录<span class="nav-count" id="navModelCount">—</span></a>
+          <a class="nav-item" href="#overview" data-page="overview" aria-current="page" title="总览"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg><span class="nav-text">总览</span></a>
+          <a class="nav-item" href="#accounts" data-page="accounts" title="账号管理"><svg class="icon" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-text">账号管理</span><span class="nav-count" id="navAccountCount">—</span></a>
+          <a class="nav-item" href="#requests" data-page="requests" title="请求审计"><svg class="icon" aria-hidden="true"><use href="#i-requests"/></svg><span class="nav-text">请求审计</span></a>
+          <a class="nav-item" href="#connections" data-page="connections" title="连接日志"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg><span class="nav-text">连接日志</span></a>
+          <a class="nav-item" href="#models" data-page="models" title="模型目录"><svg class="icon" aria-hidden="true"><use href="#i-models"/></svg><span class="nav-text">模型目录</span><span class="nav-count" id="navModelCount">—</span></a>
         </div>
-        <div class="nav-group"><div class="nav-label">系统</div><a class="nav-item" href="#settings" data-page="settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>运行配置</a></div>
+        <div class="nav-group"><div class="nav-label">系统</div><a class="nav-item" href="#settings" data-page="settings" title="运行配置"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg><span class="nav-text">运行配置</span></a></div>
       </nav>
     </aside>
     <main class="workspace" id="mainContent" tabindex="-1">
@@ -337,11 +381,11 @@ const viewInfo = {
   models:["模型目录","重新拉取上游目录，查看来源结果与账号模型排除。"],
   settings:["运行配置","查看当前生效的限制、自动任务与构建信息。"]
 };
-let activePage = "overview", overviewData = null, authEpoch = 0, overviewVersion = 0;
+let activePage = "overview", overviewData = null, authEpoch = 0, overviewVersion = 0, authController = null;
 const catalogState = {data:null,refresh:null,busy:false,version:0,timer:null,controller:null};
 const connState = {data:null,busy:false,version:0,timer:null,controller:null,open:new Set()};
 const pendingAccounts = new Set();
-const mobileQuery = window.matchMedia("(max-width: 767px)");
+const mobileQuery = window.matchMedia("(max-width: 800px)");
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 let themePreference = "";
 
@@ -371,14 +415,14 @@ function applyTheme(){
   const theme = themePreference || (darkQuery.matches ? "dark" : "light");
   document.documentElement.dataset.theme = theme;
   const label = theme === "dark" ? "切换为浅色模式" : "切换为深色模式";
-  $("themeToggle").setAttribute("aria-label",label);
-  $("themeToggle").setAttribute("aria-pressed",String(theme === "dark"));
-  $("themeToggle").title = label;
+  for (const id of ["themeToggle","loginThemeToggle"]){
+    $(id).setAttribute("aria-label",label); $(id).setAttribute("aria-pressed",String(theme === "dark")); $(id).title = label;
+  }
 }
 try { const saved = localStorage.getItem(THEME_STORE); if (saved === "light" || saved === "dark") themePreference = saved; } catch {}
 applyTheme();
 darkQuery.addEventListener("change",() => { if (!themePreference) applyTheme(); });
-$("themeToggle").onclick = () => {
+$("themeToggle").onclick = $("loginThemeToggle").onclick = () => {
   themePreference = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   try { localStorage.setItem(THEME_STORE,themePreference); } catch {}
   applyTheme();
@@ -409,6 +453,11 @@ function setDrawer(open, restoreFocus=true){
   if (open) $("sidebarClose").focus();
   else if (wasOpen && restoreFocus) $("sidebarToggle").focus();
 }
+$("sidebarCollapse").onclick = () => {
+  const collapsed = $("appView").classList.toggle("sidebar-collapsed");
+  $("sidebarCollapse").setAttribute("aria-expanded",String(!collapsed));
+  $("sidebarCollapse").setAttribute("aria-label",collapsed ? "展开侧栏" : "收起侧栏");
+};
 $("sidebarToggle").onclick = () => setDrawer(!$("appView").classList.contains("drawer-open"));
 $("sidebarClose").onclick = () => setDrawer(false);
 $("drawerBackdrop").onclick = () => setDrawer(false);
@@ -423,7 +472,7 @@ function routePage(moveFocus=false){
   document.querySelectorAll(".nav-item[data-page]").forEach(element => {
     if (element.dataset.page === page) element.setAttribute("aria-current","page"); else element.removeAttribute("aria-current");
   });
-  $("pageTitle").textContent = viewInfo[page][0];
+  $("pageTitle").textContent = $("breadcrumbTitle").textContent = viewInfo[page][0];
   $("pageDescription").textContent = viewInfo[page][1];
   $("btnAddAccount").hidden = page !== "accounts";
   document.title = viewInfo[page][0] + " · __SERVICE_TITLE__";
@@ -871,26 +920,40 @@ $("btnReqReset").onclick = () => { Object.assign(reqState,{outcome:"",model:"",a
 $("btnReqRefresh").onclick = async () => { if (reqState.loading) return; try { await loadRequests(true); toast("请求记录已刷新"); } catch(error){ toast(error.message,false); } };
 $("btnReqMore").onclick = () => { if (!reqState.loading && reqState.hasMore) loadRequests(false).catch(() => {}); };
 
-async function loadOverview(){
+async function loadOverview(opts={}){
   const version = ++overviewVersion, epoch = authEpoch;
-  const data = await api("/admin/api/overview");
+  const data = await api("/admin/api/overview",opts);
   if (epoch === authEpoch && version === overviewVersion) render(data);
   return data;
 }
 async function showApp(){
-  const epoch = ++authEpoch;
+  const epoch = ++authEpoch, hadKey = !!getKey();
+  if (authController) authController.abort();
+  const controller = new AbortController(); authController = controller;
+  let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); },15000);
   $("loginBtn").disabled = true; $("loginError").classList.add("hidden");
-  try { await loadOverview(); }
+  $("loginView").classList.add("hidden"); $("appView").classList.add("hidden");
+  $("bootView").classList.remove("hidden"); $("bootView").setAttribute("aria-busy","true");
+  try { await loadOverview({signal:controller.signal}); }
   catch(error){
     if (epoch !== authEpoch) return;
     clearKey(); showLogin();
-    $("loginError").textContent = error.status === 401 ? "API Key 无效，请重新输入。" : "连接服务失败：" + error.message;
+    if (error.status === 401 && !hadKey) return;
+    $("loginError").textContent = timedOut ? "连接超时，请检查服务后重试。" : error.status === 401 ? "API Key 无效，请重新输入。" : "连接服务失败：" + error.message;
     $("loginError").classList.remove("hidden"); return;
-  } finally { if (epoch === authEpoch) $("loginBtn").disabled = false; }
+  } finally {
+    clearTimeout(timeout);
+    if (authController === controller) authController = null;
+    if (epoch === authEpoch) $("loginBtn").disabled = false;
+  }
   if (epoch !== authEpoch) return;
-  $("bootView").classList.add("hidden"); $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden"); routePage();
+  $("bootView").classList.add("hidden"); $("bootView").setAttribute("aria-busy","false");
+  $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden"); routePage();
 }
 function showLogin(){
+  if (authController){ authController.abort(); authController = null; }
+  $("bootView").setAttribute("aria-busy","false");
   ++authEpoch; ++reqState.version; overviewData = null;
   stopViewPolling(catalogState); stopViewPolling(connState);
   catalogState.data = catalogState.refresh = null; connState.data = null; connState.open.clear();
