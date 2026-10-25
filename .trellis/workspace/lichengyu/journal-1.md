@@ -416,3 +416,25 @@ Rebuilt login, connecting stage and all console views from local CNB reference; 
 ### Next Steps
 
 - User rebuild/recreate production with existing auth/data/config mounts; production rollout and historical R13 remain unverified.
+
+
+## Session 13: R19 image deployment and GitHub CNB releases
+<!-- trellis-session: v=2 fp=72693c2e1005a18f -->
+
+**Date**: 2026-10-26
+**Task**: R19 image deployment and GitHub CNB releases
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Four existing Pi delivered image Compose, scoped auto-updates, gated GitHub/CNB release pipelines and three complete READMEs. Actual140-member export verified;85 Python tests, Go normal/race/vet/build, two Linux architectures, actionlint and Compose matrix pass. No remote publication/deployment; parent R13 open.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `32f33db` | feat: add image deployment and GitHub CNB release pipelines |
+
+### Status
+
+[OK] **Completed**
