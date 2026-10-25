@@ -382,3 +382,37 @@ quality gate remains false.
 ### Next Steps
 
 - Update deployment source and rebuild using existing .env/config/auth/data mounts, then verify actual revision. No real OAuth, push or deployment performed; historical R13 causes remain open.
+
+
+## Session 12: CNB reference console and verified source delivery
+<!-- trellis-session: v=2 fp=a43ea722040c1e18 -->
+
+**Date**: 2026-10-25
+**Task**: CNB reference console and verified source delivery
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Rebuilt login, connecting stage and all console views from local CNB reference; verified committed source ZIP, preserved credentials and kept historical R13 open.
+
+### Main Changes
+
+- Split login, real connecting/auth timeout recovery, reference shell and six-page responsive dark styling.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6623d00818abe770d94344515e787475dfeee535` | feat: redesign console with CNB reference layout and login states |
+
+### Testing
+
+- [OK] Independent review; final four Chrome suites; Go server tests/vet/build;15 release-tool tests; actual extracted compile/routes/replay/embedded UI and all4 browser suites.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- User rebuild/recreate production with existing auth/data/config mounts; production rollout and historical R13 remain unverified.
