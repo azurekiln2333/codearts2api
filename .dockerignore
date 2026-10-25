@@ -1,4 +1,12 @@
-auths
-data
-.git
-*.exe
+# 白名单：默认排除全部，只放行构建镜像必需的文件。
+# 这样实际 .env / config.json / auths / data / .local-test / 旧 ZIP / 平台目录
+# 任何情况下都不会进入构建上下文，即使被 Git 跟踪。
+**
+!Dockerfile
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+!config.example.json

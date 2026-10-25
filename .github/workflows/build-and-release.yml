@@ -1,0 +1,180 @@
+name: Build and release
+
+# Version tags (v*) are the release boundary. Pull requests and branch pushes
+# only validate; only a trusted v* tag may authenticate to GHCR and publish a
+# release. All tag/version/latest/checksum decisions come from
+# scripts/release-metadata.py so this file and .cnb.yml cannot drift apart.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Runs on every push and pull request. A v* tag cannot publish unless this
+  # job (and therefore the Go and release test suites) succeeds first.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: '1.27.x'
+          cache: false
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check pyyaml
+      - name: Go tests
+        run: go test ./...
+      - name: Go race detector
+        run: CGO_ENABLED=1 go test -race ./...
+      - name: Go vet
+        run: go vet ./...
+      - name: Go build
+        run: go build ./...
+      - name: Release metadata helper tests
+        run: python -B scripts/test_release_metadata.py
+      - name: Release tool tests
+        run: python -B scripts/test_release_tools.py
+      - name: Deployment contract tests
+        run: python -B scripts/test_deployment_contracts.py
+
+  # Publishes the checksummed source archive and the GitHub Release. Never runs
+  # for a pull request or a branch push; requires the `test` job.
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Validate release tag and resolve build identity
+        id: meta
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          python -B scripts/release-metadata.py validate-tag --tag "$RELEASE_TAG" > "$RUNNER_TEMP/version.json"
+          python -B scripts/release-metadata.py tag-outputs --tag "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          python -B scripts/release-metadata.py build-info \
+            --commit "${{ github.sha }}" \
+            --time "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --emit env >> "$GITHUB_ENV"
+      - name: Export explicit source archive to a temporary path
+        run: |
+          set -euo pipefail
+          NAME="$(python -B scripts/release-metadata.py archive-name --commit "$CA2A_BUILD_COMMIT")"
+          ARCHIVE="$(python -B scripts/release-metadata.py archive-path \
+            --commit "$CA2A_BUILD_COMMIT" \
+            --output "$RUNNER_TEMP/$NAME")"
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+          python -B scripts/release-source.py --commit "$CA2A_BUILD_COMMIT" --output "$ARCHIVE"
+      - name: Checksum and verify the archive
+        run: |
+          set -euo pipefail
+          python -B scripts/release-metadata.py checksum "$ARCHIVE" --output "$ARCHIVE.sha256"
+          ( cd "$(dirname "$ARCHIVE")" && sha256sum --check "$(basename "$ARCHIVE").sha256" )
+          DIGEST="$(cut -d' ' -f1 "$ARCHIVE.sha256")"
+          echo "DIGEST=$DIGEST" >> "$GITHUB_ENV"
+      - name: Write versioned release notes and manifest
+        run: |
+          set -euo pipefail
+          python -B scripts/release-metadata.py notes \
+            --tag "${{ steps.meta.outputs.tag }}" \
+            --commit "$CA2A_BUILD_COMMIT" \
+            --time "$CA2A_BUILD_TIME" \
+            --archive "$ARCHIVE" \
+            --sha256 "$DIGEST" \
+            --image "ghcr.io/${GITHUB_REPOSITORY,,}" \
+            --output "$RUNNER_TEMP/release-notes.md"
+          python -B scripts/release-metadata.py manifest \
+            --tag "${{ steps.meta.outputs.tag }}" \
+            --commit "$CA2A_BUILD_COMMIT" \
+            --time "$CA2A_BUILD_TIME" \
+            --archive "$ARCHIVE" \
+            --sha256 "$DIGEST" \
+            --image "ghcr.io/${GITHUB_REPOSITORY,,}" \
+            --output "$RUNNER_TEMP/release-manifest.json"
+      - name: Publish or update the GitHub Release (idempotent)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          release_flags=()
+          if [ "$PRERELEASE" = "true" ]; then
+            release_flags+=(--prerelease)
+          else
+            release_flags+=(--latest)
+          fi
+          title="codearts2api $RELEASE_TAG"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
+            gh release edit "$RELEASE_TAG" --title "$title" --notes-file "$RUNNER_TEMP/release-notes.md" "${release_flags[@]}"
+          else
+            gh release create "$RELEASE_TAG" "$ARCHIVE" "$ARCHIVE.sha256" \
+              --verify-tag --title "$title" --notes-file "$RUNNER_TEMP/release-notes.md" "${release_flags[@]}"
+          fi
+
+  # Publishes the multi-arch image to GHCR. Tag list (including `latest` for a
+  # stable tag only) is produced by the shared helper; nothing inline decides it.
+  image:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Resolve image name and tags
+        id: image
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          IMAGE="$(python -B scripts/release-metadata.py image-name --registry ghcr.io --repository "$GITHUB_REPOSITORY")"
+          python -B scripts/release-metadata.py image-tags --image "$IMAGE" --tag "$RELEASE_TAG" > "$RUNNER_TEMP/tags.txt"
+          {
+            echo "tags<<EOF"
+            cat "$RUNNER_TEMP/tags.txt"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Resolve UTC build time
+        id: build
+        run: echo "time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v4.4.0
+      - uses: docker/setup-buildx-action@v4.4.1
+      - uses: docker/login-action@v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v7.4.0
+        env:
+          CA2A_BUILD_COMMIT: ${{ github.sha }}
+          CA2A_BUILD_TIME: ${{ steps.build.outputs.time }}
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.image.outputs.tags }}
+          build-args: |
+            BUILD_COMMIT=${{ env.CA2A_BUILD_COMMIT }}
+            BUILD_TIME=${{ env.CA2A_BUILD_TIME }}

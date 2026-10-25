@@ -1,0 +1,158 @@
+# CNB mirror of .github/workflows/build-and-release.yml.
+#
+# The same trust boundary applies here: `main` and `pull_request` only validate
+# (never authenticate or publish), and only a trusted `v*` tag publishes. Every
+# version / image-tag / latest / checksum decision is delegated to
+# scripts/release-metadata.py so the two pipelines cannot drift apart.
+#
+# The image path defaults to docker.cnb.cool/$CNB_REPO_SLUG_LOWERCASE and can be
+# overridden with CA2A_IMAGE (or CNB_IMAGE); registry credentials default to the
+# platform-issued CNB_TOKEN and can be overridden with CNB_REGISTRY* variables.
+
+main:
+  push:
+    - name: verify
+      docker: &runtime
+        image: golang:1.27-alpine
+      stages:
+        - name: prepare-tools
+          script: apk add --no-cache git build-base python3 py3-yaml
+        - name: validate
+          jobs: &validation-jobs
+            - name: go-test
+              script: go test ./...
+            - name: go-race
+              script: CGO_ENABLED=1 go test -race ./...
+            - name: go-vet
+              script: go vet ./...
+            - name: go-build
+              script: go build ./...
+            - name: release-metadata-tests
+              script: python3 -B scripts/test_release_metadata.py
+            - name: release-tool-tests
+              script: python3 -B scripts/test_release_tools.py
+            - name: deployment-contract-tests
+              script: python3 -B scripts/test_deployment_contracts.py
+        - name: export-source-archive
+          script: |
+            set -eu
+            mkdir -p dist
+            COMMIT="$CNB_COMMIT"
+            NAME="$(python3 -B scripts/release-metadata.py archive-name --commit "$COMMIT")"
+            ARCHIVE="dist/$NAME"
+            python3 -B scripts/release-source.py --commit "$COMMIT" --output "$ARCHIVE"
+            python3 -B scripts/release-metadata.py checksum "$ARCHIVE"
+
+  pull_request:
+    - name: verify-pull-request
+      docker: *runtime
+      stages:
+        - name: prepare-tools
+          script: apk add --no-cache git build-base python3 py3-yaml
+        - name: validate
+          jobs: *validation-jobs
+
+"v*":
+  tag_push:
+    # Source release + checksummed assets. `git:release` defaults to non-overlay
+    # (delete then recreate); the helper sets overlying:true so a re-run updates
+    # the existing release instead of deleting it. preRelease is true only for
+    # vX.Y.Z-* tags and latest is set only for a stable tag.
+    - name: publish-source-release
+      docker: *runtime
+      stages:
+        - name: prepare-tools
+          script: apk add --no-cache git build-base python3 py3-yaml
+        - name: resolve-release-policy
+          script: |
+            python3 -B scripts/release-metadata.py validate-tag --tag "$CNB_BRANCH"
+            echo "preRelease is true only for vX.Y.Z-* tags; latest is set only for stable tags."
+        - name: build-and-test
+          jobs: *validation-jobs
+        - name: package-source
+          script: |
+            set -eu
+            mkdir -p dist
+            COMMIT="$CNB_COMMIT"
+            BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            NAME="$(python3 -B scripts/release-metadata.py archive-name --commit "$COMMIT")"
+            ARCHIVE="dist/$NAME"
+            python3 -B scripts/release-source.py --commit "$COMMIT" --output "$ARCHIVE"
+            python3 -B scripts/release-metadata.py checksum "$ARCHIVE" --output "$ARCHIVE.sha256"
+            DIGEST="$(cut -d' ' -f1 "$ARCHIVE.sha256")"
+            python3 -B scripts/release-metadata.py notes \
+              --tag "$CNB_BRANCH" --commit "$COMMIT" --time "$BUILT_AT" \
+              --archive "$ARCHIVE" --sha256 "$DIGEST" --output dist/release-notes.md
+            python3 -B scripts/release-metadata.py manifest \
+              --tag "$CNB_BRANCH" --commit "$COMMIT" --time "$BUILT_AT" \
+              --archive "$ARCHIVE" --sha256 "$DIGEST" --output dist/release-manifest.json
+            python3 -B scripts/release-metadata.py release-options \
+              --tag "$CNB_BRANCH" --notes-file dist/release-notes.md \
+              --output dist/cnb-release-options.json
+        - name: read-release-manifest
+          type: cnb:read-file
+          options:
+            filePath: dist/release-manifest.json
+          exports:
+            archive: RELEASE_ARCHIVE
+        - name: create-release
+          type: git:release
+          optionsFrom: dist/cnb-release-options.json
+        - name: upload-release-assets
+          image: cnbcool/attachments:latest
+          settings:
+            attachments:
+              - dist/$RELEASE_ARCHIVE
+              - dist/$RELEASE_ARCHIVE.sha256
+
+    # Multi-arch image. It validates the tag and runs the full Go/Python suite
+    # again before touching the registry, so an image can never bypass the
+    # release gate. The tag list (latest only for a stable tag) comes from the
+    # shared helper.
+    - name: publish-image
+      docker: *runtime
+      services:
+        - docker
+      stages:
+        - name: prepare-tools
+          script: apk add --no-cache git build-base python3 py3-yaml
+        - name: resolve-release-policy
+          script: python3 -B scripts/release-metadata.py validate-tag --tag "$CNB_BRANCH"
+        - name: build-and-test
+          jobs: *validation-jobs
+        - name: build-and-push-image
+          script: |
+            set -eu
+            PLATFORM_REGISTRY="${CNB_DOCKER_REGISTRY:-docker.cnb.cool}"
+            REGISTRY="${CNB_REGISTRY:-$PLATFORM_REGISTRY}"
+            DEFAULT_IMAGE="$REGISTRY/$CNB_REPO_SLUG_LOWERCASE"
+            IMAGE="${CA2A_IMAGE:-${CNB_IMAGE:-$DEFAULT_IMAGE}}"
+            IMAGE_REGISTRY="${IMAGE%%/*}"
+            # Refuse a non-platform registry without credentials *before* any
+            # build, instead of failing at the final push with "unauthorized".
+            python3 -B scripts/release-metadata.py guard-registry \
+              --image "$IMAGE" \
+              --platform-registry "$PLATFORM_REGISTRY" \
+              ${CNB_REGISTRY_PASSWORD:+--has-password}
+            if [ -n "${CNB_REGISTRY_PASSWORD:-}" ]; then
+              echo "$CNB_REGISTRY_PASSWORD" | docker login "$IMAGE_REGISTRY" -u "${CNB_REGISTRY_USER:-cnb}" --password-stdin
+            fi
+            BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            mkdir -p dist
+            TAGS="$(python3 -B scripts/release-metadata.py image-tags --image "$IMAGE" --tag "$CNB_BRANCH")"
+            python3 -B scripts/release-metadata.py arch-tags --image "$IMAGE" --tag "$CNB_BRANCH" > dist/arch-tags.txt
+            while read -r arch ref; do
+              docker buildx build --platform "linux/$arch" --load \
+                --build-arg BUILD_COMMIT="$CNB_COMMIT" \
+                --build-arg BUILD_TIME="$BUILT_AT" \
+                -t "$ref" .
+            done < dist/arch-tags.txt
+            while read -r arch ref; do
+              docker push "$ref"
+            done < dist/arch-tags.txt
+            ARCH_REFS=""
+            while read -r arch ref; do ARCH_REFS="$ARCH_REFS $ref"; done < dist/arch-tags.txt
+            for tag in $TAGS; do
+              docker buildx imagetools create -t "$tag" $ARCH_REFS
+            done
+            echo "published: $TAGS"

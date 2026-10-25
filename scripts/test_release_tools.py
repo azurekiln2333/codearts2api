@@ -33,6 +33,7 @@ verify = load_tool("verify-deployment")
 REVISION = "a" * 40
 OTHER_REVISION = "b" * 40
 FIXTURE_TOKEN = "synthetic-localhost-token"
+READMES = ("README.md", "README.zh-TW.md", "README.en.md")
 
 
 class ReleaseTests(unittest.TestCase):
@@ -50,14 +51,15 @@ class ReleaseTests(unittest.TestCase):
             target = self.repo / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(self.original_source)
-        # Include tracked private/platform files to prove the manifest excludes
-        # them even when an operator accidentally tracked them in their fork.
-        for path in (".env", "config.json", "auths/account.json", "data/audit/log.jsonl", ".git/config-copy", ".trellis/workflow.md", ".codex/config.toml", "codearts2api.zip"):
+        (self.repo / "docs").mkdir(exist_ok=True)
+        (self.repo / "docs" / "guide.md").write_text("product docs\n", encoding="utf-8")
+        # Tracked private/platform files must be excluded even when an operator
+        # accidentally committed them, and the workflow manifest stays explicit:
+        # a new workflow or helper is never archived because of its directory.
+        for path in ("private-fixture.txt", ".env", "config.json", "auths/account.json", "data/audit/log.jsonl", ".git/config-copy", ".trellis/workflow.md", ".codex/config.toml", "codearts2api.zip", ".github/dependabot.yml", ".github/workflows/go.yml", ".github/workflows/extra-release.yml", ".github/workflows/local-notes.txt", "scripts/private-helper.py"):
             target = self.repo / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text("private-fixture\n", encoding="utf-8")
-        (self.repo / "docs").mkdir()
-        (self.repo / "docs" / "guide.md").write_text("product docs\n", encoding="utf-8")
         self.commit()
 
     def run_git(self, *args, data=None):
@@ -79,9 +81,23 @@ class ReleaseTests(unittest.TestCase):
             names = set(archive.namelist())
             self.assertTrue(release.REQUIRED_FILES.issubset(names))
             self.assertIn("docs/guide.md", names)
+            self.assertIn(".github/workflows/build-and-release.yml", names)
+            self.assertNotIn(
+                ".github/workflows/go.yml",
+                names,
+                "the retired Go workflow must not be archived, even if still tracked",
+            )
+            for readme in READMES:
+                self.assertIn(readme, names, "every language README must ship in the source release")
             self.assertNotIn("cmd/server/untracked.go", names)
-            self.assertFalse(any(path in names for path in (".env", "config.json", "codearts2api.zip")))
+            self.assertFalse(any(path in names for path in (".env", "config.json", "codearts2api.zip", "private-fixture.txt")))
             self.assertFalse(any(path.startswith(("auths/", "data/", ".git/", ".trellis/", ".codex/")) for path in names))
+            # Only the two enumerered workflow files are product input; sibling
+            # GitHub automation, extra workflows, templates and non-YAML notes
+            # stay out, and scripts are never opened up by prefix.
+            github_members = sorted(path for path in names if path.startswith(".github/"))
+            self.assertEqual(github_members, [".github/workflows/build-and-release.yml"])
+            self.assertNotIn("scripts/private-helper.py", names)
             self.assertEqual(archive.read("cmd/server/main.go"), self.original_source)
             metadata = json.loads(archive.read("release.json"))
             self.assertEqual(metadata["source_commit"], commit)
@@ -104,6 +120,24 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseError, "commit the finished work first"):
             release.create_release(self.repo, output=target)
         self.assertFalse(target.exists())
+
+    def test_missing_workflow_does_not_make_a_release(self):
+        self.run_git("rm", "--quiet", ".github/workflows/build-and-release.yml")
+        self.commit()
+        target = self.repo / "no-workflow.zip"
+        with self.assertRaisesRegex(release.ReleaseError, r"\.github/workflows/build-and-release\.yml"):
+            release.create_release(self.repo, output=target)
+        self.assertFalse(target.exists())
+
+    def test_extra_workflow_is_not_archived(self):
+        for retired in (".github/workflows/go.yml", ".github/workflows/extra-release.yml", ".github/workflows/anything.yaml"):
+            self.assertFalse(release.product_path(retired), retired)
+        self.assertFalse(release.product_path("scripts/private-helper.py"))
+        target, commit, _ = release.create_release(self.repo, output=self.repo / "explicit.zip")
+        with zipfile.ZipFile(target) as archive:
+            names = set(archive.namelist())
+        self.assertNotIn(".github/workflows/go.yml", names)
+        self.assertNotIn(".github/workflows/extra-release.yml", names)
 
     def test_manifest_rejects_a_symlink_blob(self):
         object_id = self.run_git("hash-object", "-w", "--stdin", data=b"../../auths/account.json")

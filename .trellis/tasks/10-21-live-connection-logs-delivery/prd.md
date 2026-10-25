@@ -224,3 +224,17 @@ Acceptance:
 - All overview/accounts/requests/connections/models/settings controls remain usable. Preserve OAuth start/submit/done/continue serialization and token unknown/source/retained-window semantics.
 - Responsive mobile navigation, dark theme, reduced motion, visible keyboard focus, labels and modal/drawer focus remain correct. No restored sidebar brand/build block, regional caption or shortcut panel.
 - Existing browser regressions plus focused visual/loading/auth tests pass against actual embedded source and extracted final release. Inspect desktop/mobile screenshots, commit only owned changes, export and verify immutable source ZIP. No production deployment claim; historical R13 remains open.
+
+
+## R19: published images, GitHub/CNB release and automatic updates (2026-10-26)
+
+User requests adapting local cnb2api-panel deployment/release design and explicitly dispatching the four existing workspace Pi agents. Deliver reviewable repository changes; do not publish, push tags, change registry settings or deploy without existing explicit authorization for those external operations.
+
+Acceptance:
+- Default Compose deploys a configurable published image without local build. Keep service/container identity, one CA2A_PORT, direct .env loading and existing auth/data/config mounts. Provide a separate local-build override and accurate migration commands.
+- Automatic image checks/updates are available with a maintained pinned Watchtower matching the reference. Limit updates by opt-in label AND unique Compose project scope; never touch unrelated containers or auto-update the updater. Interval/image configurable; preserve env/mounts. Local builds must not be replaced by published images.
+- GitHub and CNB trusted version-tag pipelines test before publishing source release/checksums and linux amd64/arm64 images where supported. Stable tags update latest; prereleases never replace latest. Untrusted PRs only validate and never authenticate/publish. Build identity uses actual full commit and UTC build time. Dynamic repository image paths and documented overrides; no credential literals.
+- Source release remains explicit committed manifest and includes new Compose/build/workflow/helper inputs needed to use the release. Actual env/config/auth/data/ZIPs/platform tooling excluded. Meaningful automated release/Compose/workflow contract checks cover stable/prerelease, hashes, required inputs, isolation and build override.
+- Document pull/up/manual update/automatic update opt-out/local build/private registry auth/rollback and first release prerequisite. Do not claim an image exists or workflows ran remotely when only locally verified. Existing credentials/config/data are unchanged. Historical R13 stays open.
+
+R19 user addition (2026-10-26): deliver three complete, synchronized README files: README.md (Simplified Chinese), README.zh-TW.md (Traditional Chinese), README.en.md (English), with mutual language links and identical operational commands/configuration/release boundaries. Include all three in source exports; no stub translations.

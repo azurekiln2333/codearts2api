@@ -1,0 +1,32 @@
+# 本地/自建镜像 overlay：叠加在 docker-compose.yml 之上使用，替换镜像来源为本地构建。
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# 行为差异（相对标准部署）：
+#   - 目标服务改用本地镜像 ${CA2A_LOCAL_IMAGE:-codearts2api:local} 并强制 build，
+#     不会拉取已发布镜像，也不会被自动更新覆盖。
+#   - 目标容器 label 固定为 enable=false，即使显式加了 --profile auto-update
+#     启动 updater，也不会重建本地构建的镜像。
+#   - watchtower 保留 auto-update profile，叠加本 overlay 后 `up -d` 默认不启动 updater
+#     （基础文件是默认启动）；如确实需要，显式加 --profile auto-update。
+#     目标服 label 已是 enable=false，即使启动 updater 也不会替换本地镜像。
+#   - 构建上下文与参数沿用 CA2A_BUILD_CONTEXT / CA2A_BUILD_COMMIT / CA2A_BUILD_TIME。
+services:
+  codearts2api:
+    image: "${CA2A_LOCAL_IMAGE:-codearts2api:local}"
+    pull_policy: build
+    build:
+      context: ${CA2A_BUILD_CONTEXT:-.}
+      dockerfile: Dockerfile
+      args:
+        BUILD_COMMIT: ${CA2A_BUILD_COMMIT:-}
+        BUILD_TIME: ${CA2A_BUILD_TIME:-}
+    # 本地镜像不参与自动更新，避免被已发布镜像替换。
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+      com.centurylinklabs.watchtower.scope: "${COMPOSE_PROJECT_NAME:-codearts2api}"
+
+  # 基础文件默认启动 updater；叠加本 overlay 后改为 profile 门控（默认不启动）。
+  # 即便显式启动，目标服 label 已是 enable=false，本地镜像不会被替换。
+  watchtower:
+    profiles: [auto-update]

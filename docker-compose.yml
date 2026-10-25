@@ -1,12 +1,12 @@
+# 标准部署：直接使用已发布镜像，不在本机构建。
+# 想从源码构建请叠加 docker-compose.build.yml（见该文件头注释）。
+# 所有可在 .env 中覆盖的值都保留 Compose 插值；应用配置仍由 env_file 直读。
 services:
   codearts2api:
-    build:
-      context: ${CA2A_BUILD_CONTEXT:-.}
-      args:
-        BUILD_COMMIT: ${CA2A_BUILD_COMMIT:-}
-        BUILD_TIME: ${CA2A_BUILD_TIME:-}
+    image: "${CA2A_IMAGE:-ghcr.io/azurekiln2333/codearts2api:latest}"
     container_name: ${CA2A_CONTAINER_NAME:-codearts2api}
     restart: ${CA2A_RESTART_POLICY:-unless-stopped}
+    init: true
     ports:
       - "${CA2A_PORT:-7866}:${CA2A_PORT:-7866}"
     env_file:
@@ -16,7 +16,47 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       # Keep the published port and the server listener in sync.
       CA2A_LISTEN: ":${CA2A_PORT:-7866}"
+      # 仅供镜像内 HEALTHCHECK 使用；应用本身只读 CA2A_LISTEN。
+      CA2A_PORT: "${CA2A_PORT:-7866}"
     volumes:
       - "${CA2A_AUTHS_PATH:-./auths}:/app/auths"
       - "${CA2A_DATA_PATH:-./data}:/app/data"
       - "${CA2A_CONFIG_PATH:-./config.json}:/app/config.json:ro"
+    # 自动更新只作用于同时满足「label 开启」和「scope 匹配」的本项目容器。
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      com.centurylinklabs.watchtower.scope: "${COMPOSE_PROJECT_NAME:-codearts2api}"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  # 自动检查/拉取新镜像并重建上面那个容器（标准部署默认启用，无需额外参数）。
+  # 标准路径：docker compose up -d        → 应用 + 自动更新
+  # 仅手动部署：docker compose up -d codearts2api   → 只启动应用
+  # 已启动后关闭：docker compose stop watchtower && docker compose rm -f watchtower
+  # 本机自建镜像（见 docker-compose.build.yml）默认不启动本服务。
+  # 需要访问 Docker socket，属于高权限组件，不要对外暴露。
+  watchtower:
+    image: nickfedor/watchtower:1.23.2
+    container_name: ${CA2A_WATCHTOWER_CONTAINER_NAME:-codearts2api-watchtower}
+    restart: unless-stopped
+    environment:
+      # Label 过滤：只处理显式声明 enable=true 的容器。
+      WATCHTOWER_LABEL_ENABLE: "true"
+      # Scope 隔离：只处理本项目 COMPOSE_PROJECT_NAME 的容器。
+      WATCHTOWER_SCOPE: "${COMPOSE_PROJECT_NAME:-codearts2api}"
+      WATCHTOWER_POLL_INTERVAL: "${WATCHTOWER_POLL_INTERVAL:-600}"
+      WATCHTOWER_CLEANUP: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # updater 自身永不自动更新。
+    labels:
+      com.centurylinklabs.watchtower.enable: "false"
+      com.centurylinklabs.watchtower.scope: "${COMPOSE_PROJECT_NAME:-codearts2api}"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

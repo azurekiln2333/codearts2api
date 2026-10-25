@@ -240,3 +240,14 @@ R18 product commit `6623d00818abe770d94344515e787475dfeee535` was exported as
 private exclusions, extraction, compile/start, seven GET routes, replay/API/embedded
 token proof and all four browser suites against extracted HTML. See
 `research/cnb-console-source-release.md`. No push or production deployment.
+
+
+## R19: release and deployment execution
+
+- [x] Inspect actual reference and repository state; discover current four Pi and assign disjoint ownership.
+- [x] Implement published-image/default deployment, isolated automatic updates and local-build overlay.
+- [x] Implement validated GitHub/CNB release/image workflows and shared release metadata.
+- [x] Extend explicit source exporter and meaningful deployment/release checks.
+- [x] Update accurate migration/pull/update/private-registry/local-build/rollback docs in three complete synchronized READMEs (Simplified Chinese, Traditional Chinese, English).
+- [x] Independent integrated review; Compose/YAML/action checks and appropriate Go/release tests; preserve private inputs.
+- [ ] Commit owned changes and verify actual exported artifact; journal evidence and honest remote boundary without closing R13.

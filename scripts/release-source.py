@@ -18,11 +18,16 @@ import zipfile
 # Keep this list explicit: new build inputs must be reviewed here. A recursive
 # archive of the checkout could include credentials, local config and AI tooling.
 REQUIRED_FILES = frozenset({
-    ".dockerignore", ".env.example", "Dockerfile", "docker-compose.yml",
-    "config.example.json", "go.mod", "README.md", "LICENSE", "Makefile",
+    ".dockerignore", ".env.example", ".cnb.yml", "Dockerfile",
+    "docker-compose.yml", "docker-compose.build.yml",
+    "config.example.json", "go.mod", "README.md", "README.zh-TW.md",
+    "README.en.md", "LICENSE", "Makefile",
     "login.sh", "apply.sh", "credit.sh", "deploy/codearts2api.service",
+    ".github/workflows/build-and-release.yml",
     "internal/server/panel.html", "scripts/release-source.py",
-    "scripts/verify-deployment.py", "scripts/test_release_tools.py",
+    "scripts/release-metadata.py", "scripts/verify-deployment.py",
+    "scripts/test_release_tools.py", "scripts/test_release_metadata.py",
+    "scripts/test_deployment_contracts.py",
 })
 OPTIONAL_FILES = frozenset({"go.sum", ".gitignore"})
 COMMIT_PATTERN = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\Z")
@@ -43,6 +48,9 @@ def git(repo: Path, *args: str) -> bytes:
 
 
 def product_path(path: str) -> bool:
+    # Workflow and script inputs are enumerated exactly; nothing under .github or
+    # scripts is opened up by prefix, so an accidentally committed workflow or
+    # helper can never be archived just because of its directory.
     if path in REQUIRED_FILES or path in OPTIONAL_FILES:
         return True
     parts = PurePosixPath(path).parts
@@ -75,7 +83,7 @@ def collect_release(repo: Path, reference: str):
             raise ReleaseError("A product manifest member is not a regular file: " + path)
         members[path] = git(repo, "cat-file", "blob", object_id)
         modes[path] = 0o755 if mode == "100755" or path.endswith((".sh", ".py")) else 0o644
-    missing = REQUIRED_FILES.difference(members)
+    missing = set(REQUIRED_FILES.difference(members))
     if missing:
         raise ReleaseError("Commit is missing release inputs; commit the finished work first: " + ", ".join(sorted(missing)))
     for source_root in ("cmd/server/", "internal/"):

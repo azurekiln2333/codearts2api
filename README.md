@@ -3,6 +3,8 @@
 > 华为云 CodeArts Agent（盘古助手/码道）的 OpenAI 兼容代理。**无需运行 CodeArts Agent
 > 客户端**，纯 Go 直连华为云 API，多账号轮转 + token 自动续期 + WebUI。
 
+**语言 / Language / 語言：** [简体中文](README.md) · [繁體中文](README.zh-TW.md) · [English](README.en.md)
+
 ## 参考项目
 
 本项目是 [Sliverkiss](https://github.com/Sliverkiss) 同系列开源项目的延伸实现，架构与运维形态参考了以下仓库：
@@ -129,9 +131,7 @@ go run ./cmd/models -claim          # 先领取限时福利再查询（幂等，
 
 后台“模型目录 → 重新拉取”会真正重新请求各账号的 Agent、内置和福利来源，显示来源状态、尝试/成功时间、保留的旧目录及账号模型排除。多次点击共享同一个有界任务，任务启动至少间隔 15 秒，单次最多 60 秒、并行处理 2 个账号；失败来源保留上次成功数据并标为旧数据。`GET /admin/api/models` 只读缓存，`POST /admin/api/models/refresh` 返回 202 与任务状态。
 
-`model_not_available` 表示当前符合调度条件的账号均未提供该模型或存在有效的能力拒绝缓存。先在目录查看精确模型 ID、来源失败与排除原因。成功拉取对应的有效来源后，会重置这次拉取前的相关旧排除，允许下次真实调用重新判断；不会把目录收录当成权限验证，也不会清除并发请求刚写入的新拒绝。官网能看到模型不等于每个已配置账号都有同样权益。
-
-完整且新鲜的账号目录确认没有请求模型时，聊天返回 404 `model_not_available`，公开 `/v1/models` 也会过滤这类无账号支持的预置项。`glm-5.3-flash` 与 `glm-5.3` 是不同模型，不会相互替换。503 `no_healthy_account` 则表示当前没有健康可调度账号，例如账号全部禁用、冷却或凭证不可用；并发排队满/等待超时返回 429，启动或上游空闲超时返回 504。审计里的 `attempts: 0` 表示尚未向上游发送推理请求。
+`model_not_available` 表示当前符合调度条件的账号均未提供该模型或存在有效的能力拒绝缓存。先在目录查看精确模型 ID、来源失败与排除原因。成功拉取对应的有效来源后，会重置这次拉取前的相关旧排除，允许下次真实调用重新判断；不会把目录收录当成权限验证，也不会清除并发请求刚写入的新拒绝。官网能看到模型不等于每个已配置账号都有同样权益。完整且新鲜的账号目录确认没有请求模型时，聊天返回 404 `model_not_available`，公开 `/v1/models` 也会过滤这类无账号支持的预置项。`glm-5.3-flash` 与 `glm-5.3` 是不同模型，不会相互替换。503 `no_healthy_account` 则表示当前没有健康可调度账号，例如账号全部禁用、冷却或凭证不可用；并发排队满/等待超时返回 429，启动或上游空闲超时返回 504。审计里的 `attempts: 0` 表示尚未向上游发送推理请求。
 
 `TM.00001041` / `concurrency_limit` 表示上游并发会话拒绝。若还有合格的未尝试账号且轮换预算允许，会优先换号；没有后备时沿用有限重试。默认三个账号全部返回该错误时最多形成 A/B/CCC 五次尝试，单账号仍最多三次。HTTP 400、HTTP 429 或 SSE 包装的明确并发拒绝都不会误冷却整个账号；普通限速和 TPM 仍保留原有策略。`attempts` 是实际出站次数，需结合 `tried` 和连接轨迹判断是否换过账号。
 
@@ -179,66 +179,260 @@ export CA2A_API_KEY=$(openssl rand -hex 24)
 2026-12-31 00:00（UTC+8）；[新用户注册奖励](https://support.huaweicloud.com/price-codeartsagent/codeartsagent_billing_0029.html)
 为 4000 积分。无资格或已自动发放的新手奖励不会再次领取。
 
-## 部署（systemd / Docker）
+## 部署与升级
+
+部署方式有两种：**默认使用已发布镜像**（无需本地构建），或在源码目录**本地构建**。
+两种方式共用同一份 `docker-compose.yml` 变量与挂载；本地构建用叠加文件
+`docker-compose.build.yml` 覆盖镜像来源。
+
+要求：Docker Engine 24+ 与 Docker Compose v2（`docker compose`）。
+
+### 方式一：默认已发布镜像（推荐）
+
+```bash
+# 仅首次部署复制示例；升级时不要覆盖已有文件
+cp -n .env.example .env
+cp -n config.example.json config.json
+mkdir -p auths data
+
+# 编辑 .env：至少设置 CA2A_API_KEY；如需更换端口设置 CA2A_PORT（默认 7866）
+docker compose config --quiet   # 只做本地语法/插值检查
+docker compose pull
+docker compose up -d            # 标准部署：应用 + 自动更新
+```
+
+标准部署命令会同时启动应用容器与 Watchtower 更新器（默认启用）。只想手动部署、不要
+自动更新时用 `docker compose up -d codearts2api`：只启动应用服务，不启动更新器。
+
+默认镜像为 `ghcr.io/azurekiln2333/codearts2api:latest`，与仓库实际 origin
+（`github.com/azurekiln2333/codearts2api`）一致。可在 `.env` 用 `CA2A_IMAGE`
+切换到其他镜像或固定版本（见下文“镜像切换与固定版本”）。
+
+> **首次发布的边界**：`ghcr.io/azurekiln2333/codearts2api:latest` 只有在推送第一个
+> `v*` 版本标签、CI 成功发布后才会存在。在此之前 `docker compose pull` 会因
+> manifest 不存在而失败，这是预期行为，并非本机配置错误；此时请改用方式二本地构建。
+> GHCR 包**首次推送默认是 private**：要么在 GitHub 包设置里改为 public，要么先执行
+> `docker login ghcr.io`（凭据需含 `read:packages`）再拉取。
+
+升级：保留现有 `.env`、`config.json`、`auths/` 与 `data/`，然后
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+### 方式二：本地源码构建
+
+```bash
+# 叠加本地构建文件：使用本地镜像、pull_policy: build，并停用自动更新目标
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+叠加文件把应用镜像固定为本地 `codearts2api:local`（可用 `CA2A_LOCAL_IMAGE` 覆盖）且不删除已发布镜像变量；Watchtower
+不会把本地构建容器替换成已发布镜像。要标记构建身份（后台“运行配置”会显示实际提交）：
+
+```bash
+CA2A_BUILD_COMMIT="$(git rev-parse HEAD)" \
+CA2A_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+`CA2A_BUILD_CONTEXT` 可覆盖构建上下文。源码更新后必须重新 `up -d --build`；重启旧容器
+不会替换旧镜像。叠加构建 overlay 时更新器默认不启动（保留 `auto-update` profile）；
+即使显式加 `--profile auto-update`，应用容器的 `...enable` 标签为 `false`，也不会被自动替换。
+
+### 自动更新（Watchtower，标准部署启用，可显式关闭）
+
+标准部署命令 `docker compose up -d` 会同时启动一个**项目内隔离**的 Watchtower，自动检查
+并更新本项目的 `codearts2api` 容器。Compose 默认启动更新器；要 opt-out 时只启动应用
+服务：
+
+```bash
+# 标准部署：应用 + 自动更新
+docker compose up -d
+
+# 不要自动更新：只启动应用（更新器不会运行）
+docker compose up -d codearts2api
+```
+
+Watchtower 行为：
+
+- 镜像固定为维护分支 `nickfedor/watchtower:1.23.2`（原 `containrrr/watchtower`
+  已归档不再维护；Docker Hub 命名空间为 `nickfedor`，GitHub 仓库为
+  `nicholas-fedor/watchtower`）。
+- **作用域限定**：同时启用 `--label-enable` 与 scope。只有带
+  `com.centurylinklabs.watchtower.enable: "true"`（本项目的 `codearts2api` 服务）
+  且 `com.centurylinklabs.watchtower.scope` 等于本项目名的容器才会被更新。
+  scope 默认取 `COMPOSE_PROJECT_NAME`，回退 `codearts2api`；因此不会触碰其他项目、
+  其他栈或无关容器。
+- Watchtower 自身标签 `...enable: "false"`，永不自我更新。
+- 需要挂载 `/var/run/docker.sock`（Docker 控制通道）；这是自动更新容器镜像的
+  必要权限，不会改写 `.env`、`config.json` 或凭证。
+- 可配置项（写入 `.env`）：
+  - `WATCHTOWER_POLL_INTERVAL`：检查间隔（秒），默认 `600`。
+  - `CA2A_WATCHTOWER_CONTAINER_NAME`：更新器容器名，默认 `codearts2api-watchtower`。
+  - 更新后清理旧镜像（`WATCHTOWER_CLEANUP: "true"`）在 YAML 中固定开启，未暴露为 `.env` 变量。
+- 保留的 `.env`、`config.json`、`auths/`、`data/` 挂载在更新重建容器后不变。
+
+**关闭已启用的自动更新：**
+
+```bash
+# 只停用/移除更新器，应用容器不受影响
+docker compose stop watchtower
+docker compose rm -f watchtower
+```
+
+注意：`docker compose up -d codearts2api` 只启动应用，**不会停掉**已在运行的更新器
+（Compose 不会清理未列出的服务），要停止请用上面两条命令。更新器只能拉取**已发布**的
+镜像；首个 `v*` 标签发布前没有可拉取的镜像，请用本地构建（方式二）。本地构建方式
+（方式二）不启动更新器，也不会更新本地构建的容器。
+
+#### 私有仓库镜像的更新器鉴权
+
+宿主机上的 `docker login` 只写入宿主机自己的 `~/.docker/config.json`，**不会自动传给
+Watchtower 容器**。更新器默认只挂载 Docker socket，没有 registry 凭据：公开镜像（例如
+已设为 public 的 GHCR 包）不需要凭据；私有 GHCR/CNB 镜像若要让自动更新真正可用，需给
+更新器提供**只读**的 Docker config。
+
+新建可选的 `docker-compose.override.yml`（使用默认文件链时 Compose 会自动合并；用 `-f`
+显式列出多个文件时，需再追加 `-f docker-compose.override.yml`）：
+
+```yaml
+services:
+  watchtower:
+    environment:
+      DOCKER_CONFIG: /config
+    volumes:
+      - ${HOME}/.docker/config.json:/config/config.json:ro
+```
+
+仓库**默认不挂载**该文件，因此公开镜像的部署不会因缺少本地私密文件而失败；这是可选的
+opt-in。不要把 token 写进 YAML 或日志，登录一律用 `--password-stdin`。更新器重建容器时
+沿用原挂载（`.env`、`config.json`、`auths/`、`data/`），不需要重新导入凭证。
+
+若 `~/.docker/config.json` 使用 `credsStore`/`credHelpers`（例如 Docker Desktop），更新器
+容器内没有对应 helper，鉴权会失败；此时改用手工 `auths` 写法的 `config.json`
+（官方文档给出 `auth` 的 base64 生成方式），或把 helper 一并挂载。
+
+### 镜像切换与固定版本（GHCR / CNB / 镜像源）
+
+`CA2A_IMAGE` 决定拉取的镜像，默认 GHCR。写入 `.env` 后 `docker compose pull && up -d`
+生效：
+
+```bash
+# 固定到某个版本（推荐生产回滚使用）
+CA2A_IMAGE=ghcr.io/azurekiln2333/codearts2api:v1.2.3
+
+# 切换到 CNB 制品库；slug 是动态变量，请填你的实际仓库路径（小写）
+CA2A_IMAGE=docker.cnb.cool/<CNB_REPO_SLUG_LOWERCASE>:latest
+```
+
+**架构中间标签**：CNB 流水线做多架构组装时会先构建并推送两个**按架构的中间标签**
+`vX.Y.Z-amd64`、`vX.Y.Z-arm64`，再把它们合成多架构的 `vX.Y.Z`（stable 额外加
+`latest`）。这些 `-amd64` / `-arm64` 标签由 CNB 流水线生成，保留用于调试与单架构
+排查；**常规部署不要用它们**，继续用多架构的 `vX.Y.Z` 或 `latest`，Compose 与
+Watchtower 会自动取匹配宿主架构的镜像。
+
+CNB 制品库登录（`CNB_TOKEN` 由 CNB 流水线签发，本地可用访问令牌代替；用标准输入传密码，
+避免把令牌写进命令行历史或日志）：
+
+```bash
+printf '%s' "$CNB_TOKEN" | docker login docker.cnb.cool -u cnb --password-stdin
+```
+
+本仓库未声明固定 CNB slug；文档中的 `<CNB_REPO_SLUG_LOWERCASE>` 是占位符，
+请勿把它当成已存在的公开仓库。
+
+### 版本标签、自动发布与权限（v*）
+
+推送一个 `v*` 版本标签（如 `v1.2.3`）会触发受信任的发布流程：
+
+1. **测试门禁**：先跑 Go `test`/`race`/`vet`/`build` 与 Python 发布工具测试；
+   测试不通过不发布。
+2. **发布镜像**：发布 `ghcr.io/azurekiln2333/codearts2api:v1.2.3`；稳定版
+   （无 `-` 预发布后缀）**同时**更新 `latest`。
+3. **源码 Release**：创建对应 GitHub Release，附显式清单导出的源码 ZIP 与
+   sha256 校验文件（`scripts/release-source.py`）。
+4. **预发布**：`v1.2.3-rc.1` 之类只标记为 prerelease，**不会覆盖 `latest`**。
+5. **Pull Request** 只做校验，绝不认证或发布；工作流使用最小权限
+   （`contents: read`，发布时才 `packages: write` / `contents: write`）。
+
+CNB 侧使用同样的规则：`main`/`pull_request` 只校验，`v*` 标签才发布源码 Release
+与镜像。CI 需要平台签发的临时令牌（`CNB_TOKEN`），不写入任何真实凭据。
+
+> 以上描述的是**仓库内工作流的行为**；在你推送标签并让远程流水线运行之前，
+> 镜像与 Release 都不存在。本文档不声称任何远程流程已经运行。
+
+CNB 默认使用平台仓库路径与登录，无需覆盖注册表变量。自定义发布目标请在 **CNB 仓库 CI 变量**中设置 `CNB_IMAGE`（不含标签的镜像仓库路径）、`CNB_REGISTRY`、`CNB_REGISTRY_USER`、`CNB_REGISTRY_PASSWORD`；外部注册表必须提供密码。优先使用 `CNB_IMAGE`，避免与服务器 `.env` 中带标签或摘要的部署变量 `CA2A_IMAGE` 混淆。发布标签仅支持 `v主版本.次版本.补丁版本[-预发布]`，不支持 `+build` 元数据；长度还须容纳架构后缀。
+
+### 回滚
+
+镜像更新可独立回退，数据与凭证格式是增量的，无需迁移：
+
+```bash
+# 记录当前运行的镜像 ID 以便精确回退
+docker inspect --format '{{.Image}}' codearts2api
+
+# 回退到固定版本或摘要
+CA2A_IMAGE=ghcr.io/azurekiln2333/codearts2api:v1.2.2 docker compose pull
+CA2A_IMAGE=ghcr.io/azurekiln2333/codearts2api:v1.2.2 docker compose up -d
+# 或按摘要：CA2A_IMAGE=ghcr.io/azurekiln2333/codearts2api@sha256:<digest>
+```
+
+回退时**保留同一组挂载目录**（`.env`、`config.json`、`auths/`、`data/`），不要切到空目录。
+如需停止自动更新以免回退后又被升级，先按上文停用 Watchtower 再回退。
+
+### 保留的挂载与凭证（升级安全）
+
+Compose 通过 `env_file: .env` 直接读取应用变量；端口只填 `CA2A_PORT`（默认 `7866`），
+它同时控制宿主机端口、容器端口与服务监听，Compose 自动生成 `CA2A_LISTEN`。
+宿主机挂载路径使用 `CA2A_AUTHS_PATH`、`CA2A_DATA_PATH`、`CA2A_CONFIG_PATH`；`CA2A_AUTH_DIR`
+与 `CA2A_STATE_FILE` 则是容器内应用路径。升级时保持原挂载路径即可继续使用已添加的凭证。
+
+YAML 只保留 API Key 必填校验、时区默认值和派生监听地址这三个 `environment` 例外，
+其余应用项直接写入 `.env`；非空值覆盖 `config.json`，未设置或留空则沿用配置文件及内置默认值。
+可选应用变量仅在 shell 中 `export` 不会自动透传到容器。`.env` 文件必须存在；CLI 的
+`--env-file` 只更换 Compose 插值来源，不会更换 YAML 中固定的 `env_file: .env`。
+
+升级前备份现有 `.env`、`config.json`、`auths/` 和 `data/`，记录正在使用的镜像 ID；
+保留原目录和挂载路径。升级只重建容器，不要求重新导入凭证。若此前在 `config.json`
+显式配置过并发 `5`，该值仍然生效；初次验证上游额度时可在 `.env` 明确设置
+`CA2A_MAX_CONCURRENT=1`。
+
+### systemd 部署（无 Docker）
 
 ```bash
 sudo mkdir -p /opt/codearts2api && sudo cp -r bin config.example.json auths /opt/codearts2api/
 sudo cp deploy/codearts2api.service /etc/systemd/system/
 # 编辑 /opt/codearts2api/.env 写 CA2A_API_KEY，改好 config.json
 sudo systemctl daemon-reload && sudo systemctl enable --now codearts2api
-
-# 或 Docker
-# 首次部署才复制示例；升级时保留已有 .env、config.json、auths/ 和 data/。
-cp -n .env.example .env
-cp -n config.example.json config.json
-# 编辑 .env：设置 CA2A_API_KEY；如需 21508 端口，设置 CA2A_PORT=21508。
-mkdir -p auths data
-docker compose config --quiet
-docker compose up -d --build
 ```
-
-Compose 通过 `env_file: .env` 批量读取同目录的 `.env`，可选应用变量无需逐项声明在 YAML。端口只填 `CA2A_PORT`（默认 `7866`），它同时控制宿主机端口、容器端口与服务监听；Compose 自动生成 `CA2A_LISTEN`，无需在 `.env` 重复设置，且会覆盖 `config.json` 中的 `listen`。原生运行仍支持 `CA2A_LISTEN`，不自动读取项目 `.env`。
-
-YAML 中只保留 API Key 必填校验、时区默认值和派生监听地址这三个 `environment` 例外，其余应用项直接写入 `.env`；非空值覆盖 `config.json`，未设置或留空则沿用配置文件及内置默认值。可选应用变量仅在 shell 中 `export` 不会自动透传到容器。`.env` 文件必须存在；CLI 的 `--env-file` 只更换 Compose 插值来源，不会更换 YAML 中固定的 `env_file: .env`。
-
-端口映射、构建参数、容器名、重启策略和挂载路径仍由 Compose 在对应字段引用 `.env` 或 shell 变量。宿主机挂载路径使用 `CA2A_AUTHS_PATH`、`CA2A_DATA_PATH`、`CA2A_CONFIG_PATH`；`CA2A_AUTH_DIR` 和 `CA2A_STATE_FILE` 则是容器内应用使用的路径。升级时保持原有挂载路径即可继续使用已添加的凭证，完整变量示例见 `.env.example`。
-
-升级前备份现有 `.env`、`config.json`、`auths/` 和 `data/`，记录正在使用的镜像 ID；保留原目录和挂载路径。升级只重建容器，不要求重新导入凭证。若此前在 `config.json` 显式配置过并发 `5`，该值仍然生效；初次验证上游额度时可在 `.env` 明确设置 `CA2A_MAX_CONCURRENT=1`。
-
-镜像构建身份需随源码注入，可在 Linux 部署目录执行：
-
-```bash
-docker compose config --quiet
-docker inspect --format '{{.Image}}' codearts2api
-export CA2A_BUILD_COMMIT="$(git rev-parse HEAD)"
-CA2A_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" docker compose build
-docker compose up -d --no-build
-```
-
-容器名改过时替换上述 `codearts2api`。发布前确认工作目录对应预期提交且产品源码没有未提交改动。构建信息只保留在“运行配置”，未注入提交时无法确认版本。升级后检查实际账号并发和等待/超时配置；需要回退时使用之前记录的镜像并保留同一组挂载目录。持续有上游数据的非流式生成可能超过启动预算，客户端长时间收不到最终响应并不单独证明网关卡死。
 
 ### 完整源码包与部署核对
 
-完成代码提交后，可用 Python 3.9+ 生成完整源码包；仅从指定 Git 提交导出产品清单，包含 Compose、Dockerfile、示例配置、Go 源码和校验脚本，排除真实 `.env`、`config.json`、凭证、数据和工作区工具。相同提交生成相同 ZIP，不覆盖已有文件：
+完成代码提交后，可用 Python 3.9+ 生成完整源码包；仅从指定 Git 提交导出产品清单，
+包含 Compose、构建叠加文件、Dockerfile、示例配置、Go 源码、CI/发布输入和校验脚本，
+排除真实 `.env`、`config.json`、凭证、数据和工作区工具。相同提交生成相同 ZIP，
+不覆盖已有文件：
 
 ```bash
 python3 scripts/release-source.py --commit HEAD
 ```
 
-产物为 `codearts2api-source-<提交前12位>.zip`，附带 `release.json` 文件校验和及仅含源码提交的 `release.env`。源码包不包含 `.git`；解压后在原部署目录保留现有挂载路径，按包内身份重新构建：
+产物为 `codearts2api-source-<提交前12位>.zip`，附带 `release.json` 文件校验和及仅含
+源码提交的 `release.env`。源码包不包含 `.git`；解压后在原部署目录保留现有挂载路径，
+按包内身份本地构建：
 
 ```bash
 set -a
 . ./release.env
 set +a
-docker compose config --quiet
-CA2A_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)" docker compose build
-docker compose up -d --no-build
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
-重启现有容器不会替换旧镜像；源码更新后必须重新 build 并由 Compose 重建服务。不要在升级时覆盖原 `.env`、`config.json`、`auths/`、`data/`。
-
-部署核对使用环境变量提供密钥，仅发送 GET：检查健康、实际提交、清理后的控制台及审计/模型/连接接口；旧页面、404、401、身份未知或提交不符都会返回非零状态。反向代理有路径前缀时将其写入 `--url`。以下域名替换为自己的服务地址：
+部署核对使用环境变量提供密钥，仅发送 GET：检查健康、实际提交、清理后的控制台及
+审计/模型/连接接口；旧页面、404、401、身份未知或提交不符都会返回非零状态。
+反向代理有路径前缀时将其写入 `--url`。以下域名替换为自己的服务地址：
 
 ```bash
 read -r -s -p "服务 API Key: " CA2A_API_KEY
@@ -247,7 +441,10 @@ python3 scripts/verify-deployment.py --url https://gateway.example.com --expecte
 unset CA2A_API_KEY
 ```
 
-此校验不会发起聊天、模型探测或重新拉取；审计被配置关闭时会明确提示。它验证交付的版本和接口，模型实际权益需结合来源结果及真实调用判断。
+此校验不会发起聊天、模型探测或重新拉取；审计被配置关闭时会明确提示。它验证交付的
+版本和接口，模型实际权益需结合来源结果及真实调用判断。
+
+更完整的拉取/升级/自动更新/私有仓库登录/回滚说明见 [docs/deployment.md](docs/deployment.md)。
 
 ## 请求审计与账号状态
 
@@ -301,6 +498,11 @@ unset CA2A_API_KEY
 | `CA2A_AUDIT_RETENTION_DAYS` | 审计文件保留天数 | `7` |
 | `CA2A_AUDIT_FLUSH_INTERVAL` | 审计文件同步周期 | `1s` |
 
+部署相关变量（Compose 插值）另见 `.env.example`：`CA2A_PORT`、`TZ`、
+`CA2A_CONTAINER_NAME`、`CA2A_RESTART_POLICY`、`CA2A_AUTHS_PATH`、`CA2A_DATA_PATH`、
+`CA2A_CONFIG_PATH`、`CA2A_IMAGE`、`CA2A_WATCHTOWER_CONTAINER_NAME`、`WATCHTOWER_POLL_INTERVAL`，
+以及仅本地构建用的 `CA2A_BUILD_CONTEXT`、`CA2A_BUILD_COMMIT`、`CA2A_BUILD_TIME`、`CA2A_LOCAL_IMAGE`。
+
 ## 目录结构
 
 ```
@@ -316,9 +518,9 @@ internal/scheduler/ token 续期看门狗（新增保活机制）
 internal/server/   OpenAI 兼容路由
 internal/audit/    有界请求审计与活动连接跟踪
 internal/telemetry/ 请求阶段与读取进展观察器
-scripts/           完整源码打包与只读部署核对
+scripts/           完整源码打包、发布元数据与只读部署核对
 deploy/            systemd unit 样例
-docs/              逆向过程与接口清单
+docs/              逆向过程、接口清单与部署说明
 ```
 
 ## 免责声明
@@ -328,4 +530,3 @@ docs/              逆向过程与接口清单
 ## License
 
 MIT
-
