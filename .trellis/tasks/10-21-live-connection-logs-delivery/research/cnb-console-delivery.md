@@ -52,3 +52,11 @@ overrides were adapted. Final15s timeout uses real browser cancellation; delayed
 responses cannot authorize after failure. Original10 protected inputs/archives
 match the preservation baseline. Commit and actual archive evidence are recorded
 separately after immutable source export.
+
+
+## Immutable source delivery
+
+Source `6623d00818abe770d94344515e787475dfeee535`, archive
+`codearts2api-source-6623d00818ab.zip`, verified with actual extracted asset and
+running isolated binary. See `cnb-console-source-release.md` for complete hashes,
+line-ending identity proof, browser evidence, preservation and deployment boundary.

@@ -15,7 +15,7 @@
   "branch": "fix/deepseek-concurrency-20261021",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": "7a9bc5b8755ab30d203311995a17f14907f487c2",
+  "commit": "6623d00818abe770d94344515e787475dfeee535",
   "pr_url": null,
   "subtasks": [],
   "children": [],
@@ -337,7 +337,7 @@
       "independent_report": "research/oauth-compose-quality-review.md"
     },
     "cnb_panel_followup": {
-      "state": "source_verified_pending_export",
+      "state": "local_source_delivery_complete_pending_production",
       "verified_at": "2026-10-25",
       "quality_gate_passed": true,
       "independent_review_passed": true,
@@ -352,7 +352,17 @@
       "production_deployment_verified": false,
       "historical_r13_closed": false,
       "source_report": "research/cnb-console-delivery.md",
-      "independent_report": "research/cnb-quality-review.md"
+      "independent_report": "research/cnb-quality-review.md",
+      "source_commit": "6623d00818abe770d94344515e787475dfeee535",
+      "release_artifact": "codearts2api-source-6623d00818ab.zip",
+      "release_sha256": "a83cf4da12ca0c4619b6e955b77b4b20e2a1ffbde4bf0d50f5cab6916ceebb86",
+      "packaged_panel_sha256": "f427767533e2ce8684fa988afd7d6ee15dc6ed594481e0170c3ae6b7cf22716e",
+      "extracted_release_smoke_passed": true,
+      "packaged_four_browser_suites_passed": true,
+      "packaged_embedded_token_browser_passed": true,
+      "original_credentials_preserved": true,
+      "prior_archives_preserved": true,
+      "release_report": "research/cnb-console-source-release.md"
     }
   }
 }

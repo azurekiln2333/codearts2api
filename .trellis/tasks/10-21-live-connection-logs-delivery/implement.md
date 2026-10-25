@@ -232,5 +232,11 @@ No real OAuth, push or production deployment occurred; keep R13 open.
 - [x] Implement login, connecting stage, shell and six-page coherent styling while preserving operational contracts.
 - [x] Run focused real-browser loading/auth/responsive/theme checks and existing console/OAuth/token suites; inspect actual screenshots.
 - [x] Independent review/self-fixes; appropriate Go embed/test/vet/build and whitespace checks.
-- [ ] Update specs, commit authorized owned files, export immutable source and verify actual extracted UI/server.
-- [ ] Record release evidence/journal without closing historical R13 or claiming deployment.
+- [x] Update specs, commit authorized owned files, export immutable source and verify actual extracted UI/server.
+- [x] Record release evidence/journal without closing historical R13 or claiming deployment.
+
+R18 product commit `6623d00818abe770d94344515e787475dfeee535` was exported as
+`codearts2api-source-6623d00818ab.zip`. Its actual131-member archive passed hashes,
+private exclusions, extraction, compile/start, seven GET routes, replay/API/embedded
+token proof and all four browser suites against extracted HTML. See
+`research/cnb-console-source-release.md`. No push or production deployment.
