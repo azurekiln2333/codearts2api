@@ -185,6 +185,10 @@ local checkout or claim a successful deployment without checking the running bui
 - Config checks: defaults, JSON/env precedence, false/zero/empty settings,
   derived audit directory and normalized effective limits. Verify actual Compose
   interpolation, synchronized ports and credential mount preservation.
+- Stopped-consumer fixtures constructed without `Open` must use normalized options,
+  including positive retention. Give retained events explicit timestamps comfortably
+  inside that window; zero-day cutoff plus host clock precision is not a queue
+  overflow contract. Keep exact capacity/drop/ring assertions and bounded completion.
 - Run full tests, race detector, vet, build and diff checks after integration.
 - Connection regressions exercise actual stalled HTTP headers, silent SSE,
   comment-only progress, long stream/aggregate, blocked downstream, slot and

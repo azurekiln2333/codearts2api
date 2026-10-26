@@ -238,3 +238,8 @@ Acceptance:
 - Document pull/up/manual update/automatic update opt-out/local build/private registry auth/rollback and first release prerequisite. Do not claim an image exists or workflows ran remotely when only locally verified. Existing credentials/config/data are unchanged. Historical R13 stays open.
 
 R19 user addition (2026-10-26): deliver three complete, synchronized README files: README.md (Simplified Chinese), README.zh-TW.md (Traditional Chinese), README.en.md (English), with mutual language links and identical operational commands/configuration/release boundaries. Include all three in source exports; no stub translations.
+
+
+## R20: actual remote CI failure and CNB image build (2026-10-26)
+
+User authorized binding and pushing GitHub/GitCode/Gitee/GitLab/CNB, reports failed GitHub test run, and requests actual CNB remote Docker build. Inspect real job logs, repair the demonstrated defect without weakening tests, sync corrected commits, and observe remote validation/build results. Distinguish the runner migration notice from the failing Go assertion. Preserve private inputs and all remote history; no force pushes or existing release/tag replacement. Existing R13 remains open.

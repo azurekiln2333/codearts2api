@@ -188,13 +188,23 @@ func TestExpiredArchiveIsPrunedAndNotRestored(t *testing.T) {
 
 func TestOverflowStorageFailureAndClosedSinkRemainNonBlocking(t *testing.T) {
 	// A stopped consumer isolates the full-queue contract deterministically.
-	s := &Sink{opts: Options{Recent: 2}, ch: make(chan Event, 1)}
+	// Match Open's normalized defaults: zero retention would expire the ring
+	// immediately and make Snapshot depend on the host clock's precision.
+	s := &Sink{opts: (Options{Enabled: true, Recent: 2, MaxQueue: 1}).normalized(), ch: make(chan Event, 1)}
 	before := time.Now()
+	// Keep timestamps distinct from the query time even on coarse clocks.
+	ts := before.Add(-time.Minute).UTC().Format(time.RFC3339Nano)
 	for i := 0; i < 10000; i++ {
-		s.Record(Event{Outcome: "ok"})
+		s.Record(Event{TS: ts, Outcome: "ok"})
 	}
-	if time.Since(before) > time.Second || s.Stats().Dropped != 9999 || s.Stats().Queued != 1 || len(s.Snapshot(Query{}).Events) != 2 {
-		t.Fatalf("full queue blocked or became unbounded: elapsed=%s stats=%+v", time.Since(before), s.Stats())
+	if elapsed := time.Since(before); elapsed > time.Second {
+		t.Fatalf("full queue blocked: elapsed=%s", elapsed)
+	}
+	if stats := s.Stats(); stats.Dropped != 9999 || stats.Queued != 1 {
+		t.Fatalf("full queue counters incorrect: %+v", stats)
+	}
+	if page := s.Snapshot(Query{}); len(page.Events) != 2 {
+		t.Fatalf("full queue recent window incorrect: retained=%d want=2 stats=%+v", len(page.Events), s.Stats())
 	}
 	blocked := filepath.Join(t.TempDir(), "ordinary-file")
 	if err := os.WriteFile(blocked, []byte("not a directory"), 0o600); err != nil {

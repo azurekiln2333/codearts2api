@@ -253,3 +253,12 @@ token proof and all four browser suites against extracted HTML. See
 - [x] Commit owned changes and verify actual exported artifact; journal evidence and honest remote boundary without closing R13.
 
 Actual140-member source archive passed extracted build/start, seven GET routes, synthetic token replay,85 Python tests, actionlint and official Compose matrix. See `research/r19-source-release.md`. No remote publication/deployment; R13 remains open.
+
+
+## R20: remote CI and CNB execution
+
+- [x] Bind/push all five remote repositories, preserve GitLab initialization history and confirm identical main revisions.
+- [x] Read actual GitHub failing job and separate notice from failing audit assertion.
+- [x] Repair demonstrated audit fixture/test defect; run focused and full appropriate checks and independent review.
+- [ ] Push verified correction and observe real GitHub/CNB validation.
+- [ ] Execute/inspect CNB remote image build and record actual registry result or precise external blocker.

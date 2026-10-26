@@ -442,3 +442,8 @@ Default Compose has image only, bounded log rotation and Watchtower label/scope 
 Validation: official Compose config matrix uses synthetic .env/config only; inspect resolved images/ports/mounts/updater filters/build overlay. Unit tests execute shared release metadata against stable/prerelease/invalid tags and committed export; static YAML parsing plus actionlint where available, actual Go build/tests, extracted source validation. Docker/registry runtime and remote workflows must be reported unverified if unavailable. No production traffic required.
 
 R19 multilingual ownership: Pi pA owns all three README translations plus deployment docs; Pi p6 adds all three to required release inputs and tests navigation/command equivalence. Standard documented image-deployment command should enable automatic updates as requested, with an explicit opt-out/local-build path.
+
+
+## R20: remote verification boundary
+
+Actual GitHub run40294063255 fails in Go tests, audit_test.go197. The zero-option stopped-consumer fixture must satisfy production retention/sanitization invariants while testing queue saturation independently of clocks/platform resolution. Minimal audit fixture/diagnostics repair owned by implementation subagent; parent coordinates remote inspection and registry build. CNB main75ed55c pushed and confirmed. Read actual CNB status before selecting build trigger; only publish via the existing validated trusted-tag gate, preserving stable/prerelease policy.
