@@ -438,3 +438,25 @@ Four existing Pi delivered image Compose, scoped auto-updates, gated GitHub/CNB 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 14: R20 repair Linux CI and verify remote images
+<!-- trellis-session: v=2 fp=b205b9d80b8dcea3 -->
+
+**Date**: 2026-10-26
+**Task**: R20 repair Linux CI and verify remote images
+**Branch**: `fix/deepseek-concurrency-20261021`
+
+### Summary
+
+Fixed zero-retention audit queue fixture; all5 remotes synchronized. GitHub/CNB main validations pass. Actual v0.1.0-rc.1 Release and amd64/arm64 image jobs succeed; anonymous registries and exact revision configs verified. Extracted140-member release passes85 tests and smoke; no stable latest/server deployment; historical R13 open.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea96422` | test: normalize audit retention in queue overflow fixture |
+
+### Status
+
+[OK] **Completed**

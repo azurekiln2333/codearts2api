@@ -387,6 +387,26 @@
       "historical_r13_closed": false,
       "source_report": "research/r19-integrated-delivery.md",
       "release_report": "research/r19-source-release.md"
+    },
+    "remote_ci_image_followup": {
+      "state": "remote_prerelease_build_and_publication_verified",
+      "verified_at": "2026-10-26",
+      "quality_gate_passed": true,
+      "source_commit": "ea9642229ed6dd27c87e65fa32e3b470f5e9875d",
+      "tag": "v0.1.0-rc.1",
+      "github_main_run": 40304104020,
+      "github_tag_run": 40304404431,
+      "cnb_main_run": "cnb-lfc-1k5rqgbgs",
+      "cnb_tag_run": "cnb-u3q-1k5rqkmo6",
+      "github_test_release_image_passed": true,
+      "cnb_image_and_source_release_stages_passed": true,
+      "anonymous_registry_multiarch_revision_verified": true,
+      "extracted_release_verified": true,
+      "release_sha256": "abadf04373861fa1ab5ed41ad7d61e09384fee26062e86785a336e1c16e4fc41",
+      "stable_latest_published": false,
+      "production_deployment_verified": false,
+      "historical_r13_closed": false,
+      "report": "research/r20-remote-delivery.md"
     }
   }
 }

@@ -260,5 +260,7 @@ Actual140-member source archive passed extracted build/start, seven GET routes, 
 - [x] Bind/push all five remote repositories, preserve GitLab initialization history and confirm identical main revisions.
 - [x] Read actual GitHub failing job and separate notice from failing audit assertion.
 - [x] Repair demonstrated audit fixture/test defect; run focused and full appropriate checks and independent review.
-- [ ] Push verified correction and observe real GitHub/CNB validation.
-- [ ] Execute/inspect CNB remote image build and record actual registry result or precise external blocker.
+- [x] Push verified correction and observe real GitHub/CNB validation.
+- [x] Execute/inspect CNB remote image build and record actual registry result or precise external blocker.
+
+Actual remote proof: GitHub main40304104020 and tag40304404431 pass; CNB main cnb-lfc-1k5rqgbgs passes and tag cnb-u3q-1k5rqkmo6 image/source Release stages all succeed. Anonymous multiarch registries and exact revision configs verified for v0.1.0-rc.1. See research/r20-remote-delivery.md.
