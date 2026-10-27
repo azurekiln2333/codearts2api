@@ -22,6 +22,8 @@ This directory contains guidelines for backend development. Fill in each file wi
 | [Chat Request Lifecycle](./request-lifecycle.md) | Admission, fairness, ownership, streaming deadlines, SSE completion, and refresh/reload contracts | Implemented |
 | [Request Audit](./request-audit.md) | Bounded metadata, audit API/UI, storage limits, recovery state and build diagnostics | Implemented |
 | [Generation Token Usage](./token-usage.md) | Typed per-request counts, source labels, bounded filtered summaries and console display | Implemented R15 |
+| [Account Credit Quota](./account-credit-quota.md) | Cached account credit snapshots, overview and New API balance contract | Implemented R21 |
+| [Responses and Messages](./protocol-compatibility.md) | Supported adapter subset and shared lifecycle guarantees | Implemented R21 |
 | [OAuth Console](./oauth-console.md) | Single start/submit flow, callback completion and consistent ports | Implemented R16 |
 | [Embedded Admin Panel](./admin-panel.md) | Workspace layout, navigation/base paths, UI data contracts and real-browser verification | Implemented |
 | [Model Discovery](./model-discovery.md) | Source-aware catalogs, bounded explicit refresh, account benefit routing and stale-negative recovery | Implemented |
@@ -35,6 +37,10 @@ editing. For audit, account diagnostics or build identity, also read
 [Request Audit](./request-audit.md). Other guideline pages remain bootstrap placeholders.
 For generation token accounting or usage UI, also read
 [Generation Token Usage](./token-usage.md).
+For account credit collection, overview balances or New API balance integration,
+also read [Account Credit Quota](./account-credit-quota.md).
+For Responses or Messages adapters and their shared request lifecycle, also read
+[Responses and Messages](./protocol-compatibility.md).
 For embedded panel layout, navigation or controls, also read
 [Embedded Admin Panel](./admin-panel.md).
 For model discovery, refresh, benefit routing or model-directory changes, also read

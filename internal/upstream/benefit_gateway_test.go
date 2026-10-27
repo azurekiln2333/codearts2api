@@ -176,7 +176,7 @@ func TestDiscoveryBenefitGateSignedAndSkipsLegacyEndpoints(t *testing.T) {
 			mu.Lock()
 			gateCalls++
 			mu.Unlock()
-			if r.Method != http.MethodGet || r.URL.RawQuery != "" || r.Header.Get("Agent-Type") != "PromptCenter" || r.Header.Get(HeaderMaasType) != "" || r.Header.Get("X-Security-Token") != "fixture-token" || r.Header.Get("Content-Type") != "application/json" || r.Header.Get("X-Language") != "zh-cn" {
+			if r.Method != http.MethodGet || r.URL.RawQuery != "" || r.Header.Get("Agent-Type") != "PromptCenter" || r.Header.Get(HeaderMaasType) != "" || r.Header.Get("X-Security-Token") != "fixture-token" || r.Header.Get("X-Auth-Token") != "" || r.Header.Get("Content-Type") != "application/json" || r.Header.Get("X-Language") != "zh-cn" {
 				t.Errorf("benefit gate did not use its documented request protocol")
 			}
 			authorization := r.Header.Get("Authorization")

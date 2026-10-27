@@ -5,11 +5,13 @@
 package server
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -69,7 +71,7 @@ func parseChatRequest(body []byte) (*chatRequest, error) {
 		Tools               []map[string]any  `json:"tools"`
 		ToolChoice          json.RawMessage   `json:"tool_choice"`
 	}
-	if err := json.Unmarshal(body, &raw); err != nil {
+	if err := decodeJSONNumbers(body, &raw); err != nil {
 		return nil, fmt.Errorf("parse request: %w", err)
 	}
 	if len(raw.Messages) == 0 {
@@ -118,6 +120,22 @@ func parseChatRequest(body []byte) (*chatRequest, error) {
 		return nil, errors.New("no user or tool message found")
 	}
 	return req, nil
+}
+
+// decodeJSONNumbers keeps exact numeric values in tool schemas and arguments.
+func decodeJSONNumbers(body []byte, value any) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
 }
 
 // parseMessage 解析单条消息：content 支持 string 与 [{type:text,text}] 分片。
@@ -194,7 +212,7 @@ func rawJSONString(raw json.RawMessage) string {
 		return s
 	}
 	var v any
-	if err := json.Unmarshal(raw, &v); err != nil {
+	if err := decodeJSONNumbers(raw, &v); err != nil {
 		return "{}"
 	}
 	out, err := json.Marshal(v) // Go map marshal 按 key 排序，天然归一化
@@ -264,7 +282,7 @@ func normalizeArgs(args string) string {
 		return "{}"
 	}
 	var v any
-	if err := json.Unmarshal([]byte(args), &v); err != nil {
+	if err := decodeJSONNumbers([]byte(args), &v); err != nil {
 		return args
 	}
 	out, err := json.Marshal(v)

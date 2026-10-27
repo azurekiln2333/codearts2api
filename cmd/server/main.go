@@ -100,6 +100,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go sch.Run(ctx)
+	h.StartQuotaCollection(ctx)
 	h.StartModelDiscovery(ctx)
 	h.StartAvailabilityProber(ctx)
 	if sink != nil {

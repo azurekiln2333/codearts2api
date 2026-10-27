@@ -126,6 +126,29 @@ func TestModelEntriesAliasesStaticAndBenefit(t *testing.T) {
 	}
 }
 
+func TestModelEntriesCapsAdvertisedOutputTokens(t *testing.T) {
+	entries := modelEntries([]upstream.ModelInfo{
+		{ID: "CAP-TEST", MaxTokens: 131072},
+		{ID: "small-test", MaxTokens: 4096},
+		{ID: "unknown-test"},
+	})
+	byID := map[string]map[string]any{}
+	for _, entry := range entries {
+		byID[entry["id"].(string)] = entry
+	}
+	for _, id := range []string{"CAP-TEST", "cap-test"} {
+		if got := byID[id]["max_output_tokens"]; got != int64(upstream.MaxOutputTokens) {
+			t.Fatalf("%s max_output_tokens=%v", id, got)
+		}
+	}
+	if got := byID["small-test"]["max_output_tokens"]; got != int64(4096) {
+		t.Fatalf("small max_output_tokens=%v", got)
+	}
+	if _, present := byID["unknown-test"]["max_output_tokens"]; present {
+		t.Fatal("unknown output limit must not be fabricated")
+	}
+}
+
 func keysOf[T any](m map[string]T) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

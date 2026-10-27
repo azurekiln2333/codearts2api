@@ -29,6 +29,9 @@ type UpstreamError struct {
 	Msg  string
 }
 
+// ErrIncompleteStream identifies EOF without upstream completion evidence.
+var ErrIncompleteStream = errors.New("upstream stream ended before completion")
+
 func (e *UpstreamError) Error() string {
 	if e.Code != "" {
 		return fmt.Sprintf("codearts error code=%s msg=%s", e.Code, e.Msg)
@@ -451,12 +454,13 @@ func firstNonEmpty(values ...string) string {
 func AggregateRaw(r io.Reader) (*RawCompletion, error) {
 	br := bufio.NewReaderSize(r, 64*1024)
 	var (
-		content strings.Builder
-		reason  strings.Builder
-		finish  = "stop"
-		upErr   error
-		calls   = make(toolCallAccumulator)
-		usage   map[string]any
+		content  strings.Builder
+		reason   strings.Builder
+		finish   = "stop"
+		upErr    error
+		complete bool
+		calls    = make(toolCallAccumulator)
+		usage    map[string]any
 	)
 	var pendingEvent string
 	for {
@@ -469,10 +473,14 @@ func AggregateRaw(r io.Reader) (*RawCompletion, error) {
 			if u, ok := event.payload["usage"].(map[string]any); ok {
 				usage = u
 			}
-			delta, _ := deltaFromChunk(event.payload)
+			delta, nativeFinish := deltaFromChunk(event.payload)
+			if nativeFinish != "" {
+				complete = true
+			}
 			applyToolCallDeltas(delta, calls)
 			applyEvent(&content, &reason, &finish, &upErr, event)
 			if event.terminal {
+				complete = true
 				break
 			}
 		}
@@ -482,6 +490,9 @@ func AggregateRaw(r io.Reader) (*RawCompletion, error) {
 	}
 	if upErr != nil {
 		return nil, upErr
+	}
+	if !complete {
+		return nil, fmt.Errorf("%w: %w", ErrIncompleteStream, io.ErrUnexpectedEOF)
 	}
 	return &RawCompletion{
 		Content:   unwrapQAContent(content.String()),
@@ -536,10 +547,12 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 	h.Set("Connection", "keep-alive")
 	h.Set("X-Accel-Buffering", "no")
 	controller := http.NewResponseController(w)
+	wroteEvent := false
 	write := func(data string) error {
 		if _, err := io.WriteString(w, data); err != nil {
 			return &DownstreamWriteError{Err: err}
 		}
+		wroteEvent = true
 		if err := controller.Flush(); err != nil && !errors.Is(err, http.ErrNotSupported) {
 			return &DownstreamWriteError{Err: err}
 		}
@@ -661,9 +674,15 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 			break
 		}
 	}
+	if streamErr == nil && !sawDone && !sentFinish {
+		streamErr = fmt.Errorf("%w: %w", ErrIncompleteStream, io.ErrUnexpectedEOF)
+	}
 	if streamErr != nil {
 		var downstreamErr *DownstreamWriteError
 		if errors.As(streamErr, &downstreamErr) {
+			return streamErr
+		}
+		if errors.Is(streamErr, ErrIncompleteStream) && !wroteEvent {
 			return streamErr
 		}
 		if err := writeErr(streamErr.Error()); err != nil {

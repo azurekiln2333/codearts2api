@@ -396,6 +396,10 @@ func (c *Client) modelRequest(ctx context.Context, method, endpoint, agentType s
 // requiredStatus optionally narrows a source's success contract. In particular,
 // a pending or partial switch response must never revoke confirmed routes.
 func (c *Client) modelRequestWithStatus(ctx context.Context, method, endpoint, agentType string, cred SignCredential, maxBytes int64, requiredStatus int) ([]byte, error) {
+	return c.modelRequestWithStatusAndHeaders(ctx, method, endpoint, agentType, cred, maxBytes, requiredStatus, nil)
+}
+
+func (c *Client) modelRequestWithStatusAndHeaders(ctx context.Context, method, endpoint, agentType string, cred SignCredential, maxBytes int64, requiredStatus int, headers http.Header) ([]byte, error) {
 	var payload []byte
 	if method == http.MethodPost {
 		payload = []byte("{}")
@@ -411,6 +415,11 @@ func (c *Client) modelRequestWithStatus(ctx context.Context, method, endpoint, a
 	}
 	if cred.SecurityToken != "" {
 		req.Header.Set("X-Security-Token", cred.SecurityToken)
+	}
+	for key, values := range headers {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
 	}
 	signRequest(req, payload, cred)
 	resp, err := c.http.Do(req)

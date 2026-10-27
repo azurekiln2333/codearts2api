@@ -165,7 +165,10 @@ func NewHandler(cfg Config) *Handler {
 	}
 	h.loadChats()
 	h.mux.HandleFunc("POST /v1/chat/completions", h.withAuth(h.chatCompletions))
+	h.mux.HandleFunc("POST /v1/responses", h.withAuth(h.responses))
+	h.mux.HandleFunc("POST /v1/messages", h.anthropicMessages)
 	h.mux.HandleFunc("GET /v1/models", h.withAuth(h.models))
+	h.mux.HandleFunc("GET /v1/quota", h.withAuth(h.handleQuota))
 	h.mux.HandleFunc("GET /status", h.withAuth(h.status))
 	h.mux.HandleFunc("GET /healthz", h.healthz)
 	// WorkBuddy 风格控制台（页面不鉴权，API 走 Bearer）
@@ -174,6 +177,7 @@ func NewHandler(cfg Config) *Handler {
 	h.mux.HandleFunc("GET /panel", h.servePanel)
 	h.mux.HandleFunc("GET /panel/", h.servePanel)
 	h.mux.HandleFunc("GET /admin/api/overview", h.withAuth(h.adminOverview))
+	h.mux.HandleFunc("POST /admin/api/quota/refresh", h.withAuth(h.adminQuotaRefresh))
 	h.mux.HandleFunc("GET /admin/api/requests", h.withAuth(h.adminRequests))
 	h.mux.HandleFunc("GET /admin/api/audit", h.withAuth(h.adminAudit))
 	h.mux.HandleFunc("GET /admin/api/models", h.withAuth(h.adminModels))
@@ -505,6 +509,9 @@ func modelEntries(infos []upstream.ModelInfo) []map[string]any {
 			"context_length": ctx,
 		}
 		if maxOut > 0 {
+			if maxOut > upstream.MaxOutputTokens {
+				maxOut = upstream.MaxOutputTokens
+			}
 			entry["max_output_tokens"] = maxOut
 		}
 		if benefit {
@@ -764,7 +771,7 @@ func buildCompletion(model, reasoning, content string, calls []openAIToolCall, f
 // 返回 true 表示模型只对当前账号不可用；首次数据前可继续尝试其他候选账号。
 func (h *Handler) handleUpstreamError(acct *pool.Account, model string, err error, capturedOwner ...*auth.Auth) bool {
 	var downstream *upstream.DownstreamWriteError
-	if isParamInvalidError(err) || isChatTimeout(err) || errors.Is(err, context.Canceled) || errors.As(err, &downstream) {
+	if isParamInvalidError(err) || isChatTimeout(err) || errors.Is(err, context.Canceled) || errors.Is(err, upstream.ErrIncompleteStream) || errors.As(err, &downstream) {
 		return false
 	}
 	if reason := upstreamUnavailableReason(err); reason != "" {

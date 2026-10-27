@@ -66,6 +66,55 @@ curl -X POST http://127.0.0.1:7866/v1/chat/completions \
 指定函数不存在或重复定义时返回 400。上游 `InferHub.001001005` 参数错误也返回 400，
 不轮换、不冷却账号；若流式响应已开始，则用 SSE 错误事件结束，同样不处罚账号。
 
+CodeArts 上游请求的 `max_tokens` / `max_completion_tokens` 超过 65536 时，网关会限制为
+65536，`/v1/models` 中已知的更大输出上限也会相应限制。更小或未提供的值保持不变。
+`InferHub.001001005.400` 是通用参数错误，其他参数或请求体过大仍可能触发它。
+
+### 积分与 New API 余额
+
+概览显示账号积分套餐的总额、已使用和剩余；后台启动后每 5 分钟读取一次，也可在概览手动刷新。
+福利模型的独立每日额度不包含在内。相同 UID 去重，但不同账号可能共用同一套餐，汇总可能重复。
+读取失败、过期或部分账号未知时不会把不完整总额当作零。
+
+`GET /v1/quota` 使用服务 Bearer Key 返回原始积分和完整性状态，缓存查询不会触发上游请求：
+
+```bash
+curl http://127.0.0.1:7866/v1/quota -H "Authorization: Bearer $CA2A_API_KEY"
+```
+
+本项目目录中的 New API 支持“高级自定义”渠道余额路由。该渠道把余额当作美元，因此只有在
+自行确定换算比例后，才应设置 `credits_per_usd`；下面的 `100` 只是配置示例，不是官方汇率。
+将渠道 Base URL 设为服务根地址（例如 `http://127.0.0.1:7866`，不要以 `/v1` 结尾），
+Key 设为服务 Key。新建渠道时，可在“高级自定义”渠道的“配置路由”→“完整 JSON”中使用
+以下示例；它是路由编辑器的 JSON，不是整个渠道的 `settings`：
+
+```json
+{"advanced_routes":[
+  {"incoming_path":"/v1/chat/completions","upstream_path":"/v1/chat/completions","converter":"none"},
+  {"incoming_path":"/v1/responses","upstream_path":"/v1/responses","converter":"none"},
+  {"incoming_path":"/v1/messages","upstream_path":"/v1/messages","converter":"none"},
+  {"incoming_path":"/v1/models","upstream_path":"/v1/models","converter":"none"},
+  {"incoming_path":"/v1/dashboard/billing/credit_grants","upstream_path":"/v1/quota?credits_per_usd=100","converter":"none"}
+]}
+```
+
+Responses 和 Messages 是协议适配器，仅支持文本和部分工具等功能。Responses 不支持持久化
+（`store=true`）或通过 `previous_response_id` 续接；两种适配器均不支持图片，使用时会返回错误。
+
+示例配置了聊天、Responses、Messages、模型列表和余额路由；其他接口需要增加对应路由。已有渠道应保留原有路由，
+在路由编辑器的“余额查询”中添加或编辑余额路由；未配置时先选择“添加管理路由”。将上游路径
+设为 `/v1/quota?credits_per_usd=100`，认证选择“默认 Bearer”，保存路由后再保存渠道。按自行
+确定的比例替换 `100`。多密钥渠道不支持余额查询。
+
+刷新渠道余额时，完整且新鲜的积分快照按该比例换算；快照不完整或过期会返回 503，不会写入
+虚假的零余额，但 New API 可能继续显示上次的旧余额。普通 OpenAI 类型渠道不使用该余额路由，
+需使用支持此功能的 New API 版本。
+
+福利模型的独立额度不计入积分余额。New API 批量或定时更新余额时，若积分余额为零，可能自动禁用
+开启了自动禁用的渠道，即使福利模型仍有额度。依赖福利模型时，可关闭该渠道的“异常自动禁用”，或避免
+批量及定时余额更新；关闭自动禁用也会影响该渠道其他异常的自动停用。单渠道手动查询余额不会
+触发上述批量或定时更新的自动禁用行为。
+
 ### 多用户并发与超时（New API 接入）
 
 请求会优先使用有空闲槽位且模型能力匹配的健康账号；同负载账号轮转分配，已有会话

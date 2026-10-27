@@ -393,7 +393,11 @@ type ChatMessage struct {
 	Text string `json:"-"` // legacy debug input
 }
 
-// ChatOptions 是需要原样传给 OpenAI 兼容上游的可选生成参数。
+// MaxOutputTokens is a conservative compatibility ceiling for CodeArts requests;
+// a particular model may impose a lower limit.
+const MaxOutputTokens = 65536
+
+// ChatOptions 是传给 OpenAI 兼容上游的可选生成参数。
 type ChatOptions struct {
 	ReasoningEffort string
 	MaxTokens       *int
@@ -494,7 +498,11 @@ func chatBodyV2Exact(chatID string, messages []ChatMessage, model string, opts C
 		body["reasoning_effort"] = opts.ReasoningEffort
 	}
 	if opts.MaxTokens != nil {
-		body["max_tokens"] = *opts.MaxTokens
+		maxTokens := *opts.MaxTokens
+		if maxTokens > MaxOutputTokens {
+			maxTokens = MaxOutputTokens
+		}
+		body["max_tokens"] = maxTokens
 	}
 	if opts.Temperature != nil {
 		body["temperature"] = *opts.Temperature

@@ -48,6 +48,17 @@ func auditOutcome(outcome string, cause audit.Cause, canceled bool) string {
 	return outcome
 }
 
+func responseTranslationOutcome(err error) string {
+	switch {
+	case errors.Is(err, errAnthropicResponseTranslation), errors.Is(err, errResponsesResponseTranslation):
+		return "upstream_body_error"
+	case errors.Is(err, errAnthropicStreamTranslation), errors.Is(err, errResponsesStreamTranslation):
+		return "upstream_stream_error"
+	default:
+		return ""
+	}
+}
+
 func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	// A stable correlation id is generated for every request, independent of
@@ -94,6 +105,8 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 			switch {
 			case canceled:
 				recordOutcome, recordErr = "canceled", r.Context().Err()
+			case responseTranslationOutcome(w.err) != "":
+				recordOutcome, recordErr = responseTranslationOutcome(w.err), w.err
 			case w.err != nil:
 				recordOutcome, recordErr = "downstream_canceled", &upstream.DownstreamWriteError{Err: w.err}
 			case isChatTimeout(context.Cause(lifetime.ctx)):
@@ -525,6 +538,10 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				h.cfg.Pool.NoteUpstreamBusy(acct, sentAuth, h.cfg.QueueRetryDelay)
 			}
 			current.close()
+			if translated := responseTranslationOutcome(w.err); translated != "" {
+				outcome, auditErr = translated, w.err
+				return
+			}
 			if w.err != nil || (streamErr != nil && r.Context().Err() != nil) {
 				outcome = "downstream_canceled"
 				return
@@ -533,6 +550,9 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 				outcome = "upstream_stream_error"
 				auditErr = streamErr
 				h.handleUpstreamError(acct, canonical, streamErr, sentAuth)
+				if _, committed := w.Status(); errors.Is(streamErr, upstream.ErrIncompleteStream) && !committed {
+					writeOpenAIError(w, http.StatusBadGateway, "upstream_error", truncateMsg(streamErr.Error(), 200))
+				}
 				return
 			}
 			storeChat()
@@ -590,6 +610,10 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		telemetry.SetPhase(lifetime.ctx, telemetry.WriteResponse)
 		completedUsage := usageEstimate(msgs, comp)
 		writeJSON(w, http.StatusOK, buildCompletion(model, comp.Reasoning, content, calls, finish, chatID, completedUsage))
+		if translated := responseTranslationOutcome(w.err); translated != "" {
+			outcome, auditErr = translated, w.err
+			return
+		}
 		if w.err != nil {
 			outcome = "downstream_canceled"
 			return

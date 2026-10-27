@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -221,6 +223,86 @@ func TestAuditNeverRecordsSecretsOrContent(t *testing.T) {
 			t.Fatalf("record leaked %q: %s", forbidden, raw)
 		}
 	}
+}
+
+func TestAuditOutcomeGroupsFilterBeforePaginationAndUsage(t *testing.T) {
+	sink := newAuditSink(t)
+	for _, event := range []audit.Event{
+		{ID: "missing-outcome", Committed: true, Status: http.StatusBadGateway},
+		{ID: "success-upstream", Outcome: "ok", Committed: true, Status: http.StatusOK, Usage: audit.UsageFromMap(map[string]any{"prompt_tokens": 4, "completion_tokens": 6}, audit.UsageSourceUpstream)},
+		{ID: "invalid", Outcome: "invalid_request", Committed: true, Status: http.StatusBadRequest},
+		{ID: "success-estimated", Outcome: "ok", Committed: true, Status: http.StatusOK, Usage: audit.UsageFromMap(map[string]any{"prompt_tokens": 8, "completion_tokens": 12}, audit.UsageSourceEstimated)},
+		{ID: "partial-stream", Outcome: "upstream_stream_error", Committed: true, Status: http.StatusOK, Stream: true},
+		{ID: "canceled", Outcome: "downstream_canceled", Canceled: true},
+	} {
+		sink.Record(event)
+	}
+	waitForRecord(t, sink, "canceled")
+	h, _ := auditHandler(t, "http://127.0.0.1:1", 0, sink, func(c *Config) { c.APIKey = "audit-key" })
+	type page struct {
+		Events     []audit.Event      `json:"events"`
+		Usage      audit.UsageSummary `json:"usage"`
+		NextBefore uint64             `json:"next_before"`
+		HasMore    bool               `json:"has_more"`
+	}
+	get := func(path string, want int) page {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "/admin/api/requests?"+path, nil)
+		req.Header.Set("Authorization", "Bearer audit-key")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("query %q: status %d, want %d", path, rec.Code, want)
+		}
+		var p page
+		if want == http.StatusOK {
+			if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return p
+	}
+	success := get("outcome_group=success&limit=1", http.StatusOK)
+	if len(success.Events) != 1 || success.Events[0].ID != "success-estimated" || !success.HasMore ||
+		success.Usage.Requests != 2 || success.Usage.WithUsage != 2 || success.Usage.UpstreamRequests != 1 ||
+		success.Usage.EstimatedRequests != 1 || success.Usage.PromptTokens != 12 ||
+		success.Usage.CompletionTokens != 18 || success.Usage.TotalTokens != 30 {
+		t.Fatalf("success filter mismatch: %+v", success)
+	}
+	olderSuccess := get("outcome_group=success&limit=1&before="+strconv.FormatUint(success.NextBefore, 10), http.StatusOK)
+	if len(olderSuccess.Events) != 1 || olderSuccess.Events[0].ID != "success-upstream" || olderSuccess.HasMore || !reflect.DeepEqual(olderSuccess.Usage, success.Usage) {
+		t.Fatalf("success pagination changed filtered token summary: first=%+v older=%+v", success, olderSuccess)
+	}
+	failure := get("outcome_group=failure&limit=1", http.StatusOK)
+	if len(failure.Events) != 1 || failure.Events[0].Outcome != "downstream_canceled" || !failure.Events[0].Canceled ||
+		failure.Usage.Requests != 4 || failure.Usage.UnknownRequests != 4 || failure.Usage.WithUsage != 0 || !failure.HasMore {
+		t.Fatalf("failure filter mismatch: %+v", failure)
+	}
+	older := get("outcome_group=failure&limit=1&before="+strconv.FormatUint(failure.NextBefore, 10), http.StatusOK)
+	if len(older.Events) != 1 || older.Events[0].Outcome != "upstream_stream_error" || !older.Events[0].Committed ||
+		older.Events[0].Status != http.StatusOK || !reflect.DeepEqual(older.Usage, failure.Usage) {
+		t.Fatalf("failure pagination/usage mismatch: %+v", older)
+	}
+	empty := get("outcome_group=failure&status=502", http.StatusOK)
+	if len(empty.Events) != 1 || empty.Events[0].ID != "missing-outcome" || empty.Events[0].Outcome != "" || empty.Usage.Requests != 1 || empty.Usage.UnknownRequests != 1 {
+		t.Fatalf("empty outcome omitted from failure group: %+v", empty)
+	}
+	exact := get("outcome=invalid_request", http.StatusOK)
+	if len(exact.Events) != 1 || exact.Events[0].Outcome != "invalid_request" {
+		t.Fatalf("existing exact-outcome filter changed: %+v", exact)
+	}
+	intersection := get("outcome_group=failure&outcome=upstream_stream_error&status=200", http.StatusOK)
+	if len(intersection.Events) != 1 || intersection.Events[0].ID != "partial-stream" || !intersection.Events[0].Committed ||
+		intersection.Events[0].Status != http.StatusOK || intersection.Usage.Requests != 1 || intersection.Usage.UnknownRequests != 1 {
+		t.Fatalf("failure/exact/status intersection mismatch: %+v", intersection)
+	}
+	for _, query := range []string{"outcome_group=success&outcome=upstream_stream_error", "outcome_group=failure&outcome=upstream_stream_error&status=400"} {
+		filtered := get(query, http.StatusOK)
+		if len(filtered.Events) != 0 || filtered.Usage.Requests != 0 {
+			t.Fatalf("conflicting filters returned records: query=%q page=%+v", query, filtered)
+		}
+	}
+	get("outcome_group=unknown", http.StatusBadRequest)
 }
 
 // The audit API is protected by the existing bearer key.

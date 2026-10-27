@@ -190,6 +190,32 @@ func TestChatBodyV2CarriesBuiltInAgentChatID(t *testing.T) {
 	}
 }
 
+func TestChatBodyV2CapsOutputTokens(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input *int
+		want  any
+	}{
+		{name: "omitted"},
+		{name: "below", input: intPointer(8192), want: 8192},
+		{name: "boundary", input: intPointer(MaxOutputTokens), want: MaxOutputTokens},
+		{name: "above", input: intPointer(MaxOutputTokens + 1), want: MaxOutputTokens},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := chatBodyV2Exact("", nil, "test-model", ChatOptions{MaxTokens: tc.input})
+			got, present := body["max_tokens"]
+			if present != (tc.input != nil) || got != tc.want {
+				t.Fatalf("max_tokens=%v present=%t, want %v", got, present, tc.want)
+			}
+			if tc.name == "above" && *tc.input != MaxOutputTokens+1 {
+				t.Fatal("request options were mutated")
+			}
+		})
+	}
+}
+
+func intPointer(value int) *int { return &value }
+
 func TestBuildAuthorizeURLUsesRefreshableOAuthParameters(t *testing.T) {
 	cfg := DefaultLoginConfig()
 	got, err := url.Parse(New(time.Second).BuildAuthorizeURL(cfg, "ticket", "challenge", "S256", 43123))

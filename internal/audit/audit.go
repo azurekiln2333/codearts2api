@@ -217,10 +217,13 @@ type Query struct {
 	Limit   int
 	Before  uint64 // return events with Seq < Before; 0 means newest
 	Outcome string
-	Account string
-	Model   string
-	Status  int
-	Since   time.Time
+	// OutcomeGroup groups successful and unsuccessful executions without
+	// changing the exact Outcome filter used by existing clients.
+	OutcomeGroup string
+	Account      string
+	Model        string
+	Status       int
+	Since        time.Time
 }
 
 // Page is a stable slice of the recent window.
@@ -487,6 +490,19 @@ func (s *Sink) Snapshot(q Query) Page {
 // only to the returned event slice, not to a filtered window's usage totals.
 func matchesQuery(ev Event, q Query, ts time.Time) bool {
 	if !q.Since.IsZero() && ts.Before(q.Since) {
+		return false
+	}
+	switch q.OutcomeGroup {
+	case "success":
+		if ev.Outcome != "ok" {
+			return false
+		}
+	case "failure":
+		if ev.Outcome == "ok" {
+			return false
+		}
+	case "":
+	default:
 		return false
 	}
 	return (q.Outcome == "" || ev.Outcome == q.Outcome) &&

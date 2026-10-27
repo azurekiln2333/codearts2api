@@ -132,7 +132,7 @@ const server = http.createServer(async (req, res) => {
     if (state.mode === 'audit-error') { json(503, { error: { message: 'Fixture temporary audit error' } }); return; }
     if (state.mode === 'empty') { json(200, { events: [], disabled: true, has_more: false, window: 512 }); return; }
     const query = url.searchParams;
-    const filtered = events.filter(e => (!query.get('before') || e.seq < Number(query.get('before'))) && (!query.get('outcome') || e.outcome === query.get('outcome')) && (!query.get('model') || e.model.toLowerCase().includes(query.get('model').toLowerCase())) && (!query.get('account') || String(e.account || '').includes(query.get('account'))) && (!query.get('status') || e.status === Number(query.get('status'))));
+    const filtered = events.filter(e => (!query.get('before') || e.seq < Number(query.get('before'))) && (!query.get('outcome') || e.outcome === query.get('outcome')) && (!query.get('outcome_group') || (query.get('outcome_group') === 'success' ? e.outcome === 'ok' : e.outcome !== 'ok')) && (!query.get('model') || e.model.toLowerCase().includes(query.get('model').toLowerCase())) && (!query.get('account') || String(e.account || '').includes(query.get('account'))) && (!query.get('status') || e.status === Number(query.get('status'))));
     const page = filtered.slice(0, 2);
     json(200, { events: page, has_more: filtered.length > page.length, next_before: page.at(-1)?.seq, window: 512, dropped: 0, write_failures: 0 }); return;
   }
@@ -396,10 +396,16 @@ async function navigate(page, view) {
     assert.ok(state.calls.some(call => call.path.endsWith('/requests') && call.query.includes('account=fixture-account-01')));
     filteredResponse = page.waitForResponse(response => response.url().includes('/admin/api/requests') && !new URL(response.url()).searchParams.get('account'));
     await page.locator('#reqAccount').fill(''); await page.locator('#reqAccount').press('Enter'); await filteredResponse;
-    filteredResponse = page.waitForResponse(response => response.url().includes('/admin/api/requests') && new URL(response.url()).searchParams.get('outcome') === 'timeout');
-    await page.locator('#reqOutcome').selectOption('timeout'); await filteredResponse;
-    await page.waitForFunction(() => document.getElementById('reqBody')?.textContent.includes('504'));
-    filteredResponse = page.waitForResponse(response => response.url().includes('/admin/api/requests') && !new URL(response.url()).searchParams.get('outcome'));
+    assert.deepEqual(await page.locator('#reqOutcome option').allTextContents(), ['全部结果', '成功', '失败']);
+    filteredResponse = page.waitForResponse(response => response.url().includes('/admin/api/requests') && new URL(response.url()).searchParams.get('outcome_group') === 'success');
+    await page.locator('#reqOutcome').selectOption('success'); await filteredResponse;
+    await page.waitForFunction(() => document.getElementById('reqBody')?.textContent.includes('fixture-request-0006'));
+    assert.equal(await page.locator('#reqBody tr').count(), 1);
+    filteredResponse = page.waitForResponse(response => response.url().includes('/admin/api/requests') && new URL(response.url()).searchParams.get('outcome_group') === 'failure');
+    await page.locator('#reqOutcome').selectOption('failure'); await filteredResponse;
+    await page.waitForFunction(() => document.getElementById('reqBody')?.textContent.includes('fixture-request-0005'));
+    assert.doesNotMatch(await page.locator('#reqBody').innerText(), /fixture-request-0006/);
+    filteredResponse = page.waitForResponse(response => response.url().includes('/admin/api/requests') && !new URL(response.url()).searchParams.get('outcome_group'));
     await page.locator('#reqOutcome').selectOption(''); await filteredResponse;
     filteredResponse = page.waitForResponse(response => response.url().includes('/admin/api/requests') && new URL(response.url()).searchParams.get('status') === '504');
     await page.locator('#reqStatus').fill('504'); await page.locator('#reqStatus').press('Enter'); await filteredResponse;

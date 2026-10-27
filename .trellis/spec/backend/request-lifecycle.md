@@ -221,6 +221,10 @@ DONE text. Shared decoding is used by preflight, aggregation, and streaming.
 Errors take precedence over success-shaped DONE fields. Apply final content,
 reasoning, tools, and usage before stopping. `finish_reason` alone is not terminal:
 usage can follow it. Both consumers stop at completion without waiting for EOF.
+If EOF arrives first, an observed `finish_reason` still supplies completion
+evidence. EOF without either marker is an incomplete upstream stream, not a
+success: emit a stream error or return 502 before commitment, do not record
+successful usage, and do not punish the account for this ambiguous failure.
 
 Before response commitment, errors use the existing OpenAI JSON envelope.
 After streaming starts, upstream read/error paths emit an SSE error and `[DONE]`

@@ -21,8 +21,16 @@ audit.Open(audit.Options) (*audit.Sink, error)
 
 Authenticated APIs: `GET /admin/api/requests`, `GET /admin/api/audit` and
 `GET /admin/api/overview` and `GET /admin/api/connections`. Requests use `limit` (default 50, maximum 200), `before`
-(exclusive uint64 sequence cursor), `outcome`, `account`, `model` (requested or
+(exclusive uint64 sequence cursor), `outcome`, `outcome_group`, `account`, `model` (requested or
 canonical, case insensitive), `status` and RFC3339 `since`.
+
+`outcome_group=success` matches `outcome=ok`; `outcome_group=failure` matches
+all other outcomes. Empty means no grouping, and other values return HTTP 400.
+Apply the group alongside existing exact filters before pagination and token usage
+aggregation; retain the exact `outcome` parameter for existing clients.
+`ok` describes a successfully delivered protocol result, not whether the model's
+text is useful or ended due to an output limit. Responses clients must inspect
+the response's `incomplete` status separately.
 
 Requests and audit-statistics responses additionally contain `usage`, the filtered
 bounded recent-window generation summary. Events may contain nullable typed

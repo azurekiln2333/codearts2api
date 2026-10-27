@@ -66,6 +66,55 @@ curl -X POST http://127.0.0.1:7866/v1/chat/completions \
 指定函式不存在或重複定義時回傳 400。上游 `InferHub.001001005` 參數錯誤也回傳 400，
 不輪替、不冷卻帳號；若串流回應已開始，則用 SSE 錯誤事件結束，同樣不處罰帳號。
 
+CodeArts 上游請求的 `max_tokens` / `max_completion_tokens` 超過 65536 時，閘道會限制為
+65536，`/v1/models` 中已知的更大輸出上限也會相應限制。較小或未提供的值保持不變。
+`InferHub.001001005.400` 是通用參數錯誤，其他參數或請求本文過大仍可能觸發它。
+
+### 積分與 New API 餘額
+
+總覽顯示帳號積分套餐的總額、已使用與剩餘；後台啟動後每 5 分鐘讀取一次，也可在總覽手動重新整理。
+福利模型的獨立每日額度不包含在內。相同 UID 去重，但不同帳號可能共用同一套餐，彙總可能重複。
+讀取失敗、過期或部分帳號未知時，不會把不完整總額當作零。
+
+`GET /v1/quota` 使用服務 Bearer Key 回傳原始積分和完整性狀態，快取查詢不會觸發上游請求：
+
+```bash
+curl http://127.0.0.1:7866/v1/quota -H "Authorization: Bearer $CA2A_API_KEY"
+```
+
+本專案目錄中的 New API 支援「進階自訂」渠道餘額路由。該渠道把餘額當作美元，因此只有在
+自行確定換算比例後才應設定 `credits_per_usd`；下方的 `100` 只是設定範例，並非官方匯率。
+將渠道 Base URL 設為服務根位址（例如 `http://127.0.0.1:7866`，不要以 `/v1` 結尾），
+Key 設為服務 Key。新建渠道時，可在「進階自訂」渠道的「設定路由」→「完整 JSON」中使用
+以下範例；它是路由編輯器的 JSON，不是整個渠道的 `settings`：
+
+```json
+{"advanced_routes":[
+  {"incoming_path":"/v1/chat/completions","upstream_path":"/v1/chat/completions","converter":"none"},
+  {"incoming_path":"/v1/responses","upstream_path":"/v1/responses","converter":"none"},
+  {"incoming_path":"/v1/messages","upstream_path":"/v1/messages","converter":"none"},
+  {"incoming_path":"/v1/models","upstream_path":"/v1/models","converter":"none"},
+  {"incoming_path":"/v1/dashboard/billing/credit_grants","upstream_path":"/v1/quota?credits_per_usd=100","converter":"none"}
+]}
+```
+
+Responses 和 Messages 是協定轉接器，僅支援文字和部分工具等功能。Responses 不支援持久化
+（`store=true`）或透過 `previous_response_id` 延續；兩種轉接器均不支援圖片，使用時會回傳錯誤。
+
+範例設定了聊天、Responses、Messages、模型列表和餘額路由；其他介面需要新增對應路由。已有渠道應保留原有路由，
+在路由編輯器的「餘額查詢」中新增或編輯餘額路由；尚未設定時先選擇「新增管理路由」。將上游路徑
+設為 `/v1/quota?credits_per_usd=100`，認證選擇「預設 Bearer」，儲存路由後再儲存渠道。依自行
+確定的比例替換 `100`。多金鑰渠道不支援餘額查詢。
+
+重新整理渠道餘額時，只會換算完整且新鮮的積分快照；快照不完整或過期會回傳 503，不會寫入
+虛假的零餘額，但 New API 可能繼續顯示上次的舊餘額。一般 OpenAI 類型渠道不使用該餘額路由，
+需使用支援此功能的 New API 版本。
+
+福利模型的獨立額度不計入積分餘額。New API 批次或定時更新餘額時，若積分餘額為零，可能自動停用
+開啟自動停用的渠道，即使福利模型仍有額度。依賴福利模型時，可關閉該渠道的「異常自動停用」，或避免
+批次及定時餘額更新；關閉自動停用也會影響該渠道其他異常的自動停用。單渠道手動查詢餘額不會
+觸發上述批次或定時更新的自動停用行為。
+
 ### 多使用者併發與逾時（New API 接入）
 
 請求會優先使用有空閒槽位且模型能力匹配的健康帳號；同負載帳號輪替分配，已有工作階段

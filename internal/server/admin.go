@@ -17,7 +17,8 @@ import (
 // adminOverview reads cached runtime diagnostics only; it never starts model
 // discovery, benefit claims or real inference probes.
 func (h *Handler) adminOverview(w http.ResponseWriter, r *http.Request) {
-	total, healthy, disabled, cooling, credits := h.cfg.Pool.Stats()
+	total, healthy, disabled, cooling, _ := h.cfg.Pool.Stats()
+	quota := h.cfg.Pool.QuotaSnapshot()
 	models := h.modelList()
 	ids := make([]map[string]any, 0, len(models))
 	for _, m := range models {
@@ -31,8 +32,9 @@ func (h *Handler) adminOverview(w http.ResponseWriter, r *http.Request) {
 			"healthy":  healthy,
 			"disabled": disabled,
 			"cooling":  cooling,
-			"credits":  credits,
+			"credits":  quota.Remaining,
 		},
+		"quota":    quota,
 		"accounts": h.cfg.Pool.List(),
 		"models":   ids,
 		"schedule": map[string]any{
@@ -97,6 +99,12 @@ func (h *Handler) auditStats() any {
 // adminRequests serves the bounded recent audit window. Older retained files are
 // the on-disk archive and are intentionally not served here.
 func (h *Handler) adminRequests(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	group := q.Get("outcome_group")
+	if group != "" && group != "success" && group != "failure" {
+		writeOpenAIError(w, http.StatusBadRequest, "invalid_request", "outcome_group must be success or failure")
+		return
+	}
 	if h.cfg.Audit == nil {
 		page := h.cfg.Audit.Snapshot(audit.Query{})
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -105,13 +113,13 @@ func (h *Handler) adminRequests(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	q := r.URL.Query()
 	query := audit.Query{
-		Limit:   atoiDefault(q.Get("limit"), 50),
-		Outcome: q.Get("outcome"),
-		Account: q.Get("account"),
-		Model:   q.Get("model"),
-		Status:  atoiDefault(q.Get("status"), 0),
+		Limit:        atoiDefault(q.Get("limit"), 50),
+		Outcome:      q.Get("outcome"),
+		OutcomeGroup: group,
+		Account:      q.Get("account"),
+		Model:        q.Get("model"),
+		Status:       atoiDefault(q.Get("status"), 0),
 	}
 	if before := q.Get("before"); before != "" {
 		if n, err := strconv.ParseUint(before, 10, 64); err == nil {

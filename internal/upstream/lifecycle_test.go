@@ -115,6 +115,40 @@ func TestReadFailureTerminatesWritableSSEWithoutSuccess(t *testing.T) {
 	}
 }
 
+func TestEOFRequiresCompletionEvidence(t *testing.T) {
+	for _, tc := range []struct {
+		name, wire         string
+		completed, emitted bool
+	}{
+		{name: "partial", wire: "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n", emitted: true},
+		{name: "empty", wire: ""},
+		{name: "heartbeat only", wire: ": keepalive\n\n"},
+		{name: "usage only is not completion", wire: "data: {\"usage\":{\"prompt_tokens\":1}}\n\n"},
+		{name: "finish then EOF", wire: "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n", completed: true},
+		{name: "terminal marker", wire: "data: [DONE]\n\n", completed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := AggregateRaw(strings.NewReader(tc.wire))
+			if tc.completed && err != nil || !tc.completed && !errors.Is(err, io.ErrUnexpectedEOF) {
+				t.Fatalf("aggregate completion=%v err=%v", tc.completed, err)
+			}
+			rec := httptest.NewRecorder()
+			captured := false
+			err = StreamCapture(rec, strings.NewReader(tc.wire), "model", func(*RawCompletion) { captured = true })
+			if tc.completed && (err != nil || !captured) || !tc.completed && (!errors.Is(err, io.ErrUnexpectedEOF) || captured) {
+				t.Fatalf("stream completion=%v captured=%v err=%v", tc.completed, captured, err)
+			}
+			if !tc.completed && tc.emitted {
+				if !strings.Contains(rec.Body.String(), "event: error") || !strings.Contains(rec.Body.String(), "data: [DONE]") {
+					t.Fatalf("missing stream error: %s", rec.Body.String())
+				}
+			} else if !tc.completed && rec.Body.Len() != 0 {
+				t.Fatalf("empty incomplete stream committed a response: %s", rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestChatTimeoutCoversActualHTTPWaits(t *testing.T) {
 	for _, phase := range []string{"headers", "first_data", "error_body", "later_idle"} {
 		t.Run(phase, func(t *testing.T) {

@@ -264,3 +264,18 @@ Actual140-member source archive passed extracted build/start, seven GET routes, 
 - [x] Execute/inspect CNB remote image build and record actual registry result or precise external blocker.
 
 Actual remote proof: GitHub main40304104020 and tag40304404431 pass; CNB main cnb-lfc-1k5rqgbgs passes and tag cnb-u3q-1k5rqkmo6 image/source Release stages all succeed. Anonymous multiarch registries and exact revision configs verified for v0.1.0-rc.1. See research/r20-remote-delivery.md.
+
+## R21: stable release and compatible API execution
+
+- [x] Verify v1.0.0/latest publication from both registries (GitHub run 40452597523, CNB cnb-7ig-1k5trh6pj; matching version/latest manifest digests and amd64/arm64 descriptors).
+- [x] Implement and locally verify upstream credit discovery, aggregate overview and New API quota endpoint with synthetic provider data; real provider acceptance remains open.
+- [x] Implement and locally verify OpenAI Responses and Anthropic Messages non-streaming/streaming adapters through existing chat lifecycle.
+- [x] Investigate InferHub.001001005.400; implement bounded output-token compatibility and regression tests without claiming every parameter error is fixed.
+- [x] Implement success/failure audit filtering with server-side pagination and filtered usage; verify panel/API.
+- [ ] Integrate, review, run full tests/browser checks, document limits, commit and deliver without exposing credentials or closing R13.
+
+Local normal/race Go suites, vet, build and 85 release/deployment tests pass.
+Synthetic Chrome desktop/mobile checks cover quota states, refresh and grouped
+requests; an independent review added empty-outcome and HTTP-200 stream-failure
+coverage. The New API adapter route was checked locally. Real upstream quota,
+end-to-end New API, deployment and the historical R13 root cause remain unverified.

@@ -243,3 +243,7 @@ R19 user addition (2026-10-26): deliver three complete, synchronized README file
 ## R20: actual remote CI failure and CNB image build (2026-10-26)
 
 User authorized binding and pushing GitHub/GitCode/Gitee/GitLab/CNB, reports failed GitHub test run, and requests actual CNB remote Docker build. Inspect real job logs, repair the demonstrated defect without weakening tests, sync corrected commits, and observe remote validation/build results. Distinguish the runner migration notice from the failing Go assertion. Preserve private inputs and all remote history; no force pushes or existing release/tag replacement. Existing R13 remains open.
+
+## R21: stable release, API compatibility, quota and audit filters (2026-10-27)
+
+User requests publishing v1.0.0/latest, upstream account quota and a New API compatible quota endpoint, OpenAI Chat/Responses and Anthropic Messages compatibility, investigation and repair of InferHub.001001005.400 errors, and request log success/failure filters. Preserve credentials and avoid presenting unknown quota as zero. Both streaming and non-streaming protocol paths must preserve cancellation, account scheduling, audit and error semantics. Research upstream behavior and New API contracts with evidence, explicitly report unsupported semantics instead of silently corrupting requests. Verify actual stable registry publication and run focused integration/browser regressions plus full relevant quality gates. Existing R13 remains open.

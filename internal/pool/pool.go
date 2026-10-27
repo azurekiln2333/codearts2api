@@ -94,6 +94,7 @@ type Pool struct {
 	nextAccount      int
 	admittedRequests int
 	admissionChanged chan struct{}
+	quota            quotaManager
 }
 
 // New 构建池。
@@ -238,13 +239,14 @@ func (p *Pool) List() []map[string]any {
 		if !a.lastFailureAt.IsZero() {
 			lastFailureAt = a.lastFailureAt.Format(time.RFC3339)
 		}
+		credits := p.accountQuotaRemainingLocked(a, now)
 		out = append(out, map[string]any{
 			"name":          a.Name,
 			"uid":           a.UID,
 			"nickname":      a.UserName,
 			"user_name":     a.UserName,
 			"default_model": a.DefaultModel,
-			"credits":       int64(0), // 保留旧字段；未查询真实余额
+			"credits":       credits,
 			"checkin":       a.checkin,
 			"disabled":      a.disabled,
 			"cooling":       cooling,

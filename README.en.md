@@ -83,6 +83,69 @@ function returns 400. Upstream `InferHub.001001005` parameter errors also return
 rotating or cooling the account; if the stream already started, an SSE error event ends it
 and the account is still not penalized.
 
+The gateway caps upstream `max_tokens` / `max_completion_tokens` at 65536 and caps
+larger known `/v1/models` output limits accordingly; smaller or absent values stay
+unchanged. `InferHub.001001005.400` is a general parameter error and can also be
+caused by other parameters or a large request body.
+
+### Credits and New API balance
+
+The overview shows the total, used and remaining credits in account credit packages.
+The server reads them on startup and every five minutes; the overview also provides a
+manual refresh. Independent daily benefit-model quotas are excluded. Identical UIDs are
+deduplicated, but different accounts may share a package and the sum can overlap. Failed,
+stale or incomplete snapshots are not reported as a zero total.
+
+`GET /v1/quota` uses the service Bearer key and returns raw credits and completeness;
+reading the cache does not contact the upstream:
+
+```bash
+curl http://127.0.0.1:7866/v1/quota -H "Authorization: Bearer $CA2A_API_KEY"
+```
+
+The local New API project supports a balance route for advanced custom channels. It
+interprets the balance as USD, so set `credits_per_usd` only after determining a
+conversion yourself. The `100` below is an example, not an official exchange rate.
+Set the channel Base URL to the service root (for example, `http://127.0.0.1:7866`,
+without a trailing `/v1`) and its key to the service key. For a new channel, use the
+following example under Advanced Custom > Configure routes > Full JSON. This JSON
+belongs to the route editor, not the entire channel `settings`:
+
+```json
+{"advanced_routes":[
+  {"incoming_path":"/v1/chat/completions","upstream_path":"/v1/chat/completions","converter":"none"},
+  {"incoming_path":"/v1/responses","upstream_path":"/v1/responses","converter":"none"},
+  {"incoming_path":"/v1/messages","upstream_path":"/v1/messages","converter":"none"},
+  {"incoming_path":"/v1/models","upstream_path":"/v1/models","converter":"none"},
+  {"incoming_path":"/v1/dashboard/billing/credit_grants","upstream_path":"/v1/quota?credits_per_usd=100","converter":"none"}
+]}
+```
+
+Responses and Messages are protocol adapters supporting a subset including text and
+some tools. Responses does not support persistence (`store=true`) or continuation via
+`previous_response_id`; neither adapter supports images. Such requests return an error.
+
+The example configures chat, Responses, Messages, model-list and balance routes; add routes for any
+other endpoints you need. For an existing channel, keep its routes and add or edit the
+balance route under Balance Query in the route editor. If it is not configured yet,
+select Add management route first. Set the upstream path to
+`/v1/quota?credits_per_usd=100` and authentication to Default Bearer, then save the
+routes and the channel. Replace `100` with your chosen conversion rate. Balance
+queries are not supported for multi-key channels.
+
+Refreshing the channel balance converts only a complete, fresh snapshot; an incomplete
+or stale snapshot returns 503 instead of writing a false zero, but New API may continue
+to display the previous balance. Regular OpenAI channel types do not use this balance
+route; use a New API version that supports it.
+
+Independent benefit-model quotas are excluded from the credit balance. During a bulk or
+scheduled balance update, New API may automatically disable a channel with auto-disable
+enabled when its credit balance is zero, even if benefit-model quota remains. If you
+rely on benefit models, turn off Auto-disable channel or avoid bulk and scheduled
+balance updates. Disabling auto-disable also affects other automatic channel disabling
+for that channel. A manual balance query for a single channel does not trigger the
+bulk or scheduled update's auto-disable behavior.
+
 ### Multi-user concurrency and timeouts (New API integration)
 
 Requests prefer healthy accounts that have a free slot and match the model capability;

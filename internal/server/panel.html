@@ -83,6 +83,9 @@ svg{display:block}
 .stat-icon{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--blue-soft);color:var(--blue)}
 .stat .v{font-size:29px;font-weight:650;letter-spacing:-.6px;line-height:1.25;margin:9px 0 6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .stat .hint{font-size:11px;color:var(--muted)}
+.quota-values{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.quota-values div{min-width:0}.quota-values span{display:block;color:var(--muted);font-size:12px}.quota-values strong{display:block;margin-top:6px;font-size:22px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.quota-note{margin:14px 0 0;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 .two-column{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px;align-items:start}
 .card{border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);min-width:0;overflow:hidden}
 .card-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;min-height:58px}
@@ -306,6 +309,10 @@ svg{display:block}
             <div class="stat"><div class="stat-head"><span>并发占用 / 上限</span><span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg></span></div><div class="v" id="sConcurrency">—</div><div class="hint">所有账号的当前占用与配置容量</div></div>
             <div class="stat"><div class="stat-head"><span>模型目录</span><span class="stat-icon"><svg class="icon" aria-hidden="true"><use href="#i-models"/></svg></span></div><div class="v" id="sModels">—</div><div class="hint">服务返回的模型标识数量</div></div>
           </div>
+          <div class="card" id="quotaCard"><div class="card-h"><h2>账号积分</h2><button class="btn" id="btnQuotaRefresh" type="button"><svg class="icon" aria-hidden="true"><use href="#i-refresh"/></svg>刷新额度</button></div><div class="card-b">
+            <div class="quota-values"><div><span>总积分</span><strong id="quotaTotal">—</strong></div><div><span>已使用</span><strong id="quotaUsed">—</strong></div><div><span>剩余积分</span><strong id="quotaRemaining">—</strong></div></div>
+            <p class="quota-note" id="quotaStatus" role="status" aria-live="polite">正在读取积分…</p><p class="quota-note">仅统计积分包，福利模型额度另算；不同账号可能共用积分包。</p>
+          </div></div>
           <div class="two-column">
             <div class="card"><div class="card-h"><h2>账号池状态</h2><span class="small muted" id="overviewUpdated">正在加载…</span></div><div class="card-b">
               <div class="health-heading"><strong id="poolHeadline">正在读取账号池</strong><span class="badge neutral" id="poolBadge">加载中</span></div>
@@ -384,6 +391,7 @@ const viewInfo = {
 let activePage = "overview", overviewData = null, authEpoch = 0, overviewVersion = 0, authController = null;
 const catalogState = {data:null,refresh:null,busy:false,version:0,timer:null,controller:null};
 const connState = {data:null,busy:false,version:0,timer:null,controller:null,open:new Set()};
+const quotaState = {data:null,busy:false,version:0,timer:null,controller:null};
 const pendingAccounts = new Set();
 const mobileQuery = window.matchMedia("(max-width: 800px)");
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -677,13 +685,16 @@ function stopViewPolling(state){
 function scheduleViewPoll(page,state){
   clearTimeout(state.timer); state.timer = null;
   if (!viewVisible(page) || page === "models" && catalogState.refresh?.state !== "running") return;
+  const retryAt = page === "overview" ? quotaNextRetry(quotaState.data) : null;
+  const delay = page === "overview" && !quotaState.data?.refresh?.running ?
+    retryAt === null ? 30000 : Math.min(30000,Math.max(100,retryAt - Date.now() + 50)) : 2000;
   state.timer = setTimeout(() => {
     state.timer = null;
-    if (viewVisible(page)) (page === "models" ? loadCatalog() : loadConnections()).catch(() => {});
-  },2000);
+    if (viewVisible(page)) (page === "models" ? loadCatalog() : page === "connections" ? loadConnections() : loadQuotaOverview()).catch(() => {});
+  },delay);
 }
 function syncViewPolling(){
-  for (const [page,state,load] of [["models",catalogState,loadCatalog],["connections",connState,loadConnections]]){
+  for (const [page,state,load] of [["overview",quotaState,loadQuotaOverview],["models",catalogState,loadCatalog],["connections",connState,loadConnections]]){
     if (!viewVisible(page)){ stopViewPolling(state); continue; }
     if (!state.busy && state.timer === null) load().catch(() => {});
   }
@@ -716,6 +727,76 @@ async function loadViewSnapshot(page,state,path,renderResult,errorId){
 }
 function loadCatalog(){ return loadViewSnapshot("models",catalogState,"/admin/api/models",renderCatalog,"modelCatalogError"); }
 function loadConnections(){ return loadViewSnapshot("connections",connState,"/admin/api/connections",renderConnections,"connError"); }
+function quotaNextRetry(quota){
+  if (quota?.refresh?.running !== false || typeof quota.refresh.next_at !== "string") return null;
+  const nextAt = Date.parse(quota.refresh.next_at);
+  return Number.isFinite(nextAt) && nextAt > Date.now() ? nextAt : null;
+}
+function renderQuota(quota){
+  quotaState.data = quota || null;
+  const complete = quota?.complete === true, running = quota?.refresh?.running === true;
+  const retryAt = quotaNextRetry(quota);
+  const amount = value => {
+    const number = numberValue(value);
+    return number === null || number < 0 ? "未知" : new Intl.NumberFormat("zh-CN",{maximumFractionDigits:6}).format(number);
+  };
+  $("quotaTotal").textContent = complete ? amount(quota.total) : "未知";
+  $("quotaUsed").textContent = complete ? amount(quota.used) : "未知";
+  $("quotaRemaining").textContent = complete ? amount(quota.remaining) : "未知";
+  const ready = numberValue(quota?.ready_accounts), count = numberValue(quota?.counted_accounts);
+  const states = {empty:"暂无账号",unknown:"等待首次读取",loading:"正在读取积分",partial:"部分账号的积分不可用",failed:"积分读取失败",stale:"积分快照已过期",unavailable:"上游未返回可用积分"};
+  let status = complete ? `已读取 ${ready ?? "未知"} 个账号` : states[quota?.state] || "积分状态未知";
+  if (!complete && numberValue(quota?.known_remaining) !== null) status += `；已知剩余 ${amount(quota.known_remaining)} 积分（${ready ?? "未知"} / ${count ?? "未知"} 个账号）`;
+  if (running) status += " · 正在刷新";
+  else if (retryAt !== null) status += " · 刷新频率受限，可在 " + fmtTime(retryAt) + " 后重试";
+  if (complete && quota.oldest_success_at) status += " · 更新于 " + fmtTime(quota.oldest_success_at);
+  $("quotaStatus").textContent = status;
+  $("btnQuotaRefresh").disabled = quotaState.busy || running;
+}
+async function loadQuotaOverview(){
+  if (!viewVisible("overview") || quotaState.busy) return;
+  clearTimeout(quotaState.timer); quotaState.timer = null;
+  const epoch = authEpoch, version = ++quotaState.version, controller = new AbortController();
+  quotaState.controller = controller; quotaState.busy = true; renderQuota(quotaState.data);
+  try {
+    const data = await api("/admin/api/overview",{signal:controller.signal});
+    if (epoch !== authEpoch || version !== quotaState.version || !viewVisible("overview")) return;
+    renderQuota(data?.quota);
+  } catch(error){
+    if (epoch !== authEpoch || version !== quotaState.version || error.name === "AbortError") return;
+    $("quotaStatus").textContent = "积分读取失败：" + error.message;
+  } finally {
+    if (epoch === authEpoch && version === quotaState.version){
+      quotaState.controller = null; quotaState.busy = false; $("btnQuotaRefresh").disabled = quotaState.data?.refresh?.running === true; scheduleViewPoll("overview",quotaState);
+    }
+  }
+}
+$("btnQuotaRefresh").onclick = async () => {
+  if (!viewVisible("overview") || quotaState.busy || quotaState.data?.refresh?.running) return;
+  clearTimeout(quotaState.timer); quotaState.timer = null;
+  const epoch = authEpoch, version = ++quotaState.version, controller = new AbortController();
+  quotaState.controller = controller; quotaState.busy = true; renderQuota(quotaState.data);
+  let started = false, notice = "";
+  try {
+    const data = await api("/admin/api/quota/refresh",{method:"POST",body:"{}",signal:controller.signal});
+    if (epoch !== authEpoch || version !== quotaState.version || !viewVisible("overview")) return;
+    if (typeof data?.refresh?.running !== "boolean") throw new Error("服务未返回有效刷新状态");
+    quotaState.data = Object.assign({},quotaState.data,{refresh:data.refresh});
+    started = data.refresh.running;
+    if (!started && quotaNextRetry(quotaState.data) === null) notice = "本次刷新未启动，请稍后重试";
+  } catch(error){
+    if (epoch !== authEpoch || version !== quotaState.version || error.name === "AbortError") return;
+    notice = "刷新积分失败：" + error.message; toast(error.message,false);
+  } finally {
+    if (epoch === authEpoch && version === quotaState.version){
+      quotaState.controller = null; quotaState.busy = false;
+      renderQuota(quotaState.data);
+      if (notice) $("quotaStatus").textContent += " · " + notice;
+      if (started && viewVisible("overview")) loadQuotaOverview().catch(() => {});
+      else scheduleViewPoll("overview",quotaState);
+    }
+  }
+};
 $("btnModelsRefresh").onclick = async () => {
   if (!viewVisible("models") || catalogState.busy || catalogState.refresh?.state === "running") return;
   clearTimeout(catalogState.timer); catalogState.timer = null;
@@ -741,6 +822,7 @@ $("btnModelsRefresh").onclick = async () => {
 $("btnConnRefresh").onclick = () => loadConnections().catch(error => toast(error.message,false));
 function render(data){
   overviewData = data;
+  renderQuota(data.quota);
   const stats = data.stats || {}, accounts = data.accounts || [], models = catalogState.data?.models || data.models || [];
   const total = numberValue(stats.total), healthy = numberValue(stats.healthy), cooling = numberValue(stats.cooling), disabled = numberValue(stats.disabled);
   $("sTotal").textContent = numberText(stats.total);
@@ -792,7 +874,7 @@ $("modelSearch").addEventListener("input",renderModels);
 
 // The API pages an exclusive cursor over a bounded recent window, not archives.
 const reqState = {before:0,outcome:"",model:"",account:"",status:"",rows:[],hasMore:false,loaded:false,loading:false,version:0,query:null};
-const outcomeLabels = [["","全部执行结果"],["ok","成功 · ok"],["model_unavailable","模型不可用 · model_unavailable"],["upstream_saturated","上游繁忙 · upstream_saturated"],["queue_wait_timeout","排队超时 · queue_wait_timeout"],["admission_rejected","准入拒绝 · admission_rejected"],["timeout","超时 · timeout"],["request_body_timeout","请求体超时 · request_body_timeout"],["canceled","已取消 · canceled"],["downstream_canceled","下游取消 · downstream_canceled"],["upstream_body_error","上游响应错误 · upstream_body_error"],["upstream_stream_error","流式错误 · upstream_stream_error"],["invalid_request","请求无效 · invalid_request"],["no_healthy_account","无可用账号 · no_healthy_account"]];
+const outcomeLabels = [["","全部结果"],["success","成功"],["failure","失败"]];
 function renderReqFilters(){
   $("reqOutcome").innerHTML = outcomeLabels.map(([value,label]) => `<option value="${value}">${label}</option>`).join("");
   $("reqOutcome").value = reqState.outcome; $("reqModel").value = reqState.model; $("reqAccount").value = reqState.account; $("reqStatus").value = reqState.status;
@@ -882,7 +964,8 @@ function renderRequests(page, append=false){
 async function loadRequests(reset){
   const version = ++reqState.version, epoch = authEpoch;
   const params = new URLSearchParams({limit:"50"});
-  for (const key of ["outcome","model","account","status"]) if (reqState[key]) params.set(key,reqState[key]);
+  if (reqState.outcome) params.set("outcome_group",reqState.outcome);
+  for (const key of ["model","account","status"]) if (reqState[key]) params.set(key,reqState[key]);
   const query = params.toString(), queryChanged = query !== reqState.query;
   if (queryChanged){
     Object.assign(reqState,{query,before:0,rows:[],hasMore:false,loaded:false});
@@ -955,7 +1038,8 @@ function showLogin(){
   if (authController){ authController.abort(); authController = null; }
   $("bootView").setAttribute("aria-busy","false");
   ++authEpoch; ++reqState.version; overviewData = null;
-  stopViewPolling(catalogState); stopViewPolling(connState);
+  stopViewPolling(catalogState); stopViewPolling(connState); stopViewPolling(quotaState);
+  quotaState.data = null; renderQuota(null);
   catalogState.data = catalogState.refresh = null; connState.data = null; connState.open.clear();
   renderModels(); renderCatalogControls();
   $("modelCatalogError").hidden = $("modelCatalogWarning").hidden = true;

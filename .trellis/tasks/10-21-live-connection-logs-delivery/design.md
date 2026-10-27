@@ -447,3 +447,7 @@ R19 multilingual ownership: Pi pA owns all three README translations plus deploy
 ## R20: remote verification boundary
 
 Actual GitHub run40294063255 fails in Go tests, audit_test.go197. The zero-option stopped-consumer fixture must satisfy production retention/sanitization invariants while testing queue saturation independently of clocks/platform resolution. Minimal audit fixture/diagnostics repair owned by implementation subagent; parent coordinates remote inspection and registry build. CNB main75ed55c pushed and confirmed. Read actual CNB status before selecting build trigger; only publish via the existing validated trusted-tag gate, preserving stable/prerelease policy.
+
+## R21: independent protocol adapters and quota
+
+Stable v1.0.0 publishes the previously verified main commit; later feature delivery needs a subsequent release. Three parallel implementation owners handle (1) upstream/account quota and New API quota backend, (2) OpenAI Responses adapter, and (3) Anthropic Messages adapter. The parent owns shared router integration, audit outcome grouping, overview rendering, invalid-param investigation, task/spec integration and final verification. The adapters share the existing chat pipeline for account admission, streaming and audit; do not invent persistent Responses state or quota. The grouped audit query filters before pagination and usage aggregation while retaining exact outcome filtering for existing clients.

@@ -144,8 +144,13 @@ func (w *chatResponseWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// Status reports the committed status and whether anything was committed.
-func (w *chatResponseWriter) Status() (int, bool) { return w.status, w.committed }
+// Status reports the status actually committed by a protocol adapter, if any.
+func (w *chatResponseWriter) Status() (int, bool) {
+	if actual, ok := w.ResponseWriter.(interface{ ResponseStatus() (int, bool) }); ok {
+		return actual.ResponseStatus()
+	}
+	return w.status, w.committed
+}
 
 // setErrorCode records the error code actually emitted to the client, so a
 // record never has to guess what the caller saw.
