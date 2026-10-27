@@ -296,7 +296,11 @@ actual remote artifact publication, not proof of live provider quota or deployme
 - [x] Verify synthetic Chrome flows, desktop/mobile layout, delayed/failed
   refresh, and the full Go suite without using real credentials.
 - [x] Independently review the final authorization flow and refresh races.
-- [ ] Commit and publish the updated release.
+- [x] Commit and publish the updated release.
 
-The previous `v1.0.2` release does not include R22. Historical R13 and real
-provider/production verification remain open.
+The `v1.0.3` tag points to product commit
+`408a342c318ad5b4aca9498e8e0f7416ba3da4c0`. GitHub run `40516659892` and CNB
+tag pipeline `cnb-uo9-1k5uqdil0` succeeded. Both registries published amd64 and
+arm64 images, and each registry's `v1.0.3` and `latest` digests match. The prior
+`v1.0.2` release does not include R22. Historical R13 and real provider/production
+verification remain open.
