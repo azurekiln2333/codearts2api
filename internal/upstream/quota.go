@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
+	"math/big"
 	"net/http"
 	"strings"
 )
@@ -18,6 +19,7 @@ const EpCreditStatistics = "/snap-manager/v1/statistics/plugin"
 // Total because the provider's total metric already includes them.
 type CreditQuota struct {
 	Available bool     `json:"available"`
+	Unlimited bool     `json:"unlimited"`
 	Total     *float64 `json:"total"`
 	Used      *float64 `json:"used"`
 	Remaining *float64 `json:"remaining"`
@@ -63,14 +65,22 @@ func parseCreditQuota(raw []byte) (CreditQuota, error) {
 		}
 		out.Available = true
 		var err error
-		if out.Total, err = quotaNumber(metric.Amount); err != nil {
+		if out.Total, err = quotaNumber(metric.Amount, true); err != nil {
 			return CreditQuota{}, err
 		}
-		if out.Used, err = quotaNumber(metric.Used); err != nil {
+		if out.Total != nil && *out.Total == -1 {
+			out.Unlimited = true
+			out.Total = nil
+		}
+		if out.Used, err = quotaNumber(metric.Used, false); err != nil {
 			return CreditQuota{}, err
 		}
-		if out.Remaining, err = quotaNumber(metric.Remain); err != nil {
+		if out.Remaining, err = quotaNumber(metric.Remain, false); err != nil {
 			return CreditQuota{}, err
+		}
+		if out.Unlimited {
+			out.Remaining = nil
+			continue
 		}
 		if out.Remaining == nil && out.Total != nil && out.Used != nil {
 			remaining := math.Max(0, *out.Total-*out.Used)
@@ -83,13 +93,32 @@ func parseCreditQuota(raw []byte) (CreditQuota, error) {
 	return out, nil
 }
 
-func quotaNumber(raw json.RawMessage) (*float64, error) {
+func quotaNumber(raw json.RawMessage, allowUnlimited bool) (*float64, error) {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil, nil
 	}
 	var value float64
-	if err := json.Unmarshal(raw, &value); err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
+	if err := json.Unmarshal(raw, &value); err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
 		return nil, errors.New("invalid credit statistic")
+	}
+	if value == 0 {
+		mantissa := string(raw)
+		if exponent := strings.IndexAny(mantissa, "eE"); exponent >= 0 {
+			mantissa = mantissa[:exponent]
+		}
+		if strings.ContainsAny(mantissa, "123456789") {
+			return nil, errors.New("invalid credit statistic")
+		}
+	}
+	if value < 0 {
+		// Reject negative values that only round to -1 in float64.
+		if !allowUnlimited || value != -1 || len(raw) > 128 {
+			return nil, errors.New("invalid credit statistic")
+		}
+		exact, ok := new(big.Rat).SetString(string(raw))
+		if !ok || exact.Cmp(big.NewRat(-1, 1)) != 0 {
+			return nil, errors.New("invalid credit statistic")
+		}
 	}
 	return &value, nil
 }

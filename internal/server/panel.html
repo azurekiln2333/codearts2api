@@ -734,15 +734,15 @@ function quotaNextRetry(quota){
 }
 function renderQuota(quota){
   quotaState.data = quota || null;
-  const complete = quota?.complete === true, running = quota?.refresh?.running === true;
+  const complete = quota?.complete === true, unlimited = complete && quota?.unlimited === true, running = quota?.refresh?.running === true;
   const retryAt = quotaNextRetry(quota);
   const amount = value => {
     const number = numberValue(value);
     return number === null || number < 0 ? "未知" : new Intl.NumberFormat("zh-CN",{maximumFractionDigits:6}).format(number);
   };
-  $("quotaTotal").textContent = complete ? amount(quota.total) : "未知";
+  $("quotaTotal").textContent = unlimited ? "无限" : complete ? amount(quota.total) : "未知";
   $("quotaUsed").textContent = complete ? amount(quota.used) : "未知";
-  $("quotaRemaining").textContent = complete ? amount(quota.remaining) : "未知";
+  $("quotaRemaining").textContent = unlimited ? "无限" : complete ? amount(quota.remaining) : "未知";
   const ready = numberValue(quota?.ready_accounts), count = numberValue(quota?.counted_accounts);
   const states = {empty:"暂无账号",unknown:"等待首次读取",loading:"正在读取积分",partial:"部分账号的积分不可用",failed:"积分读取失败",stale:"积分快照已过期",unavailable:"上游未返回可用积分"};
   let status = complete ? `已读取 ${ready ?? "未知"} 个账号` : states[quota?.state] || "积分状态未知";

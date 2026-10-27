@@ -26,7 +26,7 @@ func (h *Handler) handleQuota(w http.ResponseWriter, r *http.Request) {
 			"object": "codearts_credit_summary", "unit": snapshot.Unit,
 			"scope": snapshot.Scope, "overlap_possible": snapshot.OverlapPossible,
 			"credit_packages_only": snapshot.CreditPackagesOnly, "excludes_benefit_quota": snapshot.ExcludesBenefitQuota,
-			"state": snapshot.State, "complete": snapshot.Complete,
+			"state": snapshot.State, "complete": snapshot.Complete, "unlimited": snapshot.Unlimited,
 			"total": snapshot.Total, "used": snapshot.Used, "remaining": snapshot.Remaining, "known_remaining": snapshot.KnownRemaining,
 			"configured_accounts": snapshot.ConfiguredAccounts, "counted_accounts": snapshot.CountedAccounts,
 			"ready_accounts": snapshot.ReadyAccounts, "failed_accounts": snapshot.FailedAccounts,
@@ -47,6 +47,10 @@ func (h *Handler) handleQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !snapshot.Complete || snapshot.Remaining == nil {
+		if snapshot.Complete && snapshot.Unlimited {
+			writeOpenAIError(w, http.StatusServiceUnavailable, "quota_unavailable", "unlimited credit cannot be converted to a finite balance")
+			return
+		}
 		writeOpenAIError(w, http.StatusServiceUnavailable, "quota_unavailable", "credit snapshot is incomplete or stale")
 		return
 	}

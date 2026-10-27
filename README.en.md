@@ -94,10 +94,12 @@ The overview shows the total, used and remaining credits in account credit packa
 The server reads them on startup and every five minutes; the overview also provides a
 manual refresh. Independent daily benefit-model quotas are excluded. Identical UIDs are
 deduplicated, but different accounts may share a package and the sum can overlap. Failed,
-stale or incomplete snapshots are not reported as a zero total.
+stale or incomplete snapshots are not reported as a zero total. A complete snapshot
+containing an unlimited credit package displays Unlimited in the overview.
 
 `GET /v1/quota` uses the service Bearer key and returns raw credits and completeness;
-reading the cache does not contact the upstream:
+reading the cache does not contact the upstream. Unlimited credit is represented by
+`unlimited: true`, with null total and remaining values:
 
 ```bash
 curl http://127.0.0.1:7866/v1/quota -H "Authorization: Bearer $CA2A_API_KEY"
@@ -124,6 +126,10 @@ belongs to the route editor, not the entire channel `settings`:
 Responses and Messages are protocol adapters supporting a subset including text and
 some tools. Responses does not support persistence (`store=true`) or continuation via
 `previous_response_id`; neither adapter supports images. Such requests return an error.
+Messages assistant history merges text, so interleaved text and tool calls do not
+retain their original relative positions.
+Chat also supports only a subset: unsupported content such as images, `stop` and
+non-text response formats returns HTTP 400.
 
 The example configures chat, Responses, Messages, model-list and balance routes; add routes for any
 other endpoints you need. For an existing channel, keep its routes and add or edit the
@@ -133,10 +139,10 @@ select Add management route first. Set the upstream path to
 routes and the channel. Replace `100` with your chosen conversion rate. Balance
 queries are not supported for multi-key channels.
 
-Refreshing the channel balance converts only a complete, fresh snapshot; an incomplete
-or stale snapshot returns 503 instead of writing a false zero, but New API may continue
-to display the previous balance. Regular OpenAI channel types do not use this balance
-route; use a New API version that supports it.
+Refreshing the channel balance converts only a complete, fresh, finite snapshot; an
+incomplete, stale or unlimited snapshot returns 503 instead of writing a false zero.
+New API may continue to display the previous balance. Regular OpenAI channel types do
+not use this balance route; use a New API version that supports it.
 
 Independent benefit-model quotas are excluded from the credit balance. During a bulk or
 scheduled balance update, New API may automatically disable a channel with auto-disable

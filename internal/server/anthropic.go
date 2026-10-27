@@ -249,9 +249,7 @@ func anthropicMessage(role string, raw json.RawMessage) ([]map[string]any, error
 		}
 		switch block.Type {
 		case "text":
-			if len(calls) > 0 {
-				flush()
-			}
+			// Chat represents one assistant message as text plus a tool-call list.
 			text.WriteString(block.Text)
 		case "tool_use":
 			if role != "assistant" || block.ID == "" || block.Name == "" {

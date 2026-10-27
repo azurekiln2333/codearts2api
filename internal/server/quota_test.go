@@ -138,3 +138,83 @@ func TestQuotaHTTPIncompleteNeverReportsBalance(t *testing.T) {
 		t.Fatalf("incomplete balance exposed: status=%d body=%s calls=%d", converted.Code, converted.Body.String(), calls.Load())
 	}
 }
+
+func TestQuotaHTTPUnlimitedAndPartial(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		secondBody string
+		status     int
+		complete   bool
+	}{
+		{name: "unlimited and finite zero", secondBody: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":2,"package_credit_used":2,"package_credit_remain":0}]}`, status: http.StatusOK, complete: true},
+		{name: "unlimited and unavailable", secondBody: `{"metrics":[]}`, status: http.StatusOK},
+		{name: "unlimited and failed", status: http.StatusServiceUnavailable},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var calls atomic.Int32
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				if r.Method != http.MethodGet || r.URL.Path != upstream.EpCreditStatistics {
+					t.Errorf("unexpected provider request: %s %s", r.Method, r.URL.Path)
+				}
+				if r.Header.Get("X-Security-Token") == "token-a" {
+					_, _ = w.Write([]byte(`{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1,"package_credit_used":4}]}`))
+					return
+				}
+				w.WriteHeader(test.status)
+				_, _ = w.Write([]byte(test.secondBody))
+			}))
+			defer provider.Close()
+			expiry := time.Now().Add(time.Hour).Format(time.RFC3339)
+			p, err := pool.New([]*auth.Auth{
+				auth.New("a", "a", "", "token-a", "fixture-ak", "fixture-sk", expiry, "", ""),
+				auth.New("b", "b", "", "token-b", "fixture-ak", "fixture-sk", expiry, "", ""),
+			}, pool.Config{}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, account := range p.Accounts() {
+				account.Client = upstream.NewWithModelEndpoints(time.Second, provider.URL, "")
+			}
+			h := NewHandler(Config{Pool: p, APIKey: "fixture-key"})
+			p.RequestQuotaRefresh()
+			deadline := time.Now().Add(3 * time.Second)
+			for time.Now().Before(deadline) {
+				snapshot := p.QuotaSnapshot()
+				if !snapshot.Refresh.Running && snapshot.Refresh.FinishedAt != nil {
+					break
+				}
+				time.Sleep(time.Millisecond)
+			}
+			if snapshot := p.QuotaSnapshot(); snapshot.Refresh.Running || snapshot.Refresh.FinishedAt == nil {
+				t.Fatalf("quota fixture did not finish: %+v", snapshot)
+			}
+			before := calls.Load()
+			response := quotaRequest(h, http.MethodGet, "/v1/quota", "fixture-key")
+			var raw map[string]any
+			if err := json.Unmarshal(response.Body.Bytes(), &raw); err != nil {
+				t.Fatal(err)
+			}
+			if response.Code != http.StatusOK || raw["complete"] != test.complete || raw["unlimited"] != test.complete || raw["total"] != nil || raw["remaining"] != nil || raw["known_remaining"] != nil {
+				t.Fatalf("incorrect raw snapshot: status=%d body=%s", response.Code, response.Body.String())
+			}
+			if test.complete && raw["used"] != float64(6) || !test.complete && raw["used"] != nil {
+				t.Fatalf("incorrect used credits: %s", response.Body.String())
+			}
+			overview := quotaRequest(h, http.MethodGet, "/admin/api/overview", "fixture-key")
+			var result struct {
+				Quota pool.QuotaSnapshot `json:"quota"`
+			}
+			if overview.Code != http.StatusOK || json.Unmarshal(overview.Body.Bytes(), &result) != nil || result.Quota.Complete != test.complete || result.Quota.Unlimited != test.complete {
+				t.Fatalf("overview did not preserve quota state: status=%d body=%s", overview.Code, overview.Body.String())
+			}
+			converted := quotaRequest(h, http.MethodGet, "/v1/quota?credits_per_usd=100", "fixture-key")
+			if converted.Code != http.StatusServiceUnavailable || !strings.Contains(converted.Body.String(), "quota_unavailable") || strings.Contains(converted.Body.String(), "total_available") {
+				t.Fatalf("invalid converted balance: status=%d body=%s", converted.Code, converted.Body.String())
+			}
+			if calls.Load() != before {
+				t.Fatal("cache-only quota routes performed provider requests")
+			}
+		})
+	}
+}

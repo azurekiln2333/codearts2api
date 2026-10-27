@@ -29,7 +29,7 @@ type UpstreamError struct {
 	Msg  string
 }
 
-// ErrIncompleteStream identifies EOF without upstream completion evidence.
+// ErrIncompleteStream identifies a stream that cannot produce a valid completion.
 var ErrIncompleteStream = errors.New("upstream stream ended before completion")
 
 func (e *UpstreamError) Error() string {
@@ -278,10 +278,16 @@ func sortedToolCalls(calls toolCallAccumulator) []ChatToolCall {
 }
 
 // applyEvent 把单事件应用到聚合状态。
-func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, event sseEvent) {
+func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, event sseEvent) (replaced bool) {
 	if event.err != nil {
 		*upErr = event.err
 		return
+	}
+	if event.terminal {
+		_, nativeFinish := deltaFromChunk(event.payload)
+		if f := firstNonEmpty(nativeFinish, event.text("finish_reason", "finish", "reason")); f != "" {
+			*finish = f
+		}
 	}
 	payload, text := event.payload, event.text
 	switch event.name {
@@ -317,12 +323,12 @@ func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, 
 		}
 		if t := text("text", "content", "delta"); t != "" {
 			if doneText(t) {
-				*finish = "stop"
 				return
 			}
 			// 实测：text 为全文快照（非增量）→ 替换
 			content.Reset()
 			content.WriteString(t)
+			replaced = true
 			return
 		}
 		// 终态 output 数组：[{type:"output_text",text}]
@@ -338,6 +344,7 @@ func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, 
 			if sb.Len() > 0 {
 				content.Reset()
 				content.WriteString(sb.String())
+				replaced = true
 			}
 			return
 		}
@@ -359,11 +366,11 @@ func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, 
 		}
 		if t := text("text", "content", "delta", "message"); t != "" {
 			if doneText(t) {
-				*finish = "stop"
 				return
 			}
 			content.Reset()
 			content.WriteString(t)
+			replaced = true
 			return
 		}
 		tryFillStructuredAnswer(content, payload)
@@ -372,19 +379,15 @@ func applyEvent(content, reason *strings.Builder, finish *string, upErr *error, 
 			reason.WriteString(t)
 		}
 	case "done", "end", "finish":
-		delta, nativeFinish := deltaFromChunk(payload)
+		delta, _ := deltaFromChunk(payload)
 		if value, ok := delta["content"].(string); ok {
 			content.WriteString(value)
 		}
 		if value, ok := delta["reasoning_content"].(string); ok {
 			reason.WriteString(value)
 		}
-		if f := firstNonEmpty(nativeFinish, text("finish_reason", "finish", "reason")); f != "" {
-			*finish = f
-		} else {
-			*finish = "stop"
-		}
 	}
+	return
 }
 
 // tryFillStructuredAnswer 尝试填充 structured QA（{question,options,answer} 对象）。
@@ -562,7 +565,7 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 	br := bufio.NewReaderSize(r, 64*1024)
 	id := fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano())
 	sawDone := false
-	sentFinish := false
+	sawFinish := false
 	var (
 		content   strings.Builder
 		reason    strings.Builder
@@ -580,7 +583,6 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 		choice := map[string]any{"index": 0, "delta": delta}
 		if fin != "" {
 			choice["finish_reason"] = fin
-			sentFinish = true
 		}
 		chunk := map[string]any{
 			"id":      id,
@@ -628,11 +630,20 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 			nativeDelta, nativeFinish := deltaFromChunk(event.payload)
 			applyToolCallDeltas(nativeDelta, calls)
 			var upErr error
-			beforeContent, beforeReason := content.Len(), reason.Len()
-			applyEvent(&content, &reason, &finish, &upErr, event)
+			previousContent := content.String()
+			beforeContent, beforeReason := len(previousContent), reason.Len()
+			replaced := applyEvent(&content, &reason, &finish, &upErr, event)
 			if upErr != nil {
 				streamErr = upErr
 				break
+			}
+			if replaced && !strings.HasPrefix(content.String(), previousContent) {
+				streamErr = fmt.Errorf("%w: upstream text snapshot replaced emitted content", ErrIncompleteStream)
+				break
+			}
+			// A later terminal event may change the reason; keep deltas live meanwhile.
+			if nativeFinish != "" {
+				sawFinish = true
 			}
 			delta := map[string]any{}
 			if role, ok := nativeDelta["role"].(string); ok && role != "" {
@@ -647,23 +658,13 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 			if toolCalls, ok := nativeDelta["tool_calls"]; ok {
 				delta["tool_calls"] = toolCalls
 			}
-			if len(delta) > 0 || nativeFinish != "" {
-				if werr := writeChunk(delta, nativeFinish); werr != nil {
+			if len(delta) > 0 {
+				if werr := writeChunk(delta, ""); werr != nil {
 					streamErr = werr
 					break
 				}
 			}
 			if event.terminal {
-				if !sentFinish && event.data != "[DONE]" {
-					if werr := writeChunk(map[string]any{}, finish); werr != nil {
-						streamErr = werr
-						break
-					}
-				}
-				if werr := writeDONE(true); werr != nil {
-					streamErr = werr
-					break
-				}
 				sawDone = true
 			}
 		}
@@ -674,8 +675,18 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 			break
 		}
 	}
-	if streamErr == nil && !sawDone && !sentFinish {
+	if streamErr == nil && !sawDone && !sawFinish {
 		streamErr = fmt.Errorf("%w: %w", ErrIncompleteStream, io.ErrUnexpectedEOF)
+	}
+	if streamErr == nil {
+		if len(calls) > 0 && (finish == "stop" || finish == "function_call") {
+			finish = "tool_calls"
+		}
+		if err := writeChunk(map[string]any{}, finish); err != nil {
+			streamErr = err
+		} else {
+			streamErr = writeDONE(true)
+		}
 	}
 	if streamErr != nil {
 		var downstreamErr *DownstreamWriteError
@@ -693,11 +704,8 @@ func StreamCaptureWithUsage(w http.ResponseWriter, r io.Reader, model string, on
 		}
 		return streamErr
 	}
-	if streamErr == nil && !sawDone {
-		streamErr = writeDONE(true)
-	}
-	if streamErr == nil && onDone != nil {
+	if onDone != nil {
 		onDone(completion())
 	}
-	return streamErr
+	return nil
 }

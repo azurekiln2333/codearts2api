@@ -600,11 +600,11 @@ func (h *Handler) chatCompletions(original http.ResponseWriter, r *http.Request)
 		calls := fromUpstreamToolCalls(comp.ToolCalls)
 		if toolsOn && len(calls) == 0 {
 			if c, cleanContent, found := toolResponse(comp.Content + "\n" + comp.Reasoning); found {
-				calls, content, finish = c, cleanContent, "tool_calls"
+				calls, content = c, cleanContent
 				assignCallIDs(calls)
 			}
 		}
-		if len(calls) > 0 {
+		if len(calls) > 0 && (finish == "" || finish == "stop" || finish == "function_call") {
 			finish = "tool_calls"
 		}
 		telemetry.SetPhase(lifetime.ctx, telemetry.WriteResponse)

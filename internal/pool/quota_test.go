@@ -128,6 +128,119 @@ func TestQuotaSnapshotCoverageAndFailureIsolation(t *testing.T) {
 	}
 }
 
+func TestQuotaUnlimitedAggregationAndFailures(t *testing.T) {
+	var mode atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Security-Token") == "a" {
+			switch mode.Load() {
+			case 2:
+				_, _ = w.Write([]byte(`{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1}]}`))
+			case 4:
+				_, _ = w.Write([]byte(`{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1,"package_credit_remain":-1}]}`))
+			default:
+				_, _ = w.Write([]byte(`{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1,"package_credit_used":4}]}`))
+			}
+			return
+		}
+		switch mode.Load() {
+		case 1:
+			w.WriteHeader(http.StatusServiceUnavailable)
+		case 3:
+			_, _ = w.Write([]byte(`{"metrics":[]}`))
+		default:
+			_, _ = w.Write([]byte(`{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":2,"package_credit_used":2,"package_credit_remain":0}]}`))
+		}
+	}))
+	defer server.Close()
+	p := quotaFixturePool(t, server.URL, quotaFixtureAuth("a", "a"), quotaFixtureAuth("b", "b"))
+	p.RequestQuotaRefresh()
+	got := quotaWait(t, p)
+	if !got.Complete || !got.Unlimited || got.State != "ready" || got.Total != nil || got.Remaining != nil || got.KnownRemaining != nil || got.Used == nil || *got.Used != 6 || got.ReadyAccounts != 2 {
+		t.Fatalf("mixed unlimited and finite zero: %+v", got)
+	}
+	if got.Accounts[0].Quota == nil || !got.Accounts[0].Quota.Unlimited {
+		t.Fatalf("account lost unlimited state: %+v", got.Accounts)
+	}
+	p.Disable("a", "manual")
+	if disabled := p.QuotaSnapshot(); !disabled.Complete || !disabled.Unlimited || disabled.Used == nil || *disabled.Used != 6 {
+		t.Fatalf("disabled account quota collection semantics changed: %+v", disabled)
+	}
+	p.Enable("a")
+	mode.Store(1)
+	got = quotaRetry(t, p)
+	if got.Complete || got.Unlimited || got.State != "partial" || got.KnownRemaining != nil || got.Total != nil || got.Remaining != nil || got.FailedAccounts != 1 {
+		t.Fatalf("partial failure exposed an aggregate: %+v", got)
+	}
+	mode.Store(2)
+	got = quotaRetry(t, p)
+	if !got.Complete || !got.Unlimited || got.Used != nil {
+		t.Fatalf("unknown used credits were fabricated: %+v", got)
+	}
+	mode.Store(3)
+	got = quotaRetry(t, p)
+	if got.Complete || got.Unlimited || got.KnownRemaining != nil || got.UnavailableAccounts != 1 {
+		t.Fatalf("unavailable account exposed unlimited aggregate: %+v", got)
+	}
+	mode.Store(4)
+	got = quotaRetry(t, p)
+	if got.Complete || got.Unlimited || got.FailedAccounts != 1 || got.KnownRemaining == nil || *got.KnownRemaining != 0 {
+		t.Fatalf("invalid sentinel changed valid finite zero: %+v", got)
+	}
+	mode.Store(0)
+	got = quotaRetry(t, p)
+	if !got.Complete || !got.Unlimited {
+		t.Fatalf("unlimited did not recover: %+v", got)
+	}
+	account := p.Get("a")
+	p.quota.mu.Lock()
+	entry := p.quota.entries[account]
+	entry.successAt = time.Now().Add(-quotaMaxAge - time.Second)
+	p.quota.entries[account] = entry
+	p.quota.mu.Unlock()
+	got = p.QuotaSnapshot()
+	if got.Complete || got.Unlimited || got.StaleAccounts != 1 || got.KnownRemaining == nil || *got.KnownRemaining != 0 {
+		t.Fatalf("stale unlimited account exposed aggregate: %+v", got)
+	}
+}
+
+func TestQuotaUnlimitedWithUnknownAccount(t *testing.T) {
+	started, release := make(chan struct{}), make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Security-Token") == "b" {
+			close(started)
+			<-release
+			_, _ = w.Write([]byte(`{"metrics":[{"name":"usageTotalPackageCredit","package_credit_remain":1}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1}]}`))
+	}))
+	defer server.Close()
+	p := quotaFixturePool(t, server.URL, quotaFixtureAuth("a", "a"), quotaFixtureAuth("b", "b"))
+	p.RequestQuotaRefresh()
+	select {
+	case <-started:
+	case <-time.After(3 * time.Second):
+		close(release)
+		t.Fatal("second account did not start")
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	var partial QuotaSnapshot
+	for time.Now().Before(deadline) {
+		partial = p.QuotaSnapshot()
+		if partial.ReadyAccounts == 1 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	close(release)
+	if partial.ReadyAccounts != 1 || partial.UnknownAccounts != 1 || partial.Complete || partial.Unlimited || partial.Total != nil || partial.Remaining != nil || partial.KnownRemaining != nil {
+		t.Fatalf("unknown account exposed unlimited aggregate: %+v", partial)
+	}
+	if got := quotaWait(t, p); !got.Complete || !got.Unlimited {
+		t.Fatalf("completed collection did not expose unlimited: %+v", got)
+	}
+}
+
 func TestQuotaDuplicateSelectsUsableCredential(t *testing.T) {
 	for _, test := range []struct {
 		name   string

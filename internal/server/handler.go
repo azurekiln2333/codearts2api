@@ -603,11 +603,15 @@ func buildUpstreamMessages(req *chatRequest, toolsOn bool) []upstream.ChatMessag
 	out := make([]upstream.ChatMessage, 0, len(req.Messages))
 	for i, m := range req.Messages {
 		switch m.Role {
-		case "system", "user":
-			out = append(out, upstream.ChatMessage{Role: m.Role, Content: m.Text})
+		case "system", "developer", "user":
+			role := m.Role
+			if role == "developer" {
+				role = "system"
+			}
+			out = append(out, upstream.ChatMessage{Role: role, Content: m.Text, Name: m.Name})
 		case "assistant":
 			reasoning := m.ReasoningContent
-			wire := upstream.ChatMessage{Role: "assistant", Content: m.Text, ReasoningContent: &reasoning}
+			wire := upstream.ChatMessage{Role: "assistant", Content: m.Text, ReasoningContent: &reasoning, Name: m.Name}
 			if keepCalls[i] {
 				for _, c := range m.ToolCalls {
 					wire.ToolCalls = append(wire.ToolCalls, upstream.ChatToolCall{

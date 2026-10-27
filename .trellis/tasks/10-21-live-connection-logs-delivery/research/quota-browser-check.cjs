@@ -142,6 +142,24 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#quotaTotal').innerText(), '未知');
     assert.equal(await page.locator('#quotaRemaining').innerText(), '未知');
     assert.match(await page.locator('#quotaStatus').innerText(), /1 \/ 2 个账号/);
+
+    state.quota = { ...ready, unlimited: true, total: null, remaining: null, known_remaining: null };
+    await revisit();
+    await page.waitForFunction(() => document.getElementById('quotaRemaining').textContent === '无限');
+    assert.equal(await page.locator('#quotaTotal').innerText(), '无限');
+    assert.equal(await page.locator('#quotaUsed').innerText(), '1,200');
+    await page.waitForFunction(() => !document.getElementById('toast').classList.contains('show'));
+    await page.screenshot({ path: path.join(output, 'unlimited-desktop.png') });
+    state.quota = { ...state.quota, used: null };
+    await revisit();
+    await page.waitForFunction(() => document.getElementById('quotaUsed').textContent === '未知');
+    assert.equal(await page.locator('#quotaTotal').innerText(), '无限');
+    assert.equal(await page.locator('#quotaRemaining').innerText(), '无限');
+    state.quota = { ...state.quota, state: 'partial', complete: false };
+    await revisit();
+    await page.waitForFunction(() => document.getElementById('quotaRemaining').textContent === '未知');
+    assert.equal(await page.locator('#quotaTotal').innerText(), '未知');
+
     state.quota = { ...ready, total: 0, used: 0, remaining: 0, known_remaining: 0 };
     await revisit(); await page.waitForFunction(() => document.getElementById('quotaRemaining').textContent === '0');
     state.quota = undefined;
@@ -176,11 +194,23 @@ const server = http.createServer(async (req, res) => {
       scrollHeight: document.documentElement.scrollHeight, height: innerHeight }));
     assert.ok(layout.scrollWidth <= layout.width + 1 && layout.scrollHeight <= layout.height + 1, JSON.stringify(layout));
     await page.screenshot({ path: path.join(output, 'overview-mobile.png') });
+
+    state.quota = { ...ready, unlimited: true, total: null, remaining: null, known_remaining: null };
+    await revisit();
+    await page.waitForFunction(() => document.getElementById('quotaRemaining').textContent === '无限');
+    assert.equal(await page.locator('#quotaTotal').innerText(), '无限');
+    assert.equal(await page.locator('#quotaUsed').innerText(), '1,200');
+    await page.locator('#quotaCard').scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => !document.getElementById('toast').classList.contains('show'));
+    await page.screenshot({ path: path.join(output, 'unlimited-mobile.png') });
+
+    state.quota = ready; await revisit();
+    await page.waitForFunction(() => document.getElementById('quotaRemaining').textContent === '3,800');
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.screenshot({ path: path.join(output, 'overview-desktop.png') });
     assert.deepEqual(errors, []);
     assert.ok(state.calls.includes('/admin/api/quota/refresh'));
-    console.log(JSON.stringify({ passed: true, checks: ['complete and zero balances', 'partial and unknown balances', 'running and throttled refresh', 'retry deadline, navigation and visibility timers', 'invalid and expired retry times', 'snapshot and refresh errors', 'logout during refresh', 'proxy prefix', 'desktop and mobile layout'], screenshots: output }));
+    console.log(JSON.stringify({ passed: true, checks: ['complete and zero balances', 'unlimited and unknown used credits', 'partial and unknown balances', 'running and throttled refresh', 'retry deadline, navigation and visibility timers', 'invalid and expired retry times', 'snapshot and refresh errors', 'logout during refresh', 'proxy prefix', 'desktop and mobile layout'], screenshots: output }));
   } finally {
     state.releaseRefresh?.(); state.release?.();
     await browser.close(); await new Promise(resolve => server.close(resolve));

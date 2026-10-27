@@ -84,6 +84,26 @@ successful generation; a finish reason by itself does not stop reading later
 usage frames. Never copy prompt, completion, tool input, credentials or raw
 provider error text into audit metadata.
 
+Stream text and tool deltas immediately, but defer the single final finish chunk
+until a terminal event or EOF with finish evidence, so a later terminal reason
+or error takes precedence. Preserve `length` and `content_filter` even when tool
+calls are present; only normalize `stop` or `function_call` to `tool_calls` for
+an actual tool call. Apply the same outcome to nonstream and adapted responses.
+If an upstream full-text snapshot rewrites previously emitted streaming text,
+return a stream error without recording success; nonstream aggregation may retain
+the final snapshot. Never pretend an already delivered prefix was corrected.
+
+### Chat request subset
+
+Map `developer` messages to upstream `system` messages, retaining order. Reject
+unsupported media, roles, legacy function history and generation constraints
+rather than silently dropping their semantics. A disabled parallel-tool option
+is harmless when no tool can be called; otherwise reject it. Reject an invalid
+`tool_choice` rather than silently choosing `auto`. Validate tool histories before
+inference and include forwarded message names in conversation identity.
+Unknown top-level and nested fields are not universally rejected and do not
+establish support for their semantics.
+
 ### Responses request and result
 
 - `input` is a string or an array of text messages and function history.
@@ -144,6 +164,12 @@ has an equivalent total-memory bound.
   Unknown nested fields can be ignored by JSON decoding; their presence does
   not establish support and must not be described as universally rejected.
 
+Assistant history is translated to a Chat message with merged text and a tool
+call list. It preserves the relative order within the text and within the calls,
+but cannot preserve interleaving between text and calls. Keep this limitation
+visible in the user documentation; the incremental Messages output can itself
+contain interleaved blocks.
+
 Nonstream output is a Messages-shaped `message` with text/tool-use blocks and
 input/output usage. Tool arguments must decode to a JSON object; empty
 arguments become `{}`. Chat finish reasons map to `end_turn`, `tool_use`,
@@ -172,6 +198,8 @@ emitting `message_stop` as a successful result.
 | Equivalent error after streaming begins | Responses `response.failed` or Messages `error` if writable; committed status remains 200 and audit outcome is `upstream_stream_error` |
 | Output exceeds a stated adapter bound | Fail translation rather than grow its retained state without bound; preserve actual downstream error if writing fails |
 | Upstream EOF without terminal or finish evidence | Fail aggregation/stream and release resources; do not emit a successful completion |
+| Finish evidence followed by a different terminal reason or error | Emit one final reason from the terminal event, or fail without a successful finish |
+| A streaming text snapshot rewrites delivered text | Emit a stream error when writable, release ownership, and do not mark a successful generation |
 | Client cancels before completion | Propagate cancellation, release body/admission/lease and do not mark account failure or successful usage |
 | `length` completion delivered | Responses `incomplete`, Messages `max_tokens`; a successfully delivered response may be audit `ok` |
 
@@ -205,7 +233,9 @@ interleaved tool ordering, 8 MiB/256-call boundaries, malformed tool output,
 downstream write/flush failures, cancellation with account reuse, status/usage
 and correlated audit records. Cover premature EOF, terminal error precedence and
 usage arriving after finish evidence in shared SSE tests. Include normal and race
-full-suite checks when integrating shared lifecycle changes.
+full-suite checks when integrating shared lifecycle changes. Cover developer
+messages, unsupported media and constraints, neutral tool options, invalid tool
+choices, tool-history order and message-name conversation identity on actual routes.
 
 ## 7. Wrong vs Correct
 

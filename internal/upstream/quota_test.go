@@ -36,6 +36,7 @@ func TestParseCreditQuotaMissingAndMalformed(t *testing.T) {
 	}{
 		{name: "no credit metric", raw: `{"metrics":[]}`},
 		{name: "zero is known", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_remain":0}]}`, wantAvailable: true, wantRemaining: ptrFloat(0)},
+		{name: "zero with exponent is known", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_remain":0e-999}]}`, wantAvailable: true, wantRemaining: ptrFloat(0)},
 		{name: "calculated", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":100,"package_credit_used":40}]}`, wantAvailable: true, wantRemaining: ptrFloat(60)},
 		{name: "overdrawn", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":100,"package_credit_used":140}]}`, wantAvailable: true, wantRemaining: ptrFloat(0)},
 		{name: "no remaining", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":100}]}`, wantError: true},
@@ -44,6 +45,7 @@ func TestParseCreditQuotaMissingAndMalformed(t *testing.T) {
 		{name: "negative", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_remain":-1}]}`, wantError: true},
 		{name: "string", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_remain":"1"}]}`, wantError: true},
 		{name: "overflow", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_remain":1e999}]}`, wantError: true},
+		{name: "underflow", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_remain":1e-999}]}`, wantError: true},
 		{name: "duplicate totals", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_remain":1},{"name":"usageTotalPackageCredit","package_credit_remain":1}]}`, wantError: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -53,6 +55,46 @@ func TestParseCreditQuotaMissingAndMalformed(t *testing.T) {
 			}
 			if test.wantRemaining != nil && (got.Remaining == nil || *got.Remaining != *test.wantRemaining) {
 				t.Fatalf("remaining=%v", got.Remaining)
+			}
+		})
+	}
+}
+
+func TestParseCreditQuotaUnlimited(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		raw       string
+		unlimited bool
+		used      *float64
+		error     bool
+	}{
+		{name: "infinite total with used", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1,"package_credit_used":4}]}`, unlimited: true, used: ptrFloat(4)},
+		{name: "finite remaining ignored for unlimited", raw: `{"package":{"is_token_package":true,"is_credit_package":false},"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1.0,"package_credit_used":0,"package_credit_remain":100}]}`, unlimited: true, used: ptrFloat(0)},
+		{name: "equivalent exponent", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-10e-1}]}`, unlimited: true},
+		{name: "finite zero", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":0,"package_credit_used":0,"package_credit_remain":0}]}`},
+		{name: "other negative total", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-2,"package_credit_remain":0}]}`, error: true},
+		{name: "near minus one is not the sentinel", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1.00000000000000001}]}`, error: true},
+		{name: "negative used is not a sentinel", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1,"package_credit_used":-1}]}`, error: true},
+		{name: "negative remaining is not a proven sentinel", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1,"package_credit_remain":-1}]}`, error: true},
+		{name: "overflow even with sentinel", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1,"package_credit_used":1e999}]}`, error: true},
+		{name: "underflow even with sentinel", raw: `{"metrics":[{"name":"usageTotalPackageCredit","package_credit_amount":-1,"package_credit_used":-1e-999}]}`, error: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseCreditQuota([]byte(test.raw))
+			if (err != nil) != test.error {
+				t.Fatalf("quota=%+v err=%v", got, err)
+			}
+			if err != nil {
+				return
+			}
+			if !got.Available || got.Unlimited != test.unlimited {
+				t.Fatalf("incorrect quota: %+v", got)
+			}
+			if test.unlimited && (got.Total != nil || got.Remaining != nil) {
+				t.Fatalf("unlimited quota contains finite numbers: %+v", got)
+			}
+			if test.used != nil && (got.Used == nil || *got.Used != *test.used) {
+				t.Fatalf("incorrect used credits: %+v", got)
 			}
 		})
 	}

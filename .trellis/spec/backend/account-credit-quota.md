@@ -48,8 +48,12 @@ The overview returns `quota` with state, coverage, nullable totals, freshness an
 refresh status; the panel clearly labels partial results, refresh throttling and
 excludes benefits.
 `GET /v1/quota` returns the raw cache in credits without account identities.
+An upstream total of `-1` denotes an unlimited package. A complete snapshot with
+any unlimited package sets `unlimited=true`, leaves aggregate total/remaining
+null, and displays unlimited in the overview. Other negative numbers are not
+finite credit amounts. A partial snapshot cannot assert an unlimited aggregate.
 Its optional `credits_per_usd` is an explicitly supplied positive finite number.
-With a complete snapshot it returns `object=credit_summary`, numeric
+With a complete finite snapshot it returns `object=credit_summary`, numeric
 `total_available=remaining/credits_per_usd`, `unit=USD`, the source credits and
 coverage metadata. No default or official exchange rate is implied. New API's
 advanced-custom balance route can forward to this URL; standard OpenAI channels
@@ -61,6 +65,7 @@ do not use that advanced-custom balance route.
 |---|---|
 | Known upstream zero | Zero is a valid measured value |
 | Missing metric, expired credential, failed or stale collection | Incomplete snapshot; never fabricate a zero balance |
+| Complete snapshot contains an unlimited package | Overview reports unlimited; converted New API balance returns 503 rather than a fabricated finite amount |
 | Invalid, repeated, zero, negative, nonfinite or overflowing conversion rate | HTTP 400 |
 | Requested converted balance with incomplete or stale snapshot | HTTP 503 `quota_unavailable` |
 | Old account or replaced credentials finish a request | Discard the result |
@@ -79,10 +84,10 @@ do not use that advanced-custom balance route.
 ## 6. Tests Required
 
 Use synthetic signed upstream responses and actual registered HTTP routes. Check
-known zero, partial/failure/stale/empty, UID deduplication, account/credential
+known zero, unlimited and partial/failure/stale/empty, UID deduplication, account/credential
 replacement, multi-batch completion, bounded workers, shutdown, refresh throttling, authentication,
 conversion, cache-only GET and no secret leakage. Real-browser checks cover
-desktop/mobile overview, manual refresh, loading, partial, zero and error states.
+desktop/mobile overview, manual refresh, loading, unlimited, partial, zero and error states.
 Document whether any real provider validation has actually been performed.
 
 ## 7. Wrong vs Correct

@@ -99,6 +99,7 @@ func TestParseChatRequest(t *testing.T) {
 			{"role":"user","content":"hi"},
 			{"role":"assistant","content":"hello","reasoning_content":"thought"},
 			{"role":"user","content":[{"type":"text","text":"again"}]},
+			{"role":"assistant","content":null,"tool_calls":[{"id":"call_1","type":"function","function":{"name":"f1","arguments":"{}"}}]},
 			{"role":"tool","tool_call_id":"call_1","content":"ok"}
 		],
 		"tools":[{"type":"function","function":{"name":"f1","parameters":{"type":"object","properties":{}}}}],
@@ -117,7 +118,7 @@ func TestParseChatRequest(t *testing.T) {
 	if req.Temperature == nil || *req.Temperature != 0.3 || req.TopP == nil || *req.TopP != 0.8 {
 		t.Fatalf("sampling options: %+v", req)
 	}
-	if len(req.Messages) != 5 {
+	if len(req.Messages) != 6 {
 		t.Fatalf("messages=%d", len(req.Messages))
 	}
 	if req.Messages[0].Role != "system" || req.Messages[0].Text != "be nice" {
@@ -129,8 +130,8 @@ func TestParseChatRequest(t *testing.T) {
 	if req.Messages[2].ReasoningContent != "thought" {
 		t.Fatalf("reasoning content=%q", req.Messages[2].ReasoningContent)
 	}
-	if req.Messages[4].Role != "tool" || req.Messages[4].ToolCallID != "call_1" {
-		t.Fatalf("tool msg=%+v", req.Messages[4])
+	if req.Messages[5].Role != "tool" || req.Messages[5].ToolCallID != "call_1" {
+		t.Fatalf("tool msg=%+v", req.Messages[5])
 	}
 	if len(req.Tools) != 1 || req.ToolChoice.Mode != "required" {
 		t.Fatalf("tools=%v choice=%+v", req.Tools, req.ToolChoice)
@@ -155,7 +156,7 @@ func TestParseChatRequestErrors(t *testing.T) {
 func TestParseAssistantToolCalls(t *testing.T) {
 	body := `{"messages":[{"role":"assistant","content":"","tool_calls":[
 		{"id":"call_1","type":"function","function":{"name":"f1","arguments":"{\"a\":1}"}}
-	]},{"role":"user","content":"done"}]}`
+	]},{"role":"tool","tool_call_id":"call_1","content":"ok"},{"role":"user","content":"done"}]}`
 	req, err := parseChatRequest([]byte(body))
 	if err != nil {
 		t.Fatal(err)
@@ -240,14 +241,41 @@ func TestConversationIDSeparatesTitleChatFromToolAgent(t *testing.T) {
 }
 
 func TestFlattenContent(t *testing.T) {
-	if flattenContent(json.RawMessage(`"plain"`)) != "plain" {
-		t.Fatal("string content")
+	for _, tc := range []struct {
+		name string
+		raw  json.RawMessage
+		want string
+	}{
+		{"string", json.RawMessage(`"plain"`), "plain"},
+		{"parts", json.RawMessage(`[{"type":"text","text":"a"},{"text":"b"},{"type":"input_text","text":"c"}]`), "abc"},
+		{"text metadata", json.RawMessage(`[{"type":"text","text":"a","annotations":[],"image_url":null}]`), "a"},
+		{"null", json.RawMessage(`null`), ""},
+		{"missing", nil, ""},
+		{"empty array", json.RawMessage(`[]`), ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := flattenContent(tc.raw)
+			if err != nil || got != tc.want {
+				t.Fatalf("flattenContent(%s)=%q, err=%v, want %q", tc.raw, got, err, tc.want)
+			}
+		})
 	}
-	if flattenContent(json.RawMessage(`[{"type":"text","text":"a"},{"type":"image_url","imageUrl":{"url":"x"}}]`)) != "a" {
-		t.Fatal("parts content")
-	}
-	if flattenContent(json.RawMessage(`null`)) != "" {
-		t.Fatal("null content")
+	for _, raw := range []json.RawMessage{
+		json.RawMessage(`[{"type":"text","text":"a"},{"type":"image_url","image_url":{"url":"x"}}]`),
+		json.RawMessage(`[{"type":"input_audio","input_audio":{"data":"eA==","format":"wav"}}]`),
+		json.RawMessage(`[{"type":"file","text":"ignored","file":{"file_id":"f"}}]`),
+		json.RawMessage(`[{"type":"text","text":"ignored","image_url":{"url":"x"}}]`),
+		json.RawMessage(`[{"text":"ignored","imageUrl":{"url":"x"}}]`),
+		json.RawMessage(`[{"type":"text","text":"ignored","input_audio":{"data":"eA=="}}]`),
+		json.RawMessage(`[{"type":"text","text":"ignored","file":{"file_id":"f"}}]`),
+		json.RawMessage(`[{"type":"text","text":null}]`),
+		json.RawMessage(`[null]`),
+		json.RawMessage(`{"image_url":"x"}`),
+		json.RawMessage(`123`),
+	} {
+		if _, err := flattenContent(raw); err == nil {
+			t.Fatalf("unsupported content accepted: %s", raw)
+		}
 	}
 }
 

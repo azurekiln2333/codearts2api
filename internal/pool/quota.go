@@ -77,6 +77,7 @@ type QuotaSnapshot struct {
 	OverlapPossible      bool           `json:"overlap_possible"`
 	State                string         `json:"state"`
 	Complete             bool           `json:"complete"`
+	Unlimited            bool           `json:"unlimited"`
 	Total                *float64       `json:"total"`
 	Used                 *float64       `json:"used"`
 	Remaining            *float64       `json:"remaining"`
@@ -519,6 +520,7 @@ func (p *Pool) QuotaSnapshot() QuotaSnapshot {
 	out.Refresh = p.quota.refreshLocked()
 	var remaining, total, used float64
 	allTotal, allUsed := true, true
+	anyUnlimited := false
 	now := time.Now()
 	for _, target := range targets {
 		item := AccountQuota{Account: target.account.Name, UID: target.uid, State: "unknown"}
@@ -534,7 +536,7 @@ func (p *Pool) QuotaSnapshot() QuotaSnapshot {
 				item.State, item.Error = "failed", entry.errorKind
 			case !entry.hasValue:
 				item.State = "unknown"
-			case !entry.value.Available || entry.value.Remaining == nil:
+			case !entry.value.Available || (!entry.value.Unlimited && entry.value.Remaining == nil):
 				item.State = "unavailable"
 			case now.Sub(entry.successAt) > quotaMaxAge:
 				item.State = "stale"
@@ -548,7 +550,11 @@ func (p *Pool) QuotaSnapshot() QuotaSnapshot {
 		switch item.State {
 		case "ready":
 			out.ReadyAccounts++
-			remaining += *item.Quota.Remaining
+			if item.Quota.Unlimited {
+				anyUnlimited = true
+			} else {
+				remaining += *item.Quota.Remaining
+			}
 			if item.Quota.Total == nil {
 				allTotal = false
 			} else {
@@ -575,7 +581,7 @@ func (p *Pool) QuotaSnapshot() QuotaSnapshot {
 	}
 	out.Complete = len(targets) > 0 && unprocessed == 0 && out.ReadyAccounts == len(targets) &&
 		!math.IsInf(remaining, 0) && !math.IsNaN(remaining)
-	if out.ReadyAccounts > 0 && !math.IsInf(remaining, 0) && !math.IsNaN(remaining) {
+	if out.ReadyAccounts > 0 && !anyUnlimited && !math.IsInf(remaining, 0) && !math.IsNaN(remaining) {
 		out.KnownRemaining = quotaCopyFloat(&remaining)
 	}
 	switch {
@@ -583,9 +589,12 @@ func (p *Pool) QuotaSnapshot() QuotaSnapshot {
 		out.State = "empty"
 	case out.Complete:
 		out.State = "ready"
-		out.Remaining = &remaining
-		if allTotal && !math.IsInf(total, 0) && !math.IsNaN(total) {
-			out.Total = &total
+		out.Unlimited = anyUnlimited
+		if !anyUnlimited {
+			out.Remaining = &remaining
+			if allTotal && !math.IsInf(total, 0) && !math.IsNaN(total) {
+				out.Total = &total
+			}
 		}
 		if allUsed && !math.IsInf(used, 0) && !math.IsNaN(used) {
 			out.Used = &used
