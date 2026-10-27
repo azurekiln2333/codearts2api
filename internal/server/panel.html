@@ -370,8 +370,8 @@ svg{display:block}
 <div id="oauthModal" class="modal-mask hidden">
   <section class="modal" role="dialog" aria-modal="true" aria-labelledby="oauthTitle" aria-describedby="oauthSteps">
     <div class="modal-h"><h2 id="oauthTitle">OAuth 授权登录</h2><button class="btn icon-btn ghost" id="oauthClose" type="button" aria-label="关闭 OAuth 授权窗口"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
-    <div class="modal-b"><ol class="steps" id="oauthSteps"><li>点击「发起授权」→「打开授权页」，使用目标账号登录。</li><li>若停在 127.0.0.1 或显示无法访问，将地址栏的完整地址粘贴到下方，再点击「提交授权」。</li></ol><p class="modal-help">远程部署通常需手动粘贴，127.0.0.1 指向当前电脑；服务器收到回调时会自动完成。</p><div class="modal-field"><span class="field-label" id="oauthUrlLabel">授权链接</span><div class="urlbox" id="oauthUrl" aria-labelledby="oauthUrlLabel">（发起后显示授权链接）</div></div><div class="modal-field"><label for="oauthCallbackUrl">授权回调地址</label><input class="input" id="oauthCallbackUrl" type="url" placeholder="http://127.0.0.1:端口/oauth/callback?..." autocomplete="off" spellcheck="false" aria-describedby="oauthCallbackHelp" disabled/><span class="modal-help" id="oauthCallbackHelp">包含问号后的全部参数；请粘贴回调地址，不是上方的授权链接。</span></div><div class="status-line muted" id="oauthStatus" role="status" aria-live="polite">尚未开始</div></div>
-    <div class="modal-f"><button class="btn" id="oauthCopy" type="button" disabled>复制授权链接</button><button class="btn" id="oauthOpen" type="button" disabled>打开授权页</button><button class="btn primary" id="oauthStart" type="button">发起授权</button></div>
+    <div class="modal-b"><ol class="steps" id="oauthSteps"><li>点击「获取授权链接」，复制链接或手动打开授权页，使用目标账号登录。</li><li>若停在 127.0.0.1 或显示无法访问，将地址栏的完整地址粘贴到下方，再点击「提交授权」。</li></ol><p class="modal-help">远程部署通常需手动粘贴，127.0.0.1 指向当前电脑；服务器收到回调时会自动完成。</p><div class="modal-field"><span class="field-label" id="oauthUrlLabel">授权链接</span><div class="urlbox" id="oauthUrl" aria-labelledby="oauthUrlLabel">（获取后显示授权链接）</div></div><div class="modal-field"><label for="oauthCallbackUrl">授权回调地址</label><input class="input" id="oauthCallbackUrl" type="url" placeholder="http://127.0.0.1:端口/oauth/callback?..." autocomplete="off" spellcheck="false" aria-describedby="oauthCallbackHelp" disabled/><span class="modal-help" id="oauthCallbackHelp">包含问号后的全部参数；请粘贴回调地址，不是上方的授权链接。</span></div><div class="status-line muted" id="oauthStatus" role="status" aria-live="polite">尚未获取授权链接</div></div>
+    <div class="modal-f"><button class="btn" id="oauthCopy" type="button" disabled>复制授权链接</button><button class="btn" id="oauthOpen" type="button" disabled>打开授权页</button><button class="btn primary" id="oauthStart" type="button">获取授权链接</button></div>
   </section>
 </div>
 <script>
@@ -1131,7 +1131,7 @@ function stopOAuthPoll(){ clearTimeout(oauthTimer); clearTimeout(oauthCloseTimer
 function safeOAuthUrl(value){ try { const url = new URL(value); return ["http:","https:"].includes(url.protocol) ? url.href : ""; } catch { return ""; } }
 function updateOAuthControls(){
   $("oauthStart").disabled = oauthBusy || oauthComplete;
-  $("oauthStart").textContent = oauthComplete ? "授权完成" : oauthBusy ? (oauthSessionId ? "正在提交…" : "正在发起…") : oauthSessionId ? "提交授权" : "发起授权";
+  $("oauthStart").textContent = oauthComplete ? "授权完成" : oauthBusy ? (oauthSessionId ? "正在提交…" : "正在获取…") : oauthSessionId ? "提交授权" : "获取授权链接";
   $("oauthCallbackUrl").disabled = !oauthSessionId || oauthBusy || oauthComplete;
   $("oauthCopy").textContent = oauthContinuation ? "复制继续授权链接" : "复制授权链接";
   $("oauthOpen").textContent = oauthContinuation ? "打开继续授权页" : "打开授权页";
@@ -1141,12 +1141,12 @@ function updateOAuthControls(){
 }
 function clearOAuthSession(){
   stopOAuthPoll(); oauthSessionId = ""; oauthContinuation = false; oauthDetectionFailed = false;
-  $("oauthUrl").textContent = "（发起后显示授权链接）"; $("oauthCallbackUrl").value = "";
+  $("oauthUrl").textContent = "（获取后显示授权链接）"; $("oauthCallbackUrl").value = "";
 }
 function openOAuthModal(){
   oauthReturnFocus = document.activeElement; ++oauthGeneration; clearOAuthSession(); oauthBusy = oauthComplete = false; oauthPollPromise = null;
   $("oauthModal").classList.remove("hidden"); $("appView").inert = true;
-  updateOAuthControls(); setOAuthNotice("点击「发起授权」开始。"); $("oauthStart").focus();
+  updateOAuthControls(); setOAuthNotice("获取授权链接后，可复制链接或手动打开授权页。"); $("oauthStart").focus();
 }
 function closeOAuthModal(restoreFocus=true){
   const wasOpen = !$("oauthModal").classList.contains("hidden");
@@ -1160,13 +1160,16 @@ function scheduleOAuthPoll(delay, generation){
   oauthTimer = setTimeout(() => { oauthTimer = null; if (generation === oauthGeneration) pollOAuth(); },delay);
 }
 function failOAuth(message){ clearOAuthSession(); oauthBusy = oauthComplete = false; updateOAuthControls(); setOAuthNotice(message,false); }
-async function finishOAuth(data, generation, session){
+function finishOAuth(data, generation, session){
   if (generation !== oauthGeneration || session !== oauthSessionId) return;
   clearOAuthSession(); oauthComplete = true; oauthBusy = false; updateOAuthControls();
   setOAuthNotice("✓ " + (data.message || "授权成功，账号已保存。"),true); toast(data.message || "授权成功，账号已保存。");
-  try { await loadOverview(); }
-  catch(error){ if (generation === oauthGeneration) toast("账号已授权，但刷新失败：" + error.message,false); }
-  if (generation === oauthGeneration) oauthCloseTimer = setTimeout(() => { if (generation === oauthGeneration) closeOAuthModal(); },900);
+  const epoch = authEpoch;
+  oauthCloseTimer = setTimeout(() => { if (generation === oauthGeneration) closeOAuthModal(); },900);
+  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(),15000);
+  const refresh = loadOverview({signal:controller.signal}), version = overviewVersion;
+  refresh.catch(() => { if (epoch === authEpoch && version === overviewVersion) toast("账号已授权，但账号列表刷新失败，请手动刷新。",false); })
+    .finally(() => clearTimeout(timeout));
 }
 async function startOAuth(){
   if (oauthBusy || oauthSessionId || oauthComplete) return;
@@ -1176,10 +1179,10 @@ async function startOAuth(){
     const data = await api("/admin/api/oauth/start",{method:"POST",body:"{}"});
     if (generation !== oauthGeneration) return;
     const url = safeOAuthUrl(data.auth_url);
-    if (!data.ok || !url || !data.session_id) throw new Error(data.message || "发起失败");
+    if (!data.ok || !url || !data.session_id) throw new Error(data.message || "请求失败");
     oauthSessionId = data.session_id; $("oauthUrl").textContent = url;
-    setOAuthNotice("等待浏览器完成授权。");
-  } catch(error){ if (generation === oauthGeneration){ failOAuth("发起失败：" + error.message); toast("发起授权失败",false); } }
+    setOAuthNotice("授权链接已生成，可复制链接或点击「打开授权页」。");
+  } catch(error){ if (generation === oauthGeneration){ failOAuth("获取授权链接失败：" + error.message); toast("获取授权链接失败",false); } }
   finally { if (generation === oauthGeneration){ oauthBusy = false; updateOAuthControls(); scheduleOAuthPoll(800,generation); } }
 }
 async function importOAuthCallback(){
@@ -1203,7 +1206,7 @@ async function importOAuthCallback(){
     setOAuthNotice("回调已接收。请点击「打开继续授权页」完成下一步；若再次停在 127.0.0.1，粘贴新的完整回调地址后点击「提交授权」。");
   } catch(error){
     if (generation === oauthGeneration){
-      if (error.status === 404 || error.status === 410) failOAuth("授权会话已过期，请重新发起授权。");
+      if (error.status === 404 || error.status === 410) failOAuth("授权会话已过期，请重新获取授权链接。");
       else if (error.status === 401 || error.status === 403) failOAuth("授权接口鉴权失败，请重新登录控制台。");
       else setOAuthNotice(error.status === 400 ? "回调地址无效或与本次授权不匹配。请复制授权页最新的完整地址，再点击「提交授权」。" : "提交授权失败，请检查网络或稍后再次点击「提交授权」。回调地址已保留。",false,false,error.status === 400 ? "validation" : "");
     }
@@ -1218,11 +1221,11 @@ function pollOAuth(){
       const data = await api("/admin/api/oauth/poll",{method:"POST",body:JSON.stringify({session_id:session})});
       if (generation !== oauthGeneration || session !== oauthSessionId) return;
       if (data.status === "done" && data.ok){ await finishOAuth(data,generation,session); return; }
-      if (data.status !== "pending"){ failOAuth("授权失败：" + (data.message || "请重新发起授权。")); return; }
+      if (data.status !== "pending"){ failOAuth("授权失败：" + (data.message || "请重新获取授权链接。")); return; }
       if (!oauthBusy && oauthDetectionFailed){ setOAuthStatus(oauthNotice.message,oauthNotice.ok); oauthDetectionFailed = false; }
     } catch(error){
       if (generation !== oauthGeneration || session !== oauthSessionId) return;
-      if (error.status === 404 || error.status === 410) failOAuth("授权会话已过期，请重新发起授权。");
+      if (error.status === 404 || error.status === 410) failOAuth("授权会话已过期，请重新获取授权链接。");
       else if (error.status === 401 || error.status === 403) failOAuth("授权接口鉴权失败，请重新登录控制台。");
       else if (!oauthBusy){ oauthDetectionFailed = true; setOAuthStatus(oauthNotice.message + " 自动检测暂时失败，将稍后重试。",false); }
     } finally {

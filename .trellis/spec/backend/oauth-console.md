@@ -32,17 +32,22 @@ Use it for URL port, OAuth session, legacy pending login, imported callback
 validation and exchange redirect_uri. No explicit override means listener port;
 the configured host does not replace the fixed loopback hostname.
 
-Use one primary button: 发起授权 before a session, 提交授权 afterward. Submission
-imports the pasted full callback; no separate import/poll buttons. Automatic
-detection preserves polling. Copy/open labels explicitly identify authorization
-or continuation URLs. Tell operators to copy the complete failed loopback URL,
-including all query parameters, paste it and click 提交授权.
+Use one primary button: 获取授权链接 before a session, 提交授权 afterward. Starting
+creates a session and displays its URL without opening a browser. The operator
+chooses whether to copy the link or open it using an explicit user action.
+Submission imports the pasted full callback; no separate import/poll buttons.
+Automatic detection preserves polling. Copy/open labels explicitly identify
+authorization or continuation URLs. Tell operators to copy the complete failed
+loopback URL, including all query parameters, paste it and click 提交授权.
 
 Import done may already have deleted the session. Immediately share poll-done
 finalization: stop timers, clear session/callback/link, refresh accounts once,
-show success and dismiss. Never poll that deleted session. Continue retains the
-session, presents validated next_url and explains a possible second callback.
-An intermediate portal secret is not evidence of completed authorization.
+show success and dismiss without waiting for the refresh to finish. Report a
+refresh failure so the operator can retry it, unless a newer overview request or
+login session has superseded that refresh. Bound that refresh to 15 seconds and
+report timeout as failure. Never poll that deleted session.
+Continue retains the session, presents validated next_url and explains a possible
+second callback. An intermediate portal secret is not completed authorization.
 
 Background polling cannot disable or discard submit clicks. Serialize a queued
 callback behind a current poll and suppress future polls during mutation. A poll
@@ -58,8 +63,11 @@ into status/toasts/logs/localStorage. Open links through a reliable user gesture
 | Input/state | Required behavior |
 |---|---|
 | Idle/start pending | One primary start, no duplicate mutation |
+| Link acquired | No automatic browser open; explicit copy and open actions |
 | Session and pasted callback | Same primary submits callback |
 | Import done/session deleted | Finish once; no later poll/import |
+| Account refresh pending or failed after done | Dismiss without waiting; report failure or 15-second timeout |
+| Older refresh fails after a newer refresh | Ignore the stale failure notification |
 | Continue | Same session, next link and clear instructions |
 | Direct callback | Poll completes without manual submission |
 | Submit during poll | One queued import; no lost click/overlap |
@@ -79,8 +87,10 @@ into status/toasts/logs/localStorage. Open links through a reliable user gesture
 
 Actual HTTP start/import/exchange fixtures assert effective ports, PKCE/DPoP and
 saved credentials. Preserve direct callback/continuation tests. Real Chrome
-synthetic fixtures cover primary labels/copy, done with deleted session, direct
-completion, continuation/second callback, poll-submit serialization, duplicates,
+synthetic fixtures cover primary labels/copy and explicit-only opening, done with
+deleted session, dismissal despite a pending/failed refresh, stale refresh
+failure suppression, direct completion,
+continuation/second callback, poll-submit serialization, duplicates,
 validation/expiry/transport errors, close/logout races, focus, proxy and mobile.
 Fixtures return real status DTOs; new screenshots stay outside historical tracked
 directories. Run relevant normal/race/vet/build and JS checks. No real account or

@@ -286,3 +286,17 @@ The `v1.0.1` tag and both published registries resolve to product commit
 `6ee36e748cd751bce516f395b7f59307fc1cf021`; see
 `research/r21-remote-delivery.md`. This is local/synthetic feature acceptance and
 actual remote artifact publication, not proof of live provider quota or deployment.
+
+## R22: Manual OAuth link and completion
+
+- [x] Separate obtaining an authorization link from the operator's explicit
+  decision to open or copy it; keep one primary get/submit action.
+- [x] Close after completed authorization without waiting on account refresh;
+  bound refresh to 15 seconds, ignore stale failures and retain continuation.
+- [x] Verify synthetic Chrome flows, desktop/mobile layout, delayed/failed
+  refresh, and the full Go suite without using real credentials.
+- [x] Independently review the final authorization flow and refresh races.
+- [ ] Commit and publish the updated release.
+
+The previous `v1.0.2` release does not include R22. Historical R13 and real
+provider/production verification remain open.
