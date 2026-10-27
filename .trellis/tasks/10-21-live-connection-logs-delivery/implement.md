@@ -272,10 +272,14 @@ Actual remote proof: GitHub main40304104020 and tag40304404431 pass; CNB main cn
 - [x] Implement and locally verify OpenAI Responses and Anthropic Messages non-streaming/streaming adapters through existing chat lifecycle.
 - [x] Investigate InferHub.001001005.400; implement bounded output-token compatibility and regression tests without claiming every parameter error is fixed.
 - [x] Implement success/failure audit filtering with server-side pagination and filtered usage; verify panel/API.
-- [ ] Integrate, review, run full tests/browser checks, document limits, commit and deliver without exposing credentials or closing R13.
+- [x] Integrate, review, run full tests/browser checks, document limits, commit and deliver without exposing credentials or closing R13.
 
 Local normal/race Go suites, vet, build and 85 release/deployment tests pass.
 Synthetic Chrome desktop/mobile checks cover quota states, refresh and grouped
 requests; an independent review added empty-outcome and HTTP-200 stream-failure
 coverage. The New API adapter route was checked locally. Real upstream quota,
 end-to-end New API, deployment and the historical R13 root cause remain unverified.
+The `v1.0.1` tag and both published registries resolve to product commit
+`6ee36e748cd751bce516f395b7f59307fc1cf021`; see
+`research/r21-remote-delivery.md`. This is local/synthetic feature acceptance and
+actual remote artifact publication, not proof of live provider quota or deployment.
